@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* MoeFieldMap: ダメージ・EXP（出現ポップ＋下から上浮遊・約2秒） */
+@keyframes moe-battle-popup-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.2);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(8px) scale(1.14);
+  }
+  26% {
+    transform: translateY(2px) scale(1);
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-68px) scale(0.82);
+  }
+}
+
+.moe-battle-popup-rise {
+  animation: moe-battle-popup-rise 2s ease-out forwards;
+}

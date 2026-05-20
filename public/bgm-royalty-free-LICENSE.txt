@@ -1,0 +1,23 @@
+BGM ファイル（すべて Kevin MacLeod / Incompetech）
+取得元: https://incompetech.com/music/royalty-free/music.html
+ライセンス: Creative Commons BY 4.0
+https://creativecommons.org/licenses/by/4.0/
+
+---
+
+1) public/bgm-royalty-free.mp3
+   曲名: Carefree
+
+2) public/bgm-royalty-free-castle.mp3
+   曲名: Teller of the Tales
+
+3) public/bgm-royalty-free-field.mp3
+   曲名: Spring Thaw
+
+4) public/bgm-royalty-free-battle.mp3
+   曲名: Volatile Reaction
+
+---
+
+配布・公開時は作者名と上記ライセンスへのリンクをどこかに記載してください。
+このファイルをリポジトリに含めておくと表記しやすいです。
