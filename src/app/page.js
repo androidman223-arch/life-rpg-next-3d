@@ -11,6 +11,8 @@ import {
   restoreGameStatusFromBackup,
   saveGameStatus,
 } from "@/lib/gameStatus";
+import TrainingExpPanel from "@/components/TrainingExpPanel";
+import { requestMoeFieldBgm } from "@/lib/bgmControl";
 
 const EXP_GAIN = 280;
 
@@ -22,6 +24,8 @@ export default function Home() {
 
   /** マウント後に localStorage を反映するまで操作・表示をロック（フラッシュ／誤操作防止） */
   const [storageReady, setStorageReady] = useState(false);
+
+  const [trainingOpen, setTrainingOpen] = useState(false);
 
   useEffect(() => {
     setStatus(loadGameStatus());
@@ -213,6 +217,24 @@ export default function Home() {
           。どちらも上の数値に加わります💗
         </p>
 
+        <button
+          type="button"
+          onClick={() => setTrainingOpen((v) => !v)}
+          disabled={!storageReady}
+          aria-expanded={trainingOpen}
+          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-600 hover:to-cyan-700 border border-teal-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
+        >
+          {trainingOpen ? "🧘 修行を閉じる" : "🧘 修行（タイマー・メモ・EXP）"}
+        </button>
+
+        <TrainingExpPanel
+          open={trainingOpen && storageReady}
+          onTrainerExpGranted={() => {
+            setStatus(loadGameStatus());
+            setCelebration("✨ 修行ボーナスで訓練士EXPが増えたよ！");
+          }}
+        />
+
         <Link
           href="/field"
           className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
@@ -222,6 +244,7 @@ export default function Home() {
 
         <Link
           href="/moe"
+          onClick={() => requestMoeFieldBgm()}
           className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 border border-sky-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
         >
           MOEのフィールドへ行く (ミーリム海岸)
@@ -229,6 +252,7 @@ export default function Home() {
 
         <Link
           href="/moe/3d"
+          onClick={() => requestMoeFieldBgm()}
           className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
         >
           MOEのフィールドへいく（3D版）

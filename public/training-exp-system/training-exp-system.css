@@ -1,0 +1,432 @@
+﻿#trial-thinking-time-panel {
+  background: rgba(22, 28, 42, 0.98); border: 1px solid #778;
+  border-radius: 10px; padding: 10px 14px; font-size: 12px;
+}
+.thinking-time-main-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px;
+  padding: 4px 0;
+}
+.thinking-time-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  padding: 4px 0;
+}
+.thinking-mode-chip {
+  background: rgba(40, 44, 58, 0.95); color: #aaa; border: 2px solid #555;
+  border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;
+}
+.thinking-mode-chip.self { color: #8cf; }
+.thinking-mode-chip.blame { color: #f9a; }
+.thinking-mode-chip.memo { color: #9fd; }
+.thinking-mode-chip.meditation { color: #c9f; }
+.thinking-mode-chip.self.selected { border-color: #6af; background: rgba(50, 70, 110, 0.5); }
+.thinking-mode-chip.blame.selected { border-color: #f9a; background: rgba(80, 45, 55, 0.5); }
+.thinking-mode-chip.memo.selected { border-color: #6da; background: rgba(45, 70, 60, 0.5); }
+.thinking-mode-chip.meditation.selected { border-color: #a8f; background: rgba(55, 45, 75, 0.5); }
+.thinking-compact-stat {
+  font-size: 11px; color: #aaa; white-space: nowrap;
+}
+.thinking-compact-stat span { color: #ffe680; font-weight: bold; font-size: 12px; }
+.thinking-compact-stat strong { color: #ddd; font-size: 12px; }
+.activity-session-exp {
+  font-size: 11px; font-weight: bold; color: #9f8; margin-left: 4px; white-space: nowrap;
+}
+.activity-session-exp.self,
+.activity-session-exp.memo,
+.activity-session-exp.meditation { color: #b8ffb8; }
+.thinking-stat-with-popup { position: relative; display: inline-flex; align-items: center; }
+.activity-exp-popup {
+  position: absolute; left: 50%; bottom: calc(100% + 5px);
+  transform: translateX(-50%) translateY(6px);
+  padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: bold;
+  white-space: nowrap; pointer-events: none; opacity: 0; z-index: 6;
+  background: rgba(30, 48, 42, 0.96); border: 1px solid #6da; color: #b8ffb8;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.activity-exp-popup.memo { border-color: #6da; color: #b8ffb8; }
+.activity-exp-popup.self { border-color: #6af; color: #aae; background: rgba(34, 44, 68, 0.96); }
+.activity-exp-popup.meditation { border-color: #a8c; color: #e0c8ff; background: rgba(40, 34, 52, 0.96); }
+.activity-exp-popup.exercise { border-color: #fa6; color: #ffd4a8; background: rgba(48, 38, 28, 0.96); }
+.activity-exp-popup.show {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+.activity-exp-popup.bump {
+  animation: activityExpPopupBump 0.55s ease-out;
+}
+@keyframes activityExpPopupBump {
+  0% { transform: translateX(-50%) scale(1); }
+  35% { transform: translateX(-50%) scale(1.12); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+.thinking-time-sep { color: #556; font-size: 11px; }
+.thinking-time-row + .thinking-time-row {
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+  margin-top: 4px; padding-top: 10px;
+}
+.thinking-time-block + .thinking-time-block {
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+  margin-top: 8px; padding-top: 8px;
+}
+.thinking-time-label {
+  font-weight: bold; min-width: 72px; font-size: 13px;
+}
+.thinking-time-label.self { color: #8cf; }
+.thinking-time-label.blame { color: #f9a; }
+.thinking-time-tag {
+  color: #aaa; font-size: 11px; letter-spacing: 0.08em;
+}
+.thinking-time-btn {
+  background: #3a5080; color: #fff; border: 1px solid #6af;
+  border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: bold;
+  cursor: pointer; min-width: 64px;
+}
+.thinking-time-btn:hover { background: #4a68a0; }
+.thinking-time-btn.running {
+  background: #6a3030; border-color: #f88;
+}
+.thinking-time-btn.running:hover { background: #7a3838; }
+.thinking-time-current {
+  color: #ffe680; font-weight: bold; font-size: 14px; min-width: 48px;
+}
+.thinking-time-next-bonus {
+  font-size: 11px; color: #8a9; white-space: nowrap; margin-left: 2px;
+}
+.thinking-time-total-wrap {
+  color: #aaa; font-size: 12px; margin-left: auto;
+}
+.thinking-time-total-wrap strong {
+  color: #ddd; font-size: 14px; margin-left: 4px;
+}
+.thinking-time-detail-btn {
+  background: rgba(50, 56, 72, 0.95); color: #bbb; border: 1px solid #667;
+  border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+}
+.thinking-time-detail-btn:hover { color: #fff; border-color: #99a; background: rgba(60, 68, 88, 0.95); }
+.thinking-time-detail-btn.open { color: #ffe680; border-color: #aa8; }
+.thinking-time-detail {
+  display: none; width: 100%; box-sizing: border-box;
+  margin: 2px 0 0; padding: 6px 10px 8px; border-radius: 8px;
+  font-size: 12px; line-height: 1.55; color: #ddd;
+}
+.thinking-time-detail.open { display: block; }
+.thinking-time-detail.self-detail {
+  background: rgba(40, 60, 90, 0.55); border: 1px solid rgba(120, 180, 255, 0.35);
+}
+.thinking-time-detail.blame-detail {
+  background: rgba(70, 40, 50, 0.55); border: 1px solid rgba(255, 140, 160, 0.35);
+}
+.thinking-time-detail-title {
+  font-weight: bold; margin: 0; font-size: 12px;
+}
+.thinking-time-detail-title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; margin: 0 0 4px;
+}
+.memo-detail-actions {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+.memo-detail-actions .memo-save-btn { margin-left: 68px; }
+.memo-edit-hint { font-weight: normal; color: #999; font-size: 11px; }
+.thinking-time-detail-body {
+  margin: 0; line-height: 1.55; color: #ddd;
+}
+.thinking-time-detail.self-detail .thinking-time-detail-title { color: #8cf; }
+.thinking-time-detail.blame-detail .thinking-time-detail-title { color: #f9a; }
+.thinking-time-bonus-wrap {
+  color: #aaa; font-size: 11px; white-space: nowrap;
+}
+.thinking-time-bonus-wrap strong { color: #ffd966; font-size: 13px; }
+.thinking-exp-stat {
+  font-size: 11px; color: #aaa; white-space: nowrap;
+}
+.thinking-exp-stat strong { color: #9f8; font-size: 12px; margin-left: 2px; }
+.memo-exp-bonus-note {
+  font-size: 10px; color: #ffd966; white-space: nowrap; margin-left: 2px;
+}
+.thinking-time-activity-row {
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+  margin-top: 4px; padding-top: 6px;
+}
+.thinking-exp-total-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+  margin-top: 6px; padding-top: 8px;
+  font-size: 11px; color: #aaa;
+}
+.thinking-exp-total-row > strong {
+  color: #ffd966; font-size: 14px;
+}
+.thinking-exp-breakdown {
+  font-size: 10px; color: #888;
+}
+.thinking-exp-bonus-btn {
+  background: rgba(50, 56, 72, 0.95); color: #bde; border: 1px solid #6af;
+  border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;
+}
+.thinking-exp-bonus-btn:hover { background: rgba(60, 68, 88, 0.95); color: #fff; }
+.thinking-exp-bonus-btn.open { color: #ffe680; border-color: #fd6; }
+.thinking-todo-memo-btn {
+  background: rgba(50, 56, 72, 0.95); color: #bde; border: 1px solid #8a8;
+  border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;
+}
+.thinking-todo-memo-btn:hover { background: rgba(60, 68, 88, 0.95); color: #fff; }
+.thinking-todo-memo-btn.open { color: #b8ffb8; border-color: #6c6; }
+.thinking-todo-memo-panel {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(24, 32, 28, 0.98); border: 1px solid #6a8;
+}
+.thinking-todo-memo-title-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 6px 10px; margin-bottom: 6px;
+}
+.thinking-todo-memo-title {
+  font-size: 13px; font-weight: bold; color: #b8e8a0;
+}
+.todo-memo-editor { min-height: 140px; }
+.thinking-exp-bonus-panel {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(18, 24, 36, 0.98); border: 1px solid #556;
+}
+.exp-bonus-title {
+  font-size: 13px; font-weight: bold; color: #8cf; margin-bottom: 4px;
+}
+.exp-bonus-header {
+  font-size: 11px; color: #aaa; margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120, 130, 160, 0.35);
+}
+.exp-bonus-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.exp-bonus-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  padding: 6px 8px; border-radius: 6px; background: rgba(30, 36, 50, 0.85);
+  border: 1px solid rgba(100, 110, 140, 0.35); font-size: 11px;
+}
+.exp-bonus-row.claimed { border-color: #3a6a4a; opacity: 0.55; }
+.exp-bonus-row.ready { border-color: #6a5a2a; background: rgba(50, 44, 28, 0.55); }
+.exp-bonus-row .exp-bonus-pts { color: #ffd966; font-weight: bold; min-width: 72px; }
+.exp-bonus-row .exp-bonus-reward { color: #ddd; flex: 1; }
+.exp-bonus-row.claimed .exp-bonus-reward,
+.exp-bonus-row.claimed .exp-bonus-pts { color: #777; }
+.exp-bonus-row .exp-bonus-reward.companion { color: #f8f; font-weight: bold; }
+.exp-bonus-row .exp-bonus-reward.future { color: #aab; }
+.exp-bonus-row .exp-bonus-reward.ultra-rare { color: #fd6; font-weight: bold; }
+.exp-bonus-row.future { border-color: #4a5060; opacity: 0.92; }
+.exp-bonus-row.future.ready .exp-bonus-status { color: #aab; }
+.exp-bonus-owner-note { color: #778; font-size: 10px; font-weight: normal; margin-left: 3px; }
+.exp-bonus-reward-btn {
+  flex: 1; text-align: left; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 11px; font-weight: bold; font-family: inherit;
+  background: rgba(50, 44, 28, 0.85); border: 1px solid #a80; color: #ffe680;
+}
+.exp-bonus-reward-btn:hover { background: rgba(70, 58, 32, 0.95); color: #fff; }
+.exp-bonus-reward-btn.companion { border-color: #a6f; color: #f8f; background: rgba(44, 36, 58, 0.85); }
+.exp-bonus-reward-btn.ultra-rare { border-color: #fd6; color: #fd6; }
+.thinking-mode-chip.exercise { color: #fc9; }
+.thinking-mode-chip.exercise.selected { border-color: #fa6; background: rgba(70, 50, 35, 0.5); }
+.activity-session-exp.exercise { color: #b8ffb8; }
+.thinking-settings-btn {
+  background: rgba(50, 56, 72, 0.95); color: #bbb; border: 1px solid #667;
+  border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+}
+.thinking-settings-btn:hover { color: #fff; border-color: #99a; }
+.thinking-settings-btn.open { color: #ffe680; border-color: #aa8; }
+.thinking-settings-panel {
+  width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(24, 28, 38, 0.98); border: 1px solid #556; font-size: 11px; color: #ccc;
+}
+.thinking-settings-panel label { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.txs-sync-guide-wrap {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+}
+.txs-sync-guide-block { font-size: 11px; color: #bbb; line-height: 1.55; }
+.txs-sync-guide-title {
+  font-size: 12px; font-weight: bold; color: #9fd; margin-bottom: 6px;
+}
+.txs-sync-guide-steps-title {
+  margin: 0 0 6px; font-size: 11px; font-weight: bold; color: #ffe680;
+}
+.txs-sync-guide-steps {
+  margin: 0 0 10px; padding-left: 1.35em; color: #ccc; font-size: 11px;
+}
+.txs-sync-guide-steps li { margin-bottom: 4px; }
+.txs-sync-guide-steps strong { color: #fff; }
+.txs-sync-guide-steps code {
+  color: #b8ffb8; font-size: 10px; background: rgba(0,0,0,0.25);
+  padding: 1px 4px; border-radius: 3px;
+}
+.txs-sync-guide-copy-hint { margin: 0 0 4px; font-size: 10px; color: #888; }
+.txs-sync-guide-lead { margin: 0 0 8px; color: #ccc; }
+.txs-sync-guide-lead strong { color: #ffe680; font-weight: bold; }
+.txs-sync-guide-dest { margin: 0 0 8px; font-size: 10px; color: #888; }
+.txs-sync-guide-dest code { color: #aad; font-size: 10px; }
+.txs-sync-guide-btn {
+  display: block; width: 100%; margin: 0 0 8px; padding: 8px 10px;
+  border-radius: 8px; border: 1px solid #6a8; background: rgba(40, 60, 55, 0.9);
+  color: #b8ffb8; font-size: 11px; font-weight: bold; cursor: pointer; font-family: inherit;
+}
+.txs-sync-guide-btn:hover { background: rgba(50, 75, 65, 0.95); color: #fff; }
+.txs-sync-guide-details {
+  margin-top: 4px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(20, 24, 32, 0.85); border: 1px solid rgba(100, 110, 140, 0.35);
+}
+.txs-sync-guide-details summary {
+  cursor: pointer; color: #8cf; font-weight: bold; font-size: 11px;
+}
+.txs-sync-guide-columns {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px;
+}
+@media (max-width: 520px) {
+  .txs-sync-guide-columns { grid-template-columns: 1fr; }
+}
+.txs-sync-guide-subtitle { margin: 0 0 4px; font-size: 10px; font-weight: bold; color: #aaa; }
+.txs-sync-guide-details ul { margin: 0; padding-left: 1.2em; color: #999; font-size: 10px; }
+.txs-sync-guide-foot { margin: 8px 0 0; font-size: 10px; color: #778; }
+.exp-bonus-row .exp-bonus-status { color: #888; font-size: 10px; margin-left: auto; }
+.exp-bonus-row.claimed .exp-bonus-status { color: #6f6; }
+.exp-bonus-row.ready .exp-bonus-status { color: #fd6; }
+#thinking-time-toast {
+  width: 100%; margin-top: 6px; min-height: 0; font-size: 12px; color: #ffd966;
+}
+.thinking-time-label.task { color: #b8e8a0; min-width: 88px; }
+.thinking-time-detail.task-detail {
+  background: rgba(40, 55, 45, 0.55); border: 1px solid rgba(140, 200, 130, 0.35);
+}
+.thinking-time-detail.task-detail .thinking-time-detail-title { color: #b8e8a0; }
+.current-task-goal {
+  margin: 0 0 8px; line-height: 1.55; color: #ddd; font-size: 12px;
+}
+.current-task-goal:last-child { margin-bottom: 0; }
+.current-task-goal.goal-primary {
+  font-size: 14px; font-weight: bold; color: #e8ffd0;
+}
+.current-task-note {
+  margin: 0 0 10px 12px; line-height: 1.55; color: #aab; font-size: 11px;
+}
+.thinking-time-sub-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  border-top: 1px solid rgba(120, 130, 160, 0.35);
+  margin-top: 8px; padding-top: 8px;
+}
+.thinking-sub-btn {
+  flex: 1; padding: 7px 12px; font-size: 12px; font-weight: bold;
+  border-radius: 6px; cursor: pointer; border: 2px solid #667;
+  background: rgba(40, 44, 58, 0.95); font-family: inherit;
+}
+.thinking-sub-btn.task-btn { color: #b8e8a0; border-color: #6a8; }
+.thinking-sub-btn.task-btn:hover { background: rgba(50, 70, 55, 0.6); }
+.thinking-sub-btn.habit-btn { color: #d8b8ff; border-color: #886; }
+.thinking-sub-btn.habit-btn:hover { background: rgba(60, 50, 75, 0.6); }
+.thinking-sub-btn.open { border-color: #ffd966; color: #ffe680; background: rgba(70, 65, 40, 0.45); }
+.thinking-time-detail.habit-detail {
+  background: rgba(50, 40, 65, 0.55); border: 1px solid rgba(180, 140, 220, 0.35);
+}
+.thinking-time-detail.habit-detail .thinking-time-detail-title { color: #d8b8ff; }
+.user-memo-editor {
+  display: block; width: 100%; box-sizing: border-box;
+  margin: 0; padding: 8px 10px; min-height: 88px;
+  background: rgba(12, 14, 22, 0.88); color: #ddd;
+  border: 1px solid rgba(120, 140, 180, 0.4); border-radius: 6px;
+  font-size: 12px; line-height: 1.55; font-family: inherit;
+  resize: vertical;
+}
+.user-memo-editor:focus {
+  outline: none; border-color: #8af; box-shadow: 0 0 0 2px rgba(100, 160, 255, 0.2);
+}
+.user-memo-editor.task-memo { min-height: 120px; }
+.memo-control-group {
+  display: inline-flex; align-items: center; gap: 3px; flex-wrap: nowrap;
+}
+.memo-control-group .thinking-sub-btn { flex: none; padding: 7px 10px; }
+.memo-save-btn, .memo-cancel-btn {
+  padding: 3px 10px; font-size: 11px; font-weight: bold; border-radius: 5px;
+  cursor: pointer; border: 1px solid; font-family: inherit; white-space: nowrap;
+}
+.memo-save-btn { background: #3a6080; color: #fff; border-color: #6af; }
+.memo-save-btn:hover { background: #4a78a0; }
+.memo-cancel-btn { background: #444; color: #ccc; border-color: #666; }
+.memo-cancel-btn:hover { background: #555; color: #fff; }
+.memo-confirm-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 2500;
+  align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+}
+.memo-confirm-backdrop.open { display: flex; }
+.memo-confirm-dialog {
+  min-width: 260px; max-width: min(360px, calc(100vw - 48px));
+  padding: 16px 18px; border-radius: 12px;
+  background: rgba(24, 28, 42, 0.98); color: #eee;
+  border: 2px solid #778; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+  text-align: center; font-size: 13px;
+}
+.memo-confirm-title {
+  margin: 0 0 8px; color: #ffe680; font-weight: bold; font-size: 15px;
+}
+.memo-confirm-message {
+  margin: 0 0 14px; color: #ccc; line-height: 1.6;
+}
+.memo-confirm-actions {
+  display: flex; justify-content: center; gap: 48px;
+}
+.memo-confirm-no, .memo-confirm-yes {
+  min-width: 72px; padding: 7px 12px; border-radius: 7px;
+  border: 1px solid; font-weight: bold; font-family: inherit; cursor: pointer;
+}
+.memo-confirm-no { background: #3a6080; color: #fff; border-color: #6af; }
+.memo-confirm-no:hover { background: #4a78a0; }
+.memo-confirm-yes { background: #553838; color: #ffdede; border-color: #a66; }
+.memo-confirm-yes:hover { background: #6a4242; color: #fff; }
+
+/* 修行パネル折りたたみ（単体でも動くよう同梱） */
+#training-exp-system-root .txs-training-fold.trial-menu-fold {
+  background: rgba(22, 28, 42, 0.98);
+  border: 1px solid #778;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#training-exp-system-root .txs-training-fold .menu-fold-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #9fd;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+#training-exp-system-root .txs-training-fold .menu-fold-toggle:hover {
+  background: rgba(50, 60, 80, 0.45);
+}
+#training-exp-system-root .txs-training-fold .menu-fold-arrow {
+  display: inline-block;
+  transition: transform 0.15s;
+  font-size: 12px;
+}
+#training-exp-system-root .txs-training-fold.menu-open .menu-fold-arrow {
+  transform: rotate(-180deg);
+}
+#training-exp-system-root .txs-training-fold .menu-fold-panel {
+  display: none;
+  padding: 0 10px 10px;
+}
+#training-exp-system-root .txs-training-fold.menu-open .menu-fold-panel {
+  display: block;
+}
+#training-exp-system-root .txs-fold-summary {
+  margin-left: auto;
+  font-size: 11px;
+  color: #ffd966;
+  font-weight: normal;
+}

@@ -24,9 +24,8 @@
 .DS_Store
 *.pem
 
-# ローカル専用 BGM（MOE など。`git add .` しても GitHub に上がらない）
-# → GitHub 用は public/bgm-royalty-free.mp3 をコミット（こちらは ignore しない）
-/public/ambient-bgm.mp3
+# ローカル専用 BGM（`git add .` しても GitHub に上がらない）
+/public/assets/bgm/ambient-bgm*.mp3
 
 # debug
 npm-debug.log*

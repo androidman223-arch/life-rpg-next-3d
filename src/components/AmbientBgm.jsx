@@ -1,51 +1,77 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import {
+  isMoeFieldPath,
+  MOE_FIELD_BGM_EVENT,
+} from "@/lib/bgmControl";
 
 const STORAGE_KEY = "life-rpg-bgm-track";
 
-/** ローカル専用（.gitignore 推奨） */
-const LOCAL_BGM = "/ambient-bgm.mp3";
-const LOCAL_ID = "local";
+const BGM_DIR = "/assets/bgm";
 
-/** リポジトリ同梱（Kevin MacLeod / Incompetech・CC BY 4.0）— public/bgm-royalty-free-LICENSE.txt */
+/** ローカル専用（.gitignore — public/assets/bgm/ambient-bgm*.mp3） */
+const LOCAL_TRACKS = [
+  {
+    id: "local",
+    label: "マイ BGM：ambient-bgm.mp3",
+    path: `${BGM_DIR}/ambient-bgm.mp3`,
+  },
+  ...Array.from({ length: 6 }, (_, i) => {
+    const n = i + 2;
+    return {
+      id: `local${n}`,
+      label: `マイ BGM ${n}：ambient-bgm-${n}.mp3`,
+      path: `${BGM_DIR}/ambient-bgm-${n}.mp3`,
+    };
+  }),
+];
+
+const LOCAL_ID = LOCAL_TRACKS[0].id;
+
+/** リポジトリ同梱（Kevin MacLeod / Incompetech・CC BY 4.0）— public/assets/bgm/bgm-royalty-free-LICENSE.txt */
 const ROYALTY_TRACKS = [
   {
     id: "carefree",
     label: "フリー：bgm-royalty-free.mp3（のんびり・街・日常）",
-    path: "/bgm-royalty-free.mp3",
+    path: `${BGM_DIR}/bgm-royalty-free.mp3`,
   },
   {
     id: "castle",
     label: "フリー：bgm-royalty-free-castle.mp3（城・宮殿・物語）",
-    path: "/bgm-royalty-free-castle.mp3",
+    path: `${BGM_DIR}/bgm-royalty-free-castle.mp3`,
   },
   {
     id: "field",
     label: "フリー：bgm-royalty-free-field.mp3（フィールド・散策）",
-    path: "/bgm-royalty-free-field.mp3",
+    path: `${BGM_DIR}/bgm-royalty-free-field.mp3`,
   },
   {
     id: "battle",
     label: "フリー：bgm-royalty-free-battle.mp3（アクション・戦闘）",
-    path: "/bgm-royalty-free-battle.mp3",
+    path: `${BGM_DIR}/bgm-royalty-free-battle.mp3`,
   },
 ];
 
-const SELECT_OPTIONS = [
-  { id: LOCAL_ID, label: "マイ BGM：ambient-bgm.mp3（この PC のみ）" },
-  ...ROYALTY_TRACKS,
-];
+const SELECT_OPTIONS = [...LOCAL_TRACKS, ...ROYALTY_TRACKS];
 
-function royaltyPathForId(id) {
+function pathForTrackId(id) {
+  const local = LOCAL_TRACKS.find((t) => t.id === id);
+  if (local) return local.path;
   return ROYALTY_TRACKS.find((t) => t.id === id)?.path ?? ROYALTY_TRACKS[0].path;
 }
 
-function isValidTrackId(id) {
-  return id === LOCAL_ID || ROYALTY_TRACKS.some((t) => t.id === id);
+function isLocalTrackId(id) {
+  return LOCAL_TRACKS.some((t) => t.id === id);
 }
 
-export default function AmbientBgm({ primarySrc = LOCAL_BGM }) {
+function isValidTrackId(id) {
+  return isLocalTrackId(id) || ROYALTY_TRACKS.some((t) => t.id === id);
+}
+
+export default function AmbientBgm() {
+  const pathname = usePathname();
   const audioRef = useRef(null);
   /** サーバーとクライアントの初回を揃える（localStorage はマウント後に読む） */
   const [trackId, setTrackId] = useState(LOCAL_ID);
@@ -53,25 +79,27 @@ export default function AmbientBgm({ primarySrc = LOCAL_BGM }) {
   const [loadError, setLoadError] = useState(false);
   const [volume, setVolume] = useState(0.22);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [needsGesture, setNeedsGesture] = useState(false);
   const autoFallbackRef = useRef(false);
 
   /** ブラウザのみ <audio> を出す（SSR との src 不一致を Hydration しない） */
   const [audioMounted, setAudioMounted] = useState(false);
 
-  const activeSrc = useMemo(
-    () => (trackId === LOCAL_ID ? primarySrc : royaltyPathForId(trackId)),
-    [trackId, primarySrc]
-  );
+  const activeSrc = useMemo(() => pathForTrackId(trackId), [trackId]);
 
   useEffect(() => {
     try {
-      const s = window.localStorage.getItem(STORAGE_KEY);
-      if (s && isValidTrackId(s)) setTrackId(s);
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved && isValidTrackId(saved)) {
+        setTrackId(saved);
+      } else if (isMoeFieldPath(pathname)) {
+        setTrackId("field");
+      }
     } catch {
       /* ignore */
     }
     setAudioMounted(true);
-  }, []);
+  }, [pathname]);
 
   const persistTrackSelection = useCallback((id) => {
     try {
@@ -93,10 +121,10 @@ export default function AmbientBgm({ primarySrc = LOCAL_BGM }) {
   }, [volume]);
 
   const handleAudioError = useCallback(() => {
-    if (trackId === LOCAL_ID && !autoFallbackRef.current) {
+    if (isLocalTrackId(trackId) && !autoFallbackRef.current) {
       autoFallbackRef.current = true;
-      setTrackId("carefree");
-      persistTrackSelection("carefree");
+      setTrackId("field");
+      persistTrackSelection("field");
       return;
     }
     setLoadError(true);
@@ -115,20 +143,65 @@ export default function AmbientBgm({ primarySrc = LOCAL_BGM }) {
     setPlaying((p) => !p);
   }, [loadError]);
 
+  const startBgm = useCallback(() => {
+    if (loadError) return;
+    setNeedsGesture(false);
+    setPlaying(true);
+    const a = audioRef.current;
+    if (!a) return;
+    void a.play().catch(() => {
+      setPlaying(false);
+      setNeedsGesture(true);
+    });
+  }, [loadError]);
+
   useEffect(() => {
     const a = audioRef.current;
     if (!a || loadError) return;
     if (playing) {
-      void a.play().catch(() => setPlaying(false));
+      void a.play()
+        .then(() => setNeedsGesture(false))
+        .catch(() => {
+          setPlaying(false);
+          setNeedsGesture(true);
+        });
     } else {
       a.pause();
     }
   }, [playing, loadError, activeSrc]);
 
-  const statusLine =
-    trackId === LOCAL_ID
-      ? "マイ BGM を選択中（無い・壊れている場合は自動でフリー曲へ）"
-      : `フリー曲：${ROYALTY_TRACKS.find((t) => t.id === trackId)?.path ?? ""}`;
+  /** MOEフィールド入室時のみ自動再生（メニューでは鳴らさない） */
+  useEffect(() => {
+    if (!audioMounted || loadError) return;
+    if (isMoeFieldPath(pathname)) {
+      startBgm();
+    } else {
+      setPlaying(false);
+      setNeedsGesture(false);
+    }
+  }, [pathname, audioMounted, loadError, startBgm]);
+
+  /** 「MOEのフィールドへ行く」クリック直後（ユーザー操作） */
+  useEffect(() => {
+    const onMoeFieldStart = () => {
+      try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (!saved || !isValidTrackId(saved)) {
+          setTrackId("field");
+        }
+      } catch {
+        /* ignore */
+      }
+      startBgm();
+    };
+    window.addEventListener(MOE_FIELD_BGM_EVENT, onMoeFieldStart);
+    return () =>
+      window.removeEventListener(MOE_FIELD_BGM_EVENT, onMoeFieldStart);
+  }, [startBgm]);
+
+  const statusLine = isLocalTrackId(trackId)
+    ? `マイ曲：${pathForTrackId(trackId)}（無い場合はフィールド曲へ自動切替）`
+    : `フリー曲：${pathForTrackId(trackId)}`;
 
   return (
     <>
@@ -155,7 +228,7 @@ export default function AmbientBgm({ primarySrc = LOCAL_BGM }) {
             title="タップで再生・停止"
             className="shrink-0 rounded bg-emerald-900/85 px-2 py-0.5 text-[9px] font-semibold text-emerald-100 ring-1 ring-emerald-600/45 transition hover:bg-emerald-800/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {playing ? "停止" : "BGM 再生"}
+            {playing ? "停止" : needsGesture ? "BGM（クリックで開始）" : "BGM 再生"}
           </button>
           <button
             type="button"

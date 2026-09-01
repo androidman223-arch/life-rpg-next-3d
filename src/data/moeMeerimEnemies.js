@@ -124,11 +124,18 @@ export const MOE_MEERIM_ENEMIES = [
   },
 ];
 
+/** 敵 Lv 表示（Wiki 準拠・小数第1位） */
+export function formatEnemyLevelUi(level) {
+  const n = Math.round(Number(level) * 10) / 10;
+  return n.toFixed(1);
+}
+
 export function enemyWikiStatsTitle(en) {
   if (!en?.wiki) return en?.name ?? "";
   const w = en.wiki;
+  const lv = formatEnemyLevelUi(en.level);
   return [
-    `${en.name}（Wiki表 Lv${en.level}）`,
+    `${en.name}（Wiki表 Lv${lv}）`,
     `HP ${w.hp}  MP ${w.mp}  攻撃 ${w.attack}  防御 ${w.defense}`,
     `命中 ${w.hit}  回避 ${w.evasion}  魔力 ${w.magic}`,
     `攻撃間隔 ${en.attackInterval}`,

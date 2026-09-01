@@ -1,26 +1,31 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback } from "react";
+import dynamic from "next/dynamic";
+import { addGameExp } from "@/lib/gameStatus";
+
+const MoeFieldMap = dynamic(() => import("@/components/MoeFieldMap"), {
+  ssr: false,
+  loading: () => (
+    <main className="min-h-dvh flex items-center justify-center bg-zinc-900 text-white">
+      <p className="text-violet-200">3Dフィールドを準備中…</p>
+    </main>
+  ),
+});
 
 export default function Moe3dPage() {
+  const router = useRouter();
+  const goMain = useCallback(() => router.push("/"), [router]);
+  const handleEnemyDefeat = useCallback((level) => {
+    addGameExp(Math.ceil(Number(level) * 5) || 1);
+  }, []);
+
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 via-indigo-950 to-black p-6 text-white">
-      <p className="text-xl font-bold text-violet-200">MOEのフィールド（3D版）</p>
-      <p className="mt-3 text-sm text-zinc-400 text-center max-w-sm">
-        3Dフィールドは準備中です。いまは2D版（ミーリム海岸）をお楽しみください。
-      </p>
-      <Link
-        href="/moe"
-        className="mt-6 py-3 px-6 rounded-2xl font-bold text-base bg-gradient-to-r from-sky-600 to-blue-600 border border-sky-400/50 shadow-lg"
-      >
-        2D版（ミーリム海岸）へ
-      </Link>
-      <Link
-        href="/"
-        className="mt-3 py-2 px-5 rounded-xl text-sm font-semibold text-zinc-300 border border-zinc-600 hover:bg-zinc-800"
-      >
-        メニューへ戻る
-      </Link>
-    </main>
+    <MoeFieldMap
+      worldMode="3d"
+      onBack={goMain}
+      onEnemyDefeat={handleEnemyDefeat}
+    />
   );
 }
