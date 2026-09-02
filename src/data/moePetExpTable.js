@@ -101,6 +101,13 @@ export function getMoePetExpToNextLevel(level) {
   return getMoePetExpRow(level + 1)?.expFromPrev ?? null;
 }
 
+/** 次Lvまでの残りEXP（0 でレベルアップ） */
+export function getMoePetExpRemainingToNextLevel(level, expIntoLevel) {
+  const need = getMoePetExpToNextLevel(level);
+  if (need == null) return null;
+  return Math.max(0, need - Math.max(0, Math.floor(Number(expIntoLevel) || 0)));
+}
+
 /**
  * floor(ペットLv) − floor(敵Lv) を -7〜+5 にクランプし、テーブル参照
  */

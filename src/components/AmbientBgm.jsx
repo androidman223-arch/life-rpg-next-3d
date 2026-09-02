@@ -77,7 +77,7 @@ export default function AmbientBgm() {
   const [trackId, setTrackId] = useState(LOCAL_ID);
   const [playing, setPlaying] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [volume, setVolume] = useState(0.22);
+  const [volume, setVolume] = useState(0.11);
   const [panelOpen, setPanelOpen] = useState(false);
   const [needsGesture, setNeedsGesture] = useState(false);
   const autoFallbackRef = useRef(false);

@@ -1,5 +1,7 @@
 // Master of Epic Pet Database（スキル名・習得Lvは MOEペット育成 Wiki 各ページに準拠）
 // Wiki 係数・修正の参照表: ./moePetWikiCoefficients.js
+import { MOE_PET_WIKI_FORMULA_BY_ID } from "./moePetWikiCoefficients";
+
 export const MOE_PET_DATA = {
   // https://wikiwiki.jp/moe-pet/%E3%83%9A%E3%83%83%E3%83%88/%E7%89%B9%E6%AE%8A/%E3%83%9C%E3%83%BC%E3%83%AB%E3%83%89%20%E3%82%A4%E3%83%BC%E3%82%B0%E3%83%AB
   // 能力値 = (係数 * Lv) + 修正値
@@ -528,6 +530,29 @@ export function formatPetStatUi(v) {
   return n.toFixed(1);
 }
 
+/** UI 表示用（耐火など・整数） */
+export function formatPetResistUi(v) {
+  return String(Math.floor(Number(v) || 0));
+}
+
+function calculatePetResistsFromWiki(petId, level) {
+  const formula = MOE_PET_WIKI_FORMULA_BY_ID[petId];
+  const L = Math.max(0, Number(level) || 0);
+  const calc = (key) => {
+    if (!formula?.resistGrowth) return 0;
+    return Math.floor(
+      (formula.resistGrowth[key] ?? 0) * L + (formula.resistModifier?.[key] ?? 0)
+    );
+  };
+  return {
+    resistFire: calc("fire"),
+    resistWater: calc("water"),
+    resistEarth: calc("earth"),
+    resistWind: calc("wind"),
+    resistNeutral: calc("neutral"),
+  };
+}
+
 /**
  * Lv+1 あたりの係数増分（キャプション）
  * @returns {string | null}
@@ -546,7 +571,7 @@ export function getPetWikiGrowthCaptionLine(petId) {
     parts.push(`回避+${formatPetStatUi(g.evasion)}`);
   }
   if (g.magic != null && g.magic !== 0) parts.push(`魔+${formatPetStatUi(g.magic)}`);
-  return parts.length ? `Lv+1: ${parts.join("　")}` : null;
+  return parts.length ? `Lv+1: ${parts.join(" ")}` : null;
 }
 
 export function getSunSpirit16BeatComboParams() {
@@ -583,6 +608,8 @@ export function calculatePetStats(petId, level) {
   const hpRaw = data.baseStats.hp + data.growth.hp * L;
   const mpRaw = data.baseStats.mp + data.growth.mp * L;
 
+  const resists = calculatePetResistsFromWiki(petId, L);
+
   if (prec) {
     return {
       hpMax: roundPetStatInternal(hpRaw),
@@ -592,6 +619,7 @@ export function calculatePetStats(petId, level) {
       hit: roundPetStatInternal(hit),
       evasion: roundPetStatInternal(evasion),
       magic: roundPetStatInternal(mag),
+      ...resists,
     };
   }
 
@@ -603,5 +631,6 @@ export function calculatePetStats(petId, level) {
     hit,
     evasion,
     magic: mag,
+    ...resists,
   };
 }

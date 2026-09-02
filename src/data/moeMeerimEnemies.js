@@ -122,7 +122,56 @@ export const MOE_MEERIM_ENEMIES = [
     emoji: "🦎",
     color: "bg-indigo-800 border-indigo-950",
   },
+  /** ミーリム海岸・丘の上の中ボス（エルビン渓谷のはぐれバイソン系） */
+  {
+    key: "elvin_bison",
+    name: "エルビン バイソン",
+    level: 28.5,
+    attackInterval: 96.0,
+    wiki: {
+      hp: 0.5,
+      mp: 28.0,
+      attack: 34.0,
+      defense: 28.0,
+      hit: 28.0,
+      evasion: 0.5,
+      magic: 14.0,
+    },
+    hpMax: 200,
+    petDamage: 32,
+    emoji: "🐂",
+    color: "bg-amber-900 border-amber-950",
+    midBoss: true,
+  },
+  /** エルビン山脈の超ボス系 — 2つ目の丘（バグテスト用） */
+  {
+    key: "auzun_bura",
+    name: "アウズンブラ",
+    level: 120,
+    attackInterval: 220.0,
+    wiki: {
+      hp: 0.5,
+      mp: 118.0,
+      attack: 142.0,
+      defense: 118.0,
+      hit: 118.0,
+      evasion: 0.5,
+      magic: 72.0,
+    },
+    hpMax: 820,
+    petDamage: 88,
+    emoji: "🦬",
+    color: "bg-stone-900 border-violet-950",
+    superBoss: true,
+  },
 ];
+
+export const MOE_MEERIM_MID_BOSS_KEY = "elvin_bison";
+export const MOE_MEERIM_SUPER_BOSS_KEY = "auzun_bura";
+/** 中ボス HP 倍率（通常よりタフ） */
+export const MOE_MID_BOSS_HP_MULTIPLIER = 2;
+/** 超ボス HP 倍率 */
+export const MOE_SUPER_BOSS_HP_MULTIPLIER = 3;
 
 /** 敵 Lv 表示（Wiki 準拠・小数第1位） */
 export function formatEnemyLevelUi(level) {

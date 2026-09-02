@@ -7,16 +7,21 @@ import {
   getDefaultPetForId,
   loadInitialMoePetFromStorage,
   loadMoePetsSave,
+  loadMoePetDebugSnapshot,
+  saveMoePetDebugSnapshot,
+  clearMoePetDebugSnapshot,
+  petFromDebugSnapshot,
   MOE_SAVED_PET_INITIAL_LEVEL,
   persistCurrentMoePet,
   petFromSaveSlot,
   writeMoePetsSave,
 } from "@/lib/moePetSave";
 import { playSfx } from "@/lib/sfx";
-import { MOE_MEERIM_ENEMIES, enemyWikiStatsTitle, formatEnemyLevelUi } from "@/data/moeMeerimEnemies";
+import { MOE_MEERIM_ENEMIES, MOE_MEERIM_MID_BOSS_KEY, MOE_MEERIM_SUPER_BOSS_KEY, MOE_MID_BOSS_HP_MULTIPLIER, MOE_SUPER_BOSS_HP_MULTIPLIER, enemyWikiStatsTitle, formatEnemyLevelUi } from "@/data/moeMeerimEnemies";
 import {
   applyMoePetExpGain,
   getMoePetExpBaseOnHitSuccess,
+  getMoePetExpRemainingToNextLevel,
   getMoePetExpToNextLevel,
   getMoePetFreshTotalExpForLevel,
   getMoePetTotalExpFromLegacyProgress,
@@ -26,6 +31,7 @@ import {
 import {
   MOE_PET_DATA,
   calculatePetStats,
+  formatPetResistUi,
   formatPetStatUi,
   getPetWikiGrowthCaptionLine,
   petUsesPreciseWikiStats,
@@ -33,6 +39,14 @@ import {
 } from "../data/moePets";
 import { resolveMoeDuelSkillSequence } from "../data/moePetCombatSkills";
 import MoeField3DCanvas from "@/components/MoeField3DCanvas";
+import MoeTargetWindow from "@/components/MoeTargetWindow";
+import MoeCrystalMarker from "@/components/MoeCrystalMarker";
+import MoeNpcDialogue from "@/components/MoeNpcDialogue";
+import MoePetHpWindow from "@/components/MoePetHpWindow";
+import {
+  buildPetMasterDialogue,
+  MOE_PET_MASTER_NPC,
+} from "@/data/moeFieldNpcs";
 import {
   MOE_3D_ENEMIES_PER_ZONE,
   MOE_3D_ENEMY_ZONES,
@@ -44,8 +58,16 @@ import {
   moe3dClampPosition,
   moe3dDuelSlotFromPet,
   moe3dEnemyStatsForZoneLevel,
+  moe3dMinimapZoneRects,
   moe3dPickRespawnInZone,
+  moe3dMidBossSpawnPosition,
+  moe3dSuperBossSpawnPosition,
+  moe3dBossAreaLayout,
+  buildMeerimMidBossEnemy,
+  buildMeerimSuperBossEnemy,
   moe3dPlayerStartPosition,
+  moe3dIsNearPetHouse,
+  moe3dWorldToMinimap,
   moe3dZoneEnemyPosition,
 } from "@/lib/moeField3DModels";
 import {
@@ -53,14 +75,74 @@ import {
   computeMoe2dWorldSize,
   inRiverMoe2d,
   moe2dCellCenter,
+  moe2dIsBiskExitZone,
   moe2dPickRespawnInZone2d,
+  moe2dMidBossSpawnPosition,
+  moe2dSuperBossSpawnPosition,
+  moe2dBossAreaLayout,
   moe2dPlayerStartPosition,
+  moe2dPetHouseLayout,
+  moe2dIsNearPetHouse,
   moe2dRiverBoundaries,
   moe2dZoneRowStyle,
   moe2dZoneRowMiniFill,
+  MOE_2D_MID_BOSS_UI_SIZE,
+  MOE_2D_MID_BOSS_UI_PAD,
+  MOE_2D_SUPER_BOSS_UI_SIZE,
+  MOE_2D_SUPER_BOSS_UI_PAD,
 } from "@/lib/moeField2DLayout";
 
 const PLAYER_R = 18;
+
+/** キー入力（e.code ベース — w/W 取りこぼし防止） */
+function createEmptyInputKeys() {
+  return { up: false, down: false, left: false, right: false, shift: false, space: false };
+}
+
+function applyInputKeyCode(state, code, down, e) {
+  switch (code) {
+    case "KeyW":
+    case "ArrowUp":
+      state.up = down;
+      return true;
+    case "KeyS":
+    case "ArrowDown":
+      state.down = down;
+      return true;
+    case "KeyA":
+    case "ArrowLeft":
+      state.left = down;
+      return true;
+    case "KeyD":
+    case "ArrowRight":
+      state.right = down;
+      return true;
+    case "ShiftLeft":
+    case "ShiftRight":
+      state.shift = down ? true : e.getModifierState("Shift");
+      return true;
+    case "Space":
+      state.space = down;
+      return true;
+    default:
+      return false;
+  }
+}
+
+const MOVE_KEY_CODES = new Set([
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
+/** ミニマップ SVG の表示高さ（viewBox 比の 1/2） */
+function minimapSvgStyle(mapW, mapH) {
+  return { width: "100%", aspectRatio: `${mapW * 2} / ${mapH}` };
+}
 const MOVE_SPEED = 4.5;
 /** 3Dマップは座標範囲が狭いので、同じ数値だと約10倍速く感じる */
 const MOVE_SPEED_3D = 0.18;
@@ -72,6 +154,21 @@ const HEAL_AMOUNT = 20; // プレイヤーの回復量
 const PET_SIT_REGEN_HP = 3;
 const PET_SIT_REGEN_MP = 2;
 const PET_AUTO_ATTACK_COOLDOWN_MS = 1400;
+const PET_FOLLOW_DIST_3D = 4;
+const PET_FOLLOW_DIST_3D_AUTO = 6;
+const PET_FOLLOW_DIST_3D_TIGHT = 1.2;
+const PET_FOLLOW_DIST_2D = 50;
+const PET_FOLLOW_DIST_2D_TIGHT = 16;
+const PET_APPROACH_THRESHOLD_3D = 0.35;
+const PET_APPROACH_THRESHOLD_2D = 10;
+
+const MOE_PET_COMMAND_UI = {
+  follow: { label: "もどれ", toast: "もどれ！（プレイヤーのもとへ）", hint: "追従中" },
+  wait: { label: "待て", toast: "待て！（その場で待機）", hint: "待機中" },
+  sit: { label: "座れ", toast: "座れ！（自然回復）", hint: "座って回復中" },
+  auto: { label: "オート", toast: "オート：敵を自動で攻撃", hint: "オート攻撃中" },
+  bero: { label: "ベロー", toast: "ベロー！（ぴったりくっつく）", hint: "ぴったり追従中" },
+};
 const INITIAL_MOE_PET_LEVEL = MOE_SAVED_PET_INITIAL_LEVEL;
 
 /** HP/MP バー幅（max が 0 のとき NaN 防止） */
@@ -79,6 +176,86 @@ function petResourceBarPct(current, max) {
   const m = Number(max);
   if (!m || m <= 0) return 0;
   return Math.min(100, (Number(current) / m) * 100);
+}
+
+function enemyHpBarColor(pct) {
+  if (pct <= 25) return "#dc2626";
+  if (pct <= 50) return "#ef4444";
+  return "#f87171";
+}
+
+/** ペット命令：待機・座れは anchor 固定、もどれ/オートは追従 */
+function advancePetFieldPosition({
+  pos,
+  cmd,
+  duel,
+  waitAnchor,
+  playerPos,
+  speed,
+  approachThreshold,
+  followDist,
+  followDistAuto,
+  now,
+  autoAttackCooldownRef,
+  targetEnemyIdRef,
+  enemiesRef,
+  setTargetEnemyId,
+  startDuelWithEnemyRef,
+}) {
+  if (cmd === "wait" || cmd === "sit") {
+    if (waitAnchor) {
+      return { x: waitAnchor.x, y: waitAnchor.y, reachedApproach: false };
+    }
+    return { ...pos, reachedApproach: false };
+  }
+
+  if (duel?.phase === "approach") {
+    const ddx = duel.slotX - pos.x;
+    const ddy = duel.slotY - pos.y;
+    const dist = Math.hypot(ddx, ddy);
+    if (dist < approachThreshold) {
+      return { x: duel.slotX, y: duel.slotY, reachedApproach: true };
+    }
+    const sp = speed * 1.35;
+    return {
+      x: pos.x + (ddx / dist) * sp,
+      y: pos.y + (ddy / dist) * sp,
+      reachedApproach: false,
+    };
+  }
+  if (duel?.phase === "simultaneous_charge") {
+    return { x: duel.slotX, y: duel.slotY, reachedApproach: false };
+  }
+  if (cmd === "auto" && now >= autoAttackCooldownRef.current) {
+    let tid = targetEnemyIdRef.current;
+    let en = enemiesRef.current.find((e) => e.id === tid && e.hp > 0);
+    if (!en) {
+      const alive = enemiesRef.current.filter((e) => e.hp > 0);
+      if (alive.length > 0) {
+        en = alive[Math.floor(Math.random() * alive.length)];
+        tid = en.id;
+        targetEnemyIdRef.current = tid;
+        setTargetEnemyId(tid);
+      }
+    }
+    if (en) {
+      startDuelWithEnemyRef.current(tid);
+      autoAttackCooldownRef.current = now + PET_AUTO_ATTACK_COOLDOWN_MS;
+    }
+  }
+  const pdx = playerPos.x - pos.x;
+  const pdy = playerPos.y - pos.y;
+  const dist = Math.hypot(pdx, pdy);
+  const threshold = cmd === "auto" ? followDistAuto : followDist;
+  const followMult = cmd === "follow" ? 1.35 : 0.9;
+  if (dist > threshold) {
+    return {
+      x: pos.x + (pdx / dist) * (speed * followMult),
+      y: pos.y + (pdy / dist) * (speed * followMult),
+      reachedApproach: false,
+    };
+  }
+  return { ...pos, reachedApproach: false };
 }
 
 const SKILL_SLOT_LABELS = [
@@ -108,44 +285,22 @@ function skillToastMessage(petId, slotIndex, skill) {
 
 const MOE_PET_IDS = Object.keys(MOE_PET_DATA);
 
-/** ディレイ参照用（アタック系スキル） */
-const SKILL_TYPES_WITH_DELAY = new Set([
-  "physical",
-  "physical_dot",
-  "physical_area",
-  "physical_area_narrow",
-  "physical_magic_combo",
-  "physical_magic_area",
-  "magic",
-  "magic_fire",
-  "magic_wind",
-  "magic_wind_area",
-  "magic_fire_dot",
-  "magic_dot_area",
-  "magic_area_debuff",
-  "magic_debuff",
-]);
+/** フィールド同時チャージバー：通常アタック間隔（必殺技の Wiki ディレイは使わない） */
+const MOE_PET_FIELD_ATTACK_CHARGE_SEC = 3;
 
-/** ペットの次の攻撃までのチャージ秒数（習得済みスキルの delaySec の最小を優先） */
+/** スキルボタン発動メッセージの表示時間（コンボヒットで消えない専用 UI） */
+const MOE_SKILL_TOAST_MS = 1000;
+
+/** ペットの次の攻撃までのチャージ秒数（同時チャージ UI＝アタック想定） */
 function getPetChargeSeconds(petId, petLevel) {
   const skills = MOE_PET_DATA[petId]?.skills || [];
-  const candidates = skills.filter(
-    (s) =>
-      s.delaySec != null &&
-      s.delaySec > 0 &&
-      s.level <= petLevel &&
-      s.name !== "疑似騎乗" &&
-      SKILL_TYPES_WITH_DELAY.has(s.type)
+  const atk = skills.find(
+    (s) => s.name === "アタック" && (s.level ?? 1) <= petLevel
   );
-  if (candidates.length > 0) {
-    const m = Math.min(...candidates.map((s) => s.delaySec));
-    return Math.min(55, Math.max(3, m));
-  }
-  const atk = skills.find((s) => s.name === "アタック");
   if (atk?.delaySec != null && atk.delaySec > 0) {
-    return Math.min(55, Math.max(3, atk.delaySec));
+    return Math.min(12, Math.max(2, atk.delaySec));
   }
-  return 3;
+  return MOE_PET_FIELD_ATTACK_CHARGE_SEC;
 }
 
 /** 敵の攻撃チャージ秒数（体感用に Wiki 間隔に依存せず約5秒） */
@@ -191,6 +346,20 @@ function inRiver(px, py, mapW, mapH, rowLayout) {
   return false;
 }
 
+/** 2D：川は軸ごとに判定し、橋方向へ滑らかに沿えるようにする */
+function resolve2dPlayerMove(px, py, nx, ny, mapW, mapH, rowLayout) {
+  if (!inRiver(nx, ny, mapW, mapH, rowLayout)) return { x: nx, y: ny };
+  if (!inRiver(nx, py, mapW, mapH, rowLayout)) return { x: nx, y: py };
+  if (!inRiver(px, ny, mapW, mapH, rowLayout)) return { x: px, y: ny };
+  return { x: px, y: py };
+}
+
+function isTypingTarget(el) {
+  if (!el || typeof el !== "object") return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
+}
+
 /** 3D: カメラの向き（yaw）に合わせて WASD の入力方向を変換 */
 function moveInputForCameraYaw(inputX, inputZ, camYaw) {
   const sinY = Math.sin(camYaw);
@@ -211,6 +380,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const is3d = worldMode === "3d";
   const [map3dReady, setMap3dReady] = useState(false);
   const cameraYawRef = useRef(0);
+  const lastMinimap3dSyncRef = useRef(0);
+  const [minimap3d, setMinimap3d] = useState({ x: 0, y: 0, yaw: 0 });
   const playerFacingRef = useRef(0);
   const [view, setView] = useState({ w: 1200, h: 800 });
   const mapW = view.w * 2;
@@ -220,11 +391,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [enemies, setEnemies] = useState([]);
   const [player, setPlayer] = useState({ x: 100, y: 100 });
   const [toast, setToast] = useState(null);
+  const [skillToast, setSkillToast] = useState(null);
   /** 3D：左クリックで選択した敵（攻撃はコマンドボタン） */
   const [targetEnemyId, setTargetEnemyId] = useState(null);
+  const [petFocused, setPetFocused] = useState(false);
   const [showPetStatusOverlay, setShowPetStatusOverlay] = useState(false);
+  const [petMasterDialogue, setPetMasterDialogue] = useState(null);
+  const [nearPetHouse, setNearPetHouse] = useState(false);
+  const nearPetHouseRef = useRef(false);
+  const petDebugSnapshotRef = useRef(null);
+  const [hasPetDebugSnapshot, setHasPetDebugSnapshot] = useState(false);
+  const [showFieldGuide, setShowFieldGuide] = useState(false);
   /** 3D：follow | wait | sit | auto */
   const [petCommandMode, setPetCommandMode] = useState("follow");
+  const [petFollowTight, setPetFollowTight] = useState(false);
   /** ワールド座標上のダメージ（赤）・ペットEXP（黄・+N） */
   const [battlePopups, setBattlePopups] = useState([]);
   const battlePopupIdRef = useRef(0);
@@ -243,6 +423,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(() => {
     if (!moePetHydrated) return;
+    const snap = loadMoePetDebugSnapshot(pet.id);
+    if (snap) {
+      petDebugSnapshotRef.current = snap;
+      setHasPetDebugSnapshot(true);
+    }
+  }, [moePetHydrated, pet.id]);
+
+  useEffect(() => {
+    if (!moePetHydrated) return;
     const t = window.setTimeout(() => {
       persistCurrentMoePet(pet);
     }, 280);
@@ -257,7 +446,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     pet.expIntoLevel,
   ]);
 
-  const keysRef = useRef({});
+  const keysRef = useRef(createEmptyInputKeys());
   const enemyIdRef = useRef(0);
   const playerPosRef = useRef({ x: 100, y: 100 });
   /** 3D: ジャンプの高さオフセットと上向き速度 */
@@ -267,8 +456,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** 3D: ペットに RUN アニメを出す（走行追従中） */
   const petRunAnimRef = useRef(false);
   const petPosRef = useRef({ x: 100, y: 100 });
+  const petStateRef = useRef(pet);
+  useEffect(() => {
+    petStateRef.current = pet;
+    if (world && !world.mode3d) {
+      petPosRef.current = { x: pet.x, y: pet.y };
+    }
+  }, [pet, world]);
   const petCommandRef = useRef("follow");
+  const petFollowTightRef = useRef(false);
   const waitAnchorRef = useRef(null);
+  /** 3D：待て/座れ中に固定する向き（プレイヤー追従回転を止める） */
+  const petHoldYawRef = useRef(null);
   const autoAttackCooldownRef = useRef(0);
   const sitRegenAccRef = useRef(0);
   const targetEnemyIdRef = useRef(null);
@@ -514,6 +713,41 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           return prevEn.map((en) => {
             if (en.id !== enemyId) return en;
             if (defeated && w) {
+              if (en.midBoss || en.superBoss) {
+                const base =
+                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
+                const pos = w.mode3d
+                  ? en.superBoss
+                    ? w.superBossPos ??
+                      moe3dSuperBossSpawnPosition(
+                        w.halfW ?? w.mw / 2,
+                        w.halfD ?? w.mh / 2
+                      )
+                    : w.midBossPos ??
+                      moe3dMidBossSpawnPosition(
+                        w.halfW ?? w.mw / 2,
+                        w.halfD ?? w.mh / 2
+                      )
+                  : en.superBoss
+                    ? moe2dSuperBossSpawnPosition(w.rowLayout, w.mw)
+                    : moe2dMidBossSpawnPosition(w.rowLayout, w.mw);
+                const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
+                const hpMult = en.superBoss
+                  ? MOE_SUPER_BOSS_HP_MULTIPLIER
+                  : MOE_MID_BOSS_HP_MULTIPLIER;
+                const hpMax = Math.max(1, Math.round(scaled.hpMax * hpMult));
+                return {
+                  ...en,
+                  x: pos.x,
+                  y: pos.y,
+                  level: scaled.level,
+                  hpMax,
+                  hp: hpMax,
+                  petDamage: scaled.petDamage,
+                  wiki: scaled.wiki,
+                  zoneLevel: base.level,
+                };
+              }
               if (w.mode3d) {
                 const zoneIndex = en.zoneIndex ?? 0;
                 const zoneCount = MOE_3D_ENEMY_ZONES.length;
@@ -620,7 +854,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   applyPetComboHitRef.current = applyPetComboHit;
 
   const applyPetStrike = React.useCallback(
-    (enemyId) => applyPetComboHit(enemyId),
+    (enemyId) => {
+      const d = duelRef.current;
+      if (!d || d.enemyId !== enemyId || d.phase !== "simultaneous_charge") {
+        return false;
+      }
+      return applyPetComboHit(enemyId);
+    },
     [applyPetComboHit]
   );
 
@@ -680,6 +920,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   const applyEnemyStrike = React.useCallback((enemyId) => {
+    const d = duelRef.current;
+    if (!d || d.enemyId !== enemyId || d.phase !== "simultaneous_charge") {
+      return false;
+    }
     const target = enemiesRef.current.find((e) => e.id === enemyId);
     if (!target || target.hp <= 0) {
       approachChargeScheduledRef.current = false;
@@ -800,6 +1044,32 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           });
         }
       });
+      const midBase = MOE_MEERIM_ENEMIES.find(
+        (d) => d.key === MOE_MEERIM_MID_BOSS_KEY
+      );
+      if (midBase) {
+        newEnemies.push(
+          buildMeerimMidBossEnemy(
+            midBase,
+            enemyIdRef.current++,
+            moe3dMidBossSpawnPosition(halfW, halfD),
+            MOE_MID_BOSS_HP_MULTIPLIER
+          )
+        );
+      }
+      const superBase = MOE_MEERIM_ENEMIES.find(
+        (d) => d.key === MOE_MEERIM_SUPER_BOSS_KEY
+      );
+      if (superBase) {
+        newEnemies.push(
+          buildMeerimSuperBossEnemy(
+            superBase,
+            enemyIdRef.current++,
+            moe3dSuperBossSpawnPosition(halfW, halfD),
+            MOE_SUPER_BOSS_HP_MULTIPLIER
+          )
+        );
+      }
       setWorld({ mw, mh, mode3d: true, halfW, halfD });
       setEnemies(newEnemies);
       approachChargeScheduledRef.current = false;
@@ -808,6 +1078,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const start = moe3dPlayerStartPosition(halfW, halfD);
       playerPosRef.current = start;
       setPlayer(start);
+      setMinimap3d({ x: start.x, y: start.y, yaw: cameraYawRef.current });
       setPet((prev) => ({ ...prev, x: start.x + 2, y: start.y - 1.5 }));
       petPosRef.current = { x: start.x + 2, y: start.y - 1.5 };
       playerJumpRef.current = { offset: 0, vy: 0 };
@@ -848,6 +1119,33 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
     });
 
+    const midBase = MOE_MEERIM_ENEMIES.find(
+      (d) => d.key === MOE_MEERIM_MID_BOSS_KEY
+    );
+    if (midBase) {
+      newEnemies.push(
+        buildMeerimMidBossEnemy(
+          midBase,
+          enemyIdRef.current++,
+          moe2dMidBossSpawnPosition(rowLayout, mw),
+          MOE_MID_BOSS_HP_MULTIPLIER
+        )
+      );
+    }
+    const superBase = MOE_MEERIM_ENEMIES.find(
+      (d) => d.key === MOE_MEERIM_SUPER_BOSS_KEY
+    );
+    if (superBase) {
+      newEnemies.push(
+        buildMeerimSuperBossEnemy(
+          superBase,
+          enemyIdRef.current++,
+          moe2dSuperBossSpawnPosition(rowLayout, mw),
+          MOE_SUPER_BOSS_HP_MULTIPLIER
+        )
+      );
+    }
+
     setWorld({ mw, mh, rowLayout });
     setEnemies(newEnemies);
     approachChargeScheduledRef.current = false;
@@ -868,6 +1166,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [toast]);
 
   useEffect(() => {
+    if (!skillToast) return;
+    const t = setTimeout(() => setSkillToast(null), MOE_SKILL_TOAST_MS);
+    return () => clearTimeout(t);
+  }, [skillToast]);
+
+  useEffect(() => {
     if (!petLevelUpFlash) return;
     const t = setTimeout(() => setPetLevelUpFlash(null), 5500);
     return () => clearTimeout(t);
@@ -880,34 +1184,47 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   useEffect(() => {
+    const resetKeys = () => {
+      keysRef.current = createEmptyInputKeys();
+      playerSprintRef.current = false;
+      petRunAnimRef.current = false;
+    };
+
     const down = (e) => {
-      const k = e.key;
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"].includes(k)) {
-        e.preventDefault();
-        keysRef.current[k] = true;
-      }
-      if ((e.code === "Space" || k === " ") && worldRef.current?.mode3d) {
-        e.preventDefault();
-        keysRef.current[" "] = true;
-      }
-      if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
-        keysRef.current.Shift = true;
-      }
+      if (isTypingTarget(e.target)) return;
+      if (!applyInputKeyCode(keysRef.current, e.code, true, e)) return;
+      if (MOVE_KEY_CODES.has(e.code)) e.preventDefault();
+      if (e.code === "Space" && worldRef.current?.mode3d) e.preventDefault();
     };
     const up = (e) => {
-      keysRef.current[e.key] = false;
-      if (e.code === "Space") keysRef.current[" "] = false;
-      if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
-        keysRef.current.Shift = false;
-      }
+      if (isTypingTarget(e.target)) return;
+      applyInputKeyCode(keysRef.current, e.code, false, e);
     };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) resetKeys();
+    };
+
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", resetKeys);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", resetKeys);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      resetKeys();
     };
   }, []);
+
+  useEffect(() => {
+    if (!petMasterDialogue && !showPetStatusOverlay && !showFieldGuide) return;
+    keysRef.current = createEmptyInputKeys();
+    playerSprintRef.current = false;
+    petRunAnimRef.current = false;
+  }, [petMasterDialogue, showPetStatusOverlay, showFieldGuide]);
 
   useEffect(() => {
     if (!world) return;
@@ -964,79 +1281,48 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       });
     };
 
-    const tickPet3d = (speed, approachThreshold, dt, now) => {
-      const pos = { ...petPosRef.current };
-      const d = duelRef.current;
-      const cmd = petCommandRef.current;
-
-      if (cmd === "sit") {
-        sitRegenAccRef.current += dt;
-        if (sitRegenAccRef.current >= 1) {
-          sitRegenAccRef.current = 0;
-          setPet((prev) => ({
-            ...prev,
-            hp: Math.min(prev.hpMax, prev.hp + PET_SIT_REGEN_HP),
-            mp: Math.min(prev.mpMax, prev.mp + PET_SIT_REGEN_MP),
-          }));
-        }
-      } else {
+    const tickSitRegen = (cmd, dt) => {
+      if (cmd !== "sit") {
         sitRegenAccRef.current = 0;
+        return;
       }
+      sitRegenAccRef.current += dt;
+      if (sitRegenAccRef.current >= 1) {
+        sitRegenAccRef.current = 0;
+        setPet((prev) => ({
+          ...prev,
+          hp: Math.min(prev.hpMax, prev.hp + PET_SIT_REGEN_HP),
+          mp: Math.min(prev.mpMax, prev.mp + PET_SIT_REGEN_MP),
+        }));
+      }
+    };
 
-      if (d?.phase === "approach") {
-        const tx = d.slotX;
-        const ty = d.slotY;
-        const ddx = tx - pos.x;
-        const ddy = ty - pos.y;
-        const dist = Math.hypot(ddx, ddy);
-        if (dist < approachThreshold) {
-          pos.x = tx;
-          pos.y = ty;
-          scheduleApproachToCharge(d.enemyId);
-        } else {
-          const sp = speed * 1.35;
-          pos.x += (ddx / dist) * sp;
-          pos.y += (ddy / dist) * sp;
-        }
-      } else if (d?.phase === "simultaneous_charge") {
-        pos.x = d.slotX;
-        pos.y = d.slotY;
-      } else if (cmd === "wait" || cmd === "sit") {
-        const anchor = waitAnchorRef.current;
-        if (anchor) {
-          pos.x = anchor.x;
-          pos.y = anchor.y;
-        }
-      } else {
-        if (cmd === "auto" && now >= autoAttackCooldownRef.current) {
-          let tid = targetEnemyIdRef.current;
-          let en = enemiesRef.current.find((e) => e.id === tid && e.hp > 0);
-          if (!en) {
-            const alive = enemiesRef.current.filter((e) => e.hp > 0);
-            if (alive.length > 0) {
-              en = alive[Math.floor(Math.random() * alive.length)];
-              tid = en.id;
-              targetEnemyIdRef.current = tid;
-              setTargetEnemyId(tid);
-            }
-          }
-          if (en) {
-            startDuelWithEnemyRef.current(tid);
-            autoAttackCooldownRef.current = now + PET_AUTO_ATTACK_COOLDOWN_MS;
-          }
-        }
-        const px = playerPosRef.current.x;
-        const py = playerPosRef.current.y;
-        const pdx = px - pos.x;
-        const pdy = py - pos.y;
-        const dist = Math.hypot(pdx, pdy);
-        const followDist = cmd === "auto" ? 6 : 4;
-        if (dist > followDist) {
-          pos.x += (pdx / dist) * (speed * 0.9);
-          pos.y += (pdy / dist) * (speed * 0.9);
-        }
+    const tickPet3d = (speed, dt, now) => {
+      const cmd = petCommandRef.current;
+      tickSitRegen(cmd, dt);
+      const result = advancePetFieldPosition({
+        pos: { ...petPosRef.current },
+        cmd,
+        duel: duelRef.current,
+        waitAnchor: waitAnchorRef.current,
+        playerPos: playerPosRef.current,
+        speed,
+        approachThreshold: PET_APPROACH_THRESHOLD_3D,
+        followDist: petFollowTightRef.current
+          ? PET_FOLLOW_DIST_3D_TIGHT
+          : PET_FOLLOW_DIST_3D,
+        followDistAuto: PET_FOLLOW_DIST_3D_AUTO,
+        now,
+        autoAttackCooldownRef,
+        targetEnemyIdRef,
+        enemiesRef,
+        setTargetEnemyId,
+        startDuelWithEnemyRef,
+      });
+      if (result.reachedApproach && duelRef.current?.phase === "approach") {
+        scheduleApproachToCharge(duelRef.current.enemyId);
       }
-      petPosRef.current = pos;
+      petPosRef.current = { x: result.x, y: result.y };
     };
 
     const loop = (now) => {
@@ -1046,16 +1332,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const k = keysRef.current;
       let inputX = 0;
       let inputZ = 0;
-      if (k["ArrowUp"] || k["w"] || k["W"]) inputZ -= 1;
-      if (k["ArrowDown"] || k["s"] || k["S"]) inputZ += 1;
-      if (k["ArrowLeft"] || k["a"] || k["A"]) inputX -= 1;
-      if (k["ArrowRight"] || k["d"] || k["D"]) inputX += 1;
+      if (k.up) inputZ -= 1;
+      if (k.down) inputZ += 1;
+      if (k.left) inputX -= 1;
+      if (k.right) inputX += 1;
 
       let dx = 0;
       let dy = 0;
       if (inputX !== 0 || inputZ !== 0) {
         if (world.mode3d) {
-          const sprinting = !!(k.Shift && (inputX !== 0 || inputZ !== 0));
+          const sprinting = !!(k.shift && (inputX !== 0 || inputZ !== 0));
           const speedMult = sprinting ? SPRINT_MULTIPLIER_3D : 1;
           const speed = MOVE_SPEED_3D * 60 * dt * speedMult;
           const { mx, my, facing } = moveInputForCameraYaw(
@@ -1075,7 +1361,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
 
       if (world.mode3d) {
-        const sprinting = !!(k.Shift && (inputX !== 0 || inputZ !== 0));
+        const sprinting = !!(k.shift && (inputX !== 0 || inputZ !== 0));
         playerSprintRef.current = sprinting;
         const cmd = petCommandRef.current;
         petRunAnimRef.current =
@@ -1086,7 +1372,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const petSpeed = MOVE_SPEED_3D * 60 * dt * speedMult;
 
         const jump = playerJumpRef.current;
-        if (k[" "] && jump.offset <= 0.02 && jump.vy <= 0) {
+        if (k.space && jump.offset <= 0.02 && jump.vy <= 0) {
           jump.vy = JUMP_VELOCITY_3D;
         }
         jump.offset += jump.vy * dt;
@@ -1104,76 +1390,90 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         nx = Math.max(-hw + margin, Math.min(hw - margin, nx));
         ny = Math.max(-hd + margin, Math.min(hd - margin, ny));
         playerPosRef.current = { x: nx, y: ny };
-        tickPet3d(petSpeed, 0.35, dt, now);
+        if (now - lastMinimap3dSyncRef.current >= 75) {
+          lastMinimap3dSyncRef.current = now;
+          setMinimap3d({ x: nx, y: ny, yaw: cameraYawRef.current });
+        }
+        const nearHouse = moe3dIsNearPetHouse(nx, ny, hw, hd);
+        if (nearHouse !== nearPetHouseRef.current) {
+          nearPetHouseRef.current = nearHouse;
+          setNearPetHouse(nearHouse);
+        }
+        tickPet3d(petSpeed, dt, now);
       } else {
         playerSprintRef.current = false;
         petRunAnimRef.current = false;
-        setPlayer((prev) => {
-          let nx = prev.x + dx;
-          let ny = prev.y + dy;
-          nx = Math.max(PLAYER_R, Math.min(world.mw - PLAYER_R, nx));
-          ny = Math.max(PLAYER_R, Math.min(world.mh - PLAYER_R, ny));
+        const cmd = petCommandRef.current;
+        tickSitRegen(cmd, dt);
 
-          if (inRiver(nx, ny, world.mw, world.mh, world.rowLayout)) {
-            nx = prev.x;
-            ny = prev.y;
-          }
+        const px = playerPosRef.current.x;
+        const py = playerPosRef.current.y;
+        let nx = px + dx;
+        let ny = py + dy;
+        nx = Math.max(PLAYER_R, Math.min(world.mw - PLAYER_R, nx));
+        ny = Math.max(PLAYER_R, Math.min(world.mh - PLAYER_R, ny));
 
-          if (nx < 80 && ny > world.mh - 80 && !world.rowLayout?.length) {
-            queueMicrotask(() => onBack?.());
-            return prev;
-          }
-          const startRow = world.rowLayout?.find((r) => r.kind === "start");
+        const resolved = resolve2dPlayerMove(
+          px,
+          py,
+          nx,
+          ny,
+          world.mw,
+          world.mh,
+          world.rowLayout
+        );
+        nx = resolved.x;
+        ny = resolved.y;
+
+        if (nx < 80 && ny > world.mh - 80 && !world.rowLayout?.length) {
+          queueMicrotask(() => onBack?.());
+        } else if (
+          world.rowLayout?.length &&
+          moe2dIsBiskExitZone(nx, ny, world.rowLayout)
+        ) {
+          queueMicrotask(() => onBack?.());
+        } else {
+          playerPosRef.current = { x: nx, y: ny };
+
+          const petBefore = petPosRef.current;
+          const petResult = advancePetFieldPosition({
+            pos: petBefore,
+            cmd,
+            duel: duelRef.current,
+            waitAnchor: waitAnchorRef.current,
+            playerPos: playerPosRef.current,
+            speed: MOVE_SPEED,
+            approachThreshold: PET_APPROACH_THRESHOLD_2D,
+            followDist: petFollowTightRef.current
+              ? PET_FOLLOW_DIST_2D_TIGHT
+              : PET_FOLLOW_DIST_2D,
+            followDistAuto: PET_FOLLOW_DIST_2D * 1.2,
+            now,
+            autoAttackCooldownRef,
+            targetEnemyIdRef,
+            enemiesRef,
+            setTargetEnemyId,
+            startDuelWithEnemyRef,
+          });
           if (
-            startRow &&
-            nx < world.mw * 0.32 &&
-            ny > startRow.y + startRow.h * 0.25
+            petResult.reachedApproach &&
+            duelRef.current?.phase === "approach"
           ) {
-            queueMicrotask(() => onBack?.());
-            return prev;
+            scheduleApproachToCharge(duelRef.current.enemyId);
           }
+          petPosRef.current = { x: petResult.x, y: petResult.y };
 
-          const next = { x: nx, y: ny };
-          playerPosRef.current = next;
-          return next;
-        });
-
-        setPet((prev) => {
-          const d = duelRef.current;
-          if (d?.phase === "approach") {
-            const tx = d.slotX;
-            const ty = d.slotY;
-            const ddx = tx - prev.x;
-            const ddy = ty - prev.y;
-            const dist = Math.hypot(ddx, ddy);
-            if (dist < 10) {
-              scheduleApproachToCharge(d.enemyId);
-              return { ...prev, x: tx, y: ty };
-            }
-            const sp = MOVE_SPEED * 1.35;
-            return {
+          if (nx !== px || ny !== py) {
+            setPlayer({ x: nx, y: ny });
+          }
+          if (petResult.x !== petBefore.x || petResult.y !== petBefore.y) {
+            setPet((prev) => ({
               ...prev,
-              x: prev.x + (ddx / dist) * sp,
-              y: prev.y + (ddy / dist) * sp,
-            };
+              x: petResult.x,
+              y: petResult.y,
+            }));
           }
-          if (d?.phase === "simultaneous_charge") {
-            return { ...prev, x: d.slotX, y: d.slotY };
-          }
-          const px = playerPosRef.current.x;
-          const py = playerPosRef.current.y;
-          const pdx = px - prev.x;
-          const pdy = py - prev.y;
-          const dist = Math.hypot(pdx, pdy);
-          if (dist > 50) {
-            return {
-              ...prev,
-              x: prev.x + (pdx / dist) * (MOVE_SPEED * 0.9),
-              y: prev.y + (pdy / dist) * (MOVE_SPEED * 0.9),
-            };
-          }
-          return prev;
-        });
+        }
       }
 
       raf = requestAnimationFrame(loop);
@@ -1227,30 +1527,75 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   );
   startDuelWithEnemyRef.current = startDuelWithEnemy;
 
+  const cancelActiveDuel = useCallback(() => {
+    if (!duelRef.current) return false;
+    approachChargeScheduledRef.current = false;
+    duelCombatSessionRef.current += 1;
+    moeSkillComboGenRef.current += 1;
+    petStrikeUntilRef.current = 0;
+    enemyStrikeUntilRef.current = 0;
+    duelRef.current = null;
+    setDuel(null);
+    return true;
+  }, []);
+
   const applyPetCommand = useCallback((mode) => {
     petCommandRef.current = mode;
     setPetCommandMode(mode);
+    if (mode !== "follow") {
+      petFollowTightRef.current = false;
+      setPetFollowTight(false);
+    }
     if (mode === "wait" || mode === "sit") {
-      waitAnchorRef.current = { ...petPosRef.current };
+      const anchor = worldRef.current?.mode3d
+        ? petPosRef.current
+        : { x: petStateRef.current.x, y: petStateRef.current.y };
+      waitAnchorRef.current = { x: anchor.x, y: anchor.y };
+      if (worldRef.current?.mode3d) {
+        petHoldYawRef.current = playerFacingRef.current;
+      }
     } else {
       waitAnchorRef.current = null;
+      petHoldYawRef.current = null;
     }
+    if (mode !== "sit") sitRegenAccRef.current = 0;
   }, []);
 
   const handlePetComeBack = useCallback(() => {
+    const wasFighting = cancelActiveDuel();
+    petFollowTightRef.current = false;
+    setPetFollowTight(false);
     applyPetCommand("follow");
-    setToast("もどれ！");
-  }, [applyPetCommand]);
+    setToast(
+      wasFighting
+        ? "もどれ！（戦闘をやめてプレイヤーのもとへ）"
+        : MOE_PET_COMMAND_UI.follow.toast
+    );
+  }, [applyPetCommand, cancelActiveDuel]);
+
+  const handlePetBero = useCallback(() => {
+    const wasFighting = cancelActiveDuel();
+    applyPetCommand("follow");
+    petFollowTightRef.current = true;
+    setPetFollowTight(true);
+    setToast(
+      wasFighting
+        ? "ベロー！（戦闘やめてぴったりくっつく）"
+        : MOE_PET_COMMAND_UI.bero.toast
+    );
+  }, [applyPetCommand, cancelActiveDuel]);
 
   const handlePetWait = useCallback(() => {
+    cancelActiveDuel();
     applyPetCommand("wait");
-    setToast("待て！");
-  }, [applyPetCommand]);
+    setToast(MOE_PET_COMMAND_UI.wait.toast);
+  }, [applyPetCommand, cancelActiveDuel]);
 
   const handlePetSit = useCallback(() => {
+    cancelActiveDuel();
     applyPetCommand("sit");
-    setToast("座れ（自然回復）");
-  }, [applyPetCommand]);
+    setToast(MOE_PET_COMMAND_UI.sit.toast);
+  }, [applyPetCommand, cancelActiveDuel]);
 
   const handlePetAutoToggle = useCallback(() => {
     if (petCommandRef.current === "auto") {
@@ -1259,24 +1604,36 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     } else {
       applyPetCommand("auto");
       autoAttackCooldownRef.current = performance.now() + 400;
-      setToast("オート：敵を自動で攻撃");
+      setToast(MOE_PET_COMMAND_UI.auto.toast);
     }
   }, [applyPetCommand]);
 
-  const handleEnemyClick = (e, id) => {
-    e.stopPropagation();
-    startDuelWithEnemy(id);
-  };
-
   const handleEnemySelect = useCallback(
-    (id) => {
+    (id, e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
       const target = enemiesRef.current.find((en) => en.id === id);
       if (!target || target.hp <= 0) return;
+      setPetFocused(false);
       setTargetEnemyId(id);
-      setToast(`ターゲット: ${target.name} Lv.${formatEnemyLevelUi(target.level)}`);
+      setToast(null);
     },
     []
   );
+
+  const handlePetSelect = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setPetFocused((prev) => {
+      const next = !prev;
+      if (next) {
+        setTargetEnemyId(null);
+        const data = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+        setToast(`ペット: ${data.name} Lv.${pet.level}`);
+      }
+      return next;
+    });
+  }, [pet.id, pet.level]);
 
   const handlePetAttackCommand = useCallback(() => {
     if (targetEnemyId == null) {
@@ -1294,7 +1651,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(() => {
     if (targetEnemyId == null) return;
-    const en = enemies.find((e) => e.id === targetEnemyId);
+    const en = enemiesRef.current.find((e) => e.id === targetEnemyId);
     if (!en || en.hp <= 0) setTargetEnemyId(null);
   }, [enemies, targetEnemyId]);
 
@@ -1437,6 +1794,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const applyPetId = (newId) => {
     if (newId === pet.id || !MOE_PET_DATA[newId]) return;
+    restorePetDebugSnapshot({ silent: true });
     const prevSave = loadMoePetsSave();
     const totalExpNow =
       pet.totalExp != null
@@ -1464,6 +1822,149 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     applyPetId(MOE_PET_IDS[nextIdx]);
   };
 
+  const openPetMasterDialogue = useCallback(() => {
+    setPetMasterDialogue({ view: "menu" });
+  }, []);
+
+  const handlePetMasterTalk = useCallback(() => {
+    if (is3d) {
+      if (!nearPetHouseRef.current) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    } else if (world?.rowLayout?.length) {
+      const pos = playerPosRef.current;
+      if (
+        !moe2dIsNearPetHouse(pos.x, pos.y, world.rowLayout, world.mw)
+      ) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    }
+    openPetMasterDialogue();
+  }, [is3d, openPetMasterDialogue, world?.rowLayout, world?.mw]);
+
+  const applyPetDebugLevel100 = useCallback(() => {
+    setPet((prev) => {
+      if (!petDebugSnapshotRef.current) {
+        const snap = {
+          totalExp:
+            prev.totalExp != null
+              ? prev.totalExp
+              : getMoePetTotalExpFromLegacyProgress(
+                  prev.level,
+                  prev.expIntoLevel ?? 0
+                ),
+          hp: prev.hp,
+          mp: prev.mp,
+        };
+        petDebugSnapshotRef.current = snap;
+        saveMoePetDebugSnapshot(prev.id, snap);
+        setHasPetDebugSnapshot(true);
+      }
+      const totalExp = getMoePetFreshTotalExpForLevel(100);
+      const level = 100;
+      const stats = calculatePetStats(prev.id, level);
+      const hpMax = stats?.hpMax ?? prev.hpMax;
+      const mpMax = stats?.mpMax ?? prev.mpMax;
+      const precise = petUsesPreciseWikiStats(prev.id);
+      return {
+        ...prev,
+        level,
+        totalExp,
+        expIntoLevel: 0,
+        hpMax,
+        mpMax,
+        hp: precise ? roundPetStatInternal(hpMax) : hpMax,
+        mp: precise ? roundPetStatInternal(mpMax) : mpMax,
+      };
+    });
+    setToast("🐛 デバッグ: Lv.100 に設定（閉じると元に戻ります）");
+  }, []);
+
+  const restorePetDebugSnapshot = useCallback(
+    (options = {}) => {
+      const { silent = false, closeDialogue = false } = options;
+      const petId = petStateRef.current?.id ?? pet.id;
+      const snap =
+        petDebugSnapshotRef.current ?? loadMoePetDebugSnapshot(petId);
+      if (!snap) {
+        if (!silent) setToast("戻すデータがありません");
+        return false;
+      }
+      setPet((prev) => {
+        const restored = petFromDebugSnapshot(prev.id, snap, {
+          x: prev.x,
+          y: prev.y,
+        });
+        persistCurrentMoePet(restored);
+        return restored;
+      });
+      petDebugSnapshotRef.current = null;
+      clearMoePetDebugSnapshot(petId);
+      setHasPetDebugSnapshot(false);
+      if (closeDialogue) setPetMasterDialogue(null);
+      if (!silent) setToast("元のLv・EXPに戻しました");
+      return true;
+    },
+    [pet.id]
+  );
+
+  const closePetMasterDialogue = useCallback(
+    (revertDebug = false) => {
+      if (
+        revertDebug &&
+        (petDebugSnapshotRef.current || loadMoePetDebugSnapshot(pet.id))
+      ) {
+        restorePetDebugSnapshot({ silent: true });
+        setToast("Lv.100 儀式を解除し、元のLvに戻しました");
+      }
+      setPetMasterDialogue(null);
+    },
+    [pet.id, restorePetDebugSnapshot]
+  );
+
+  const handlePetMasterMenuSelect = useCallback(
+    (id) => {
+      const petData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+      if (id === "talk") {
+        setPetMasterDialogue({ view: "talk", lineIndex: 0 });
+        return;
+      }
+      if (id === "lv100") {
+        applyPetDebugLevel100();
+        setPetMasterDialogue({
+          view: "message",
+          message: {
+            speaker: "master",
+            text: `${petData.name}の創造儀式が完了した。Lv.100 になったぞ！`,
+          },
+        });
+        return;
+      }
+      if (id === "restore") {
+        if (!restorePetDebugSnapshot()) {
+          setPetMasterDialogue({
+            view: "message",
+            message: {
+              speaker: "master",
+              text: "戻せる状態ではないのう。先に Lv.100 儀式を試しておくれ。",
+            },
+          });
+          return;
+        }
+        setPetMasterDialogue({
+          view: "message",
+          message: {
+            speaker: "master",
+            text: "元のLvと経験値に戻したぞ。",
+          },
+        });
+      }
+    },
+    [pet.id, applyPetDebugLevel100, restorePetDebugSnapshot]
+  );
+
   const precisePet = petUsesPreciseWikiStats(pet.id);
   const petWikiStats = React.useMemo(
     () => calculatePetStats(pet.id, pet.level),
@@ -1472,6 +1973,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const wikiGrowthCaption = React.useMemo(
     () => getPetWikiGrowthCaptionLine(pet.id),
     [pet.id]
+  );
+  const currentPetData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+  const petMasterLines = React.useMemo(
+    () => buildPetMasterDialogue(currentPetData, pet.level),
+    [currentPetData, pet.level]
   );
 
   if (!world) {
@@ -1484,8 +1990,45 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const camX = is3d ? 0 : view.w / 2 - player.x;
   const camY = is3d ? 0 : view.h / 2 - player.y;
-  const currentPetData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+  const mini3HalfW = world.halfW ?? MOE_3D_HALF_W;
+  const mini3HalfD = world.halfD ?? MOE_3D_HALF_D;
+  const mini3W = world.mw ?? mini3HalfW * 2;
+  const mini3H = world.mh ?? mini3HalfD * 2;
+  const mini3Player = is3d
+    ? moe3dWorldToMinimap(
+        minimap3d.x,
+        minimap3d.y,
+        mini3HalfW,
+        mini3HalfD,
+        mini3W,
+        mini3H
+      )
+    : null;
+  const mini3ViewLen = Math.min(mini3W, mini3H) * 0.14;
+  const mini3Yaw = minimap3d.yaw;
+  const mini3ViewTip = mini3Player
+    ? {
+        x: mini3Player.x + Math.sin(mini3Yaw) * mini3ViewLen,
+        y: mini3Player.y + Math.cos(mini3Yaw) * mini3ViewLen,
+      }
+    : null;
+  const mini3ViewLeft = mini3Player
+    ? {
+        x: mini3Player.x + Math.sin(mini3Yaw - 0.5) * mini3ViewLen * 0.55,
+        y: mini3Player.y + Math.cos(mini3Yaw - 0.5) * mini3ViewLen * 0.55,
+      }
+    : null;
+  const mini3ViewRight = mini3Player
+    ? {
+        x: mini3Player.x + Math.sin(mini3Yaw + 0.5) * mini3ViewLen * 0.55,
+        y: mini3Player.y + Math.cos(mini3Yaw + 0.5) * mini3ViewLen * 0.55,
+      }
+    : null;
   const duelEnemy = duel ? enemies.find((e) => e.id === duel.enemyId) : null;
+  const targetEnemy =
+    targetEnemyId != null
+      ? enemies.find((e) => e.id === targetEnemyId && e.hp > 0) ?? null
+      : null;
 
   const trainerExpPct = Math.min(
     100,
@@ -1495,6 +2038,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   );
 
   const petNextNeed = getMoePetExpToNextLevel(pet.level);
+  const petNextRemaining = getMoePetExpRemainingToNextLevel(
+    pet.level,
+    pet.expIntoLevel
+  );
   const petTotalExp =
     pet.totalExp != null
       ? pet.totalExp
@@ -1504,17 +2051,47 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       ? 100
       : Math.min(100, Math.floor(((pet.expIntoLevel ?? 0) / petNextNeed) * 100));
 
+  const petMasterView = petMasterDialogue?.view ?? "menu";
+
   return (
     <div
       className="relative h-dvh w-full overflow-hidden bg-sky-900"
       onContextMenu={is3d ? (e) => e.preventDefault() : undefined}
     >
+      {targetEnemy && <MoeTargetWindow target={targetEnemy} />}
+      <MoePetHpWindow
+        emoji={currentPetData.emoji}
+        name={currentPetData.name}
+        hp={pet.hp}
+        hpMax={pet.hpMax}
+      />
       {duel && (
         <div className="pointer-events-none absolute bottom-6 left-1/2 z-[55] w-[min(92vw,22rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-xl border border-white/25 bg-black/82 px-3 py-2.5 text-white shadow-lg backdrop-blur-md sm:bottom-10">
           <p className="text-center text-[10px] font-bold text-cyan-200">
             交戦中
             {duelEnemy ? ` ${duelEnemy.emoji} ${duelEnemy.name}` : ""}
           </p>
+          {duelEnemy && (
+            <div className="mt-1.5">
+              <div className="mb-0.5 flex justify-between text-[9px] text-red-100/95">
+                <span>敵HP</span>
+                <span className="font-mono tabular-nums">
+                  {Math.ceil(duelEnemy.hp)}/{duelEnemy.hpMax}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
+                <div
+                  className="h-full rounded-full transition-all duration-150"
+                  style={{
+                    width: `${petResourceBarPct(duelEnemy.hp, duelEnemy.hpMax)}%`,
+                    backgroundColor: enemyHpBarColor(
+                      petResourceBarPct(duelEnemy.hp, duelEnemy.hpMax)
+                    ),
+                  }}
+                />
+              </div>
+            </div>
+          )}
           {duel.phase === "approach" && (
             <p className="mt-1 text-center text-[10px] text-white/85">
               ペットが敵の正面へ移動中…
@@ -1576,10 +2153,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           🎉 {petLevelUpFlash}
         </div>
       )}
+      {skillToast && (
+        <div
+          className={`pointer-events-none absolute left-1/2 z-[51] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border-2 border-amber-300/90 bg-gradient-to-br from-amber-600 to-orange-700 px-5 py-2.5 text-center text-sm font-bold text-amber-50 shadow-xl whitespace-pre-wrap break-words ${
+            petLevelUpFlash ? "top-[11rem]" : "top-20"
+          }`}
+        >
+          {skillToast}
+        </div>
+      )}
       {toast && (
         <div
           className={`absolute left-1/2 z-50 max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border-2 border-blue-300 bg-blue-600 px-6 py-3 text-center text-base font-bold text-white shadow-xl whitespace-pre-wrap break-words ${
-            petLevelUpFlash ? "top-[11rem]" : "top-20"
+            petLevelUpFlash ? "top-[11rem]" : skillToast ? "top-32" : "top-20"
           }`}
         >
           {toast}
@@ -1606,7 +2192,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       {/* Pet Status UI + スキル（右列）— z は BGM(42) より上で下部が隠れないように */}
       <div className="absolute right-2 top-2 z-[46] flex flex-row gap-1.5 items-start">
-        <div className="max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-y-auto overscroll-contain rounded-lg border border-white/20 bg-black/75 p-2 text-white backdrop-blur-md [scrollbar-width:thin]">
+        <div
+          className="max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-white/20 bg-black/75 p-2 text-white backdrop-blur-md [scrollbar-width:thin]"
+        >
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="text-xl leading-none">{currentPetData.emoji}</span>
             <div className="min-w-0">
@@ -1643,171 +2231,209 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 style={{ width: `${petResourceBarPct(pet.mp, pet.mpMax)}%` }}
               />
             </div>
-            {is3d && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowPetStatusOverlay((v) => !v)}
-                  className="mt-1.5 w-full rounded border border-emerald-500/50 bg-emerald-950/90 py-1 text-[9px] font-bold text-emerald-100 transition hover:bg-emerald-900/95 active:scale-95"
-                >
-                  ステータス
-                </button>
-                <div className="mt-1 grid grid-cols-3 gap-0.5">
-                  <button
-                    type="button"
-                    onClick={handlePetAttackCommand}
-                    className="rounded border border-red-500/60 bg-red-900/90 px-0.5 py-1 text-[7px] font-bold leading-tight text-red-50 transition hover:bg-red-800/95 active:scale-95"
-                  >
-                    攻撃
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePetComeBack}
-                    className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                      petCommandMode === "follow"
-                        ? "border-cyan-400/70 bg-cyan-900/90 text-cyan-50"
-                        : "border-cyan-600/50 bg-cyan-950/80 text-cyan-100 hover:bg-cyan-900/90"
-                    }`}
-                  >
-                    もどれ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePetWait}
-                    className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                      petCommandMode === "wait"
-                        ? "border-zinc-300/70 bg-zinc-700/90 text-white"
-                        : "border-zinc-500/50 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800/90"
-                    }`}
-                  >
-                    待て
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePetSit}
-                    className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                      petCommandMode === "sit"
-                        ? "border-violet-400/70 bg-violet-900/90 text-violet-50"
-                        : "border-violet-600/50 bg-violet-950/85 text-violet-100 hover:bg-violet-900/90"
-                    }`}
-                  >
-                    座れ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePetAutoToggle}
-                    className={`col-span-2 rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                      petCommandMode === "auto"
-                        ? "border-orange-400/70 bg-orange-900/90 text-orange-50 ring-1 ring-orange-300/50"
-                        : "border-orange-600/50 bg-orange-950/85 text-orange-100 hover:bg-orange-900/90"
-                    }`}
-                  >
-                    オート{petCommandMode === "auto" ? "（停止）" : ""}
-                  </button>
-                </div>
-                {targetEnemyId != null && (
-                  <p className="mt-0.5 truncate text-center text-[7px] font-medium text-yellow-200/90">
-                    ▼ {enemies.find((e) => e.id === targetEnemyId)?.name ?? "—"}{" "}
-                    Lv.
-                    {formatEnemyLevelUi(
-                      enemies.find((e) => e.id === targetEnemyId)?.level ?? 0
-                    )}
-                  </p>
-                )}
-              </>
-            )}
-            <div
-              ref={petExpUiAnchorRef}
-              className="relative rounded-md"
-            >
-              <div className="flex justify-between text-[9px] text-amber-100/90">
-                <span>ペットEXP</span>
-                <span className="font-mono tabular-nums text-[8px]">
-                  {pet.level >= MOE_PET_MAX_LEVEL
-                    ? "MAX"
-                    : `${pet.expIntoLevel ?? 0}/${petNextNeed ?? "—"}`}
-                </span>
-              </div>
-              <div className="mt-0.5 w-full bg-amber-950/80 h-1 rounded-full overflow-hidden border border-amber-800/40">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-400 to-yellow-500 transition-all"
-                  style={{ width: `${petExpPct}%` }}
-                />
-              </div>
-            </div>
-            <p className="text-[7px] text-amber-200/80 font-mono tabular-nums leading-snug">
-              累計 {petTotalExp} EXP（Wiki 累積表ベースでLv判定）
-            </p>
-            <p className="text-[7px] text-amber-200/70 leading-snug">
-              自分の攻撃・敵攻撃の直後それぞれ約
-              {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}％で取得。敵が強いほど多い（Wiki EXP表）
-            </p>
             <button
               type="button"
-              onClick={handlePetExpReset}
-              className="mt-1 w-full rounded border border-rose-600/60 bg-rose-950/80 py-1 text-[8px] font-bold text-rose-100 transition hover:bg-rose-900/90 active:scale-[0.98]"
+              onClick={handleHeal}
+              className="mt-1.5 w-full rounded bg-pink-600 py-1 text-[9px] font-bold transition hover:bg-pink-500 active:scale-95"
             >
-              ペットEXP・Lv リセット
+              ヒーリング (回復)
             </button>
-            <p className="mt-0.5 text-[7px] leading-snug text-white/42">
-              各ペットの Lv・累計EXP・HP/MP はこのブラウザに保存（種族ごと）。スキル開放はデータの Lv から自動。
+            <p className="mt-1.5 text-center text-[7px] font-bold text-cyan-200/90">
+              ペット命令
             </p>
-          </div>
-          <div className="mt-1.5 border-t border-white/15 pt-1.5 space-y-0.5">
-            <div className="flex justify-between text-[9px] text-pink-100/95">
-              <span>経験値（保存）</span>
-              <span className="font-mono tabular-nums text-[8px]">
-                {trainerStatus.exp}/{trainerStatus.nextExp}
-              </span>
+            <div className="mt-0.5 rounded-md border border-cyan-500/45 bg-zinc-950/70 p-1">
+              <div className="grid grid-cols-3 gap-0.5">
+                <button
+                  type="button"
+                  onClick={handlePetAttackCommand}
+                  className="rounded border border-red-500/60 bg-red-900/90 px-0.5 py-1 text-[7px] font-bold leading-tight text-red-50 transition hover:bg-red-800/95 active:scale-95"
+                >
+                  攻撃
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePetComeBack}
+                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                    petCommandMode === "follow" && !petFollowTight
+                      ? "border-cyan-400/70 bg-cyan-900/90 text-cyan-50"
+                      : "border-cyan-600/50 bg-cyan-950/80 text-cyan-100 hover:bg-cyan-900/90"
+                  }`}
+                >
+                  もどれ
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePetWait}
+                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                    petCommandMode === "wait"
+                      ? "border-zinc-300/70 bg-zinc-700/90 text-white"
+                      : "border-zinc-500/50 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800/90"
+                  }`}
+                >
+                  待て
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePetSit}
+                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                    petCommandMode === "sit"
+                      ? "border-violet-400/70 bg-violet-900/90 text-violet-50"
+                      : "border-violet-600/50 bg-violet-950/85 text-violet-100 hover:bg-violet-900/90"
+                  }`}
+                >
+                  座れ
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePetAutoToggle}
+                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                    petCommandMode === "auto"
+                      ? "border-orange-400/70 bg-orange-900/90 text-orange-50 ring-1 ring-orange-300/50"
+                      : "border-orange-600/50 bg-orange-950/85 text-orange-100 hover:bg-orange-900/90"
+                  }`}
+                >
+                  オート{petCommandMode === "auto" ? "止" : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePetBero}
+                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                    petFollowTight && petCommandMode === "follow"
+                      ? "border-pink-400/70 bg-pink-900/90 text-pink-50 ring-1 ring-pink-300/50"
+                      : "border-pink-600/50 bg-pink-950/85 text-pink-100 hover:bg-pink-900/90"
+                  }`}
+                >
+                  ベロー
+                </button>
+              </div>
             </div>
-            <div className="w-full bg-pink-950/80 h-2 rounded-full overflow-hidden border border-pink-800/50">
-              <div
-                className="h-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500 transition-all duration-500"
-                style={{ width: `${trainerExpPct}%` }}
-              />
-            </div>
-            <p className="text-[8px] text-pink-200/80 text-center font-medium">
-              {trainerExpPct}% ・ あと {Math.max(0, trainerStatus.nextExp - trainerStatus.exp)} EXP
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleHeal}
-            className="mt-2 w-full rounded bg-pink-600 py-1 text-[9px] font-bold hover:bg-pink-500 transition active:scale-95"
-          >
-            ヒーリング (回復)
-          </button>
-
-          <div className="mt-1.5 border-t border-white/15 pt-1.5 pb-0.5">
-            <p className="mb-0.5 text-center text-[8px] font-bold text-cyan-200/90">ペット変更</p>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => cyclePet(-1)}
-                className="flex-1 rounded bg-cyan-900/90 py-1 text-[9px] font-bold text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
-              >
-                ◀ 前
-              </button>
-              <button
-                type="button"
-                onClick={() => cyclePet(1)}
-                className="flex-1 rounded bg-cyan-900/90 py-1 text-[9px] font-bold text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
-              >
-                次 ▶
-              </button>
-            </div>
-            <label className="mt-1 block text-[7px] text-gray-500">一覧から選ぶ</label>
-            <select
-              value={pet.id}
-              onChange={(e) => applyPetId(e.target.value)}
-              className="mt-0.5 w-full rounded border border-white/25 bg-zinc-900/95 py-0.5 pl-1 pr-5 text-[9px] text-white outline-none focus:ring-1 focus:ring-cyan-500"
+            <button
+              type="button"
+              onClick={() => setShowPetStatusOverlay((v) => !v)}
+              className="mt-1.5 w-full rounded border border-emerald-500/50 bg-emerald-950/90 py-1 text-[9px] font-bold text-emerald-100 transition hover:bg-emerald-900/95 active:scale-95"
             >
-              {MOE_PET_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {MOE_PET_DATA[id].emoji} {MOE_PET_DATA[id].name}
-                </option>
-              ))}
-            </select>
+              ステータス{showPetStatusOverlay ? " ▲" : ""}
+            </button>
+            {showPetStatusOverlay && (
+              <div className="mt-1 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-emerald-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(14rem,38vh)]">
+                <div className="box-border w-full max-w-full px-1 py-2 text-white">
+                  <div className="space-y-1.5 text-[10px]">
+                    <div ref={petExpUiAnchorRef} className="relative">
+                      <div className="flex w-full items-center justify-between gap-1 text-amber-100">
+                        <span className="shrink-0 text-[9px]">ペットEXP</span>
+                        <span className="min-w-0 shrink text-right font-mono text-[8px] tabular-nums leading-none text-amber-200/90 whitespace-nowrap">
+                          Next{" "}
+                          {pet.level >= MOE_PET_MAX_LEVEL ? "MAX" : petNextRemaining ?? "—"} / Total{" "}
+                          {petTotalExp}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full border border-amber-800/40 bg-amber-950/80">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-400 to-yellow-500"
+                          style={{ width: `${petExpPct}%` }}
+                        />
+                      </div>
+                      <p className="mt-0.5 text-[7px] leading-snug text-amber-200/55">
+                        Wiki 累積表ベースでLv判定
+                      </p>
+                      <p className="text-[8px] text-amber-200/70 leading-snug">
+                        自分の攻撃・敵攻撃の直後それぞれ約
+                        {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}％で取得。敵が強いほど多い
+                      </p>
+                    </div>
+                    {precisePet && petWikiStats && (
+                      <div className="space-y-0.5 border-t border-white/15 pt-1.5 text-[9px] leading-tight">
+                        {[
+                          ["攻撃", formatPetStatUi(petWikiStats.attack), "耐火", formatPetResistUi(petWikiStats.resistFire)],
+                          ["防御", formatPetStatUi(petWikiStats.defense), "耐水", formatPetResistUi(petWikiStats.resistWater)],
+                          ["命中", formatPetStatUi(petWikiStats.hit), "耐地", formatPetResistUi(petWikiStats.resistEarth)],
+                          ["回避", formatPetStatUi(petWikiStats.evasion), "耐風", formatPetResistUi(petWikiStats.resistWind)],
+                          ["魔力", formatPetStatUi(petWikiStats.magic), "耐無", formatPetResistUi(petWikiStats.resistNeutral)],
+                        ].map(([leftLabel, leftVal, rightLabel, rightVal]) => (
+                          <div
+                            key={leftLabel}
+                            className="flex w-full items-center justify-between gap-1"
+                          >
+                            <span className="min-w-0 shrink text-emerald-100">
+                              {leftLabel}:{" "}
+                              <span className="font-mono tabular-nums">{leftVal}</span>
+                            </span>
+                            <span className="min-w-0 shrink text-right text-emerald-100/90">
+                              {rightLabel}{" "}
+                              <span className="font-mono tabular-nums">{rightVal}</span>
+                            </span>
+                          </div>
+                        ))}
+                        {wikiGrowthCaption && (
+                          <p className="pt-0.5 text-[7px] leading-none tracking-tight text-cyan-200/85 whitespace-nowrap">
+                            {wikiGrowthCaption}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="mt-1.5 border-t border-white/15 pt-1.5 pb-0.5">
+              <p className="mb-0.5 text-center text-[8px] font-bold text-cyan-200/90">ペット変更</p>
+              <div className="flex gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => cyclePet(-1)}
+                  className="flex-1 rounded bg-cyan-900/90 py-0.5 text-[7px] font-bold leading-tight text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
+                >
+                  ◀ 前
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cyclePet(1)}
+                  className="flex-1 rounded bg-cyan-900/90 py-0.5 text-[7px] font-bold leading-tight text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
+                >
+                  次 ▶
+                </button>
+              </div>
+              <select
+                value={pet.id}
+                onChange={(e) => applyPetId(e.target.value)}
+                className="mt-1 w-full rounded border border-white/25 bg-zinc-900/95 py-0.5 pl-1 pr-5 text-[9px] text-white outline-none focus:ring-1 focus:ring-cyan-500"
+              >
+                {MOE_PET_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {MOE_PET_DATA[id].emoji} {MOE_PET_DATA[id].name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-1.5 space-y-1 border-t border-white/15 pt-1.5">
+              <button
+                type="button"
+                onClick={handlePetExpReset}
+                className="w-full rounded border border-rose-600/60 bg-rose-950/80 py-1 text-[8px] font-bold text-rose-100 transition hover:bg-rose-900/90 active:scale-[0.98]"
+              >
+                ペットEXP・Lv リセット
+              </button>
+              <p className="text-[8px] leading-snug text-white/42">
+                ペットの Lv・EXP等はこのブラウザ保存
+              </p>
+              <div className="space-y-1">
+                <div className="flex w-full items-center justify-between gap-2 text-pink-100/95">
+                  <span className="shrink-0 text-[10px]">訓練士EXP</span>
+                  <span className="min-w-0 shrink text-right font-mono text-[9px] tabular-nums">
+                    {trainerStatus.exp}/{trainerStatus.nextExp}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full border border-pink-800/50 bg-pink-950/80">
+                  <div
+                    className="h-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500 transition-all duration-500"
+                    style={{ width: `${trainerExpPct}%` }}
+                  />
+                </div>
+                <p className="text-[8px] leading-snug text-white/42">
+                  敵撃破で加算・localStorage 保存
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1830,12 +2456,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 title={skill?.name ?? ""}
                 onClick={() => {
                   if (!skill || !msg) return;
+                  setSkillToast(msg);
                   if (duelSkillSeq) {
-                    setToast(msg);
                     scheduleMoeDuelSkillHits(duel.enemyId, duelSkillSeq);
-                    return;
                   }
-                  setToast(msg);
                 }}
                 className="shrink-0 rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-700/90 to-orange-900/90 py-1 text-[8px] font-bold leading-tight text-amber-50 shadow-sm transition hover:from-amber-600/95 hover:to-orange-800/95 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:from-amber-700/90 disabled:hover:to-orange-900/90"
               >
@@ -1846,147 +2470,124 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
       </div>
 
-      <div className="absolute left-3 top-3 z-40 max-w-[min(90vw,22rem)] rounded-lg border border-white/20 bg-black/55 px-3 py-2 text-xs text-white/90 backdrop-blur-sm">
-        <p className="font-bold text-cyan-300">
-          ミーリム海岸 (Master of Epic){is3d ? " · 3D" : ""}
-        </p>
-        {is3d ? (
-          <>
-            <p>WASD＝移動 · Shift＝走る · 南（手前）スタート→北へ行くほど強敵</p>
-            <p>敵クリック＝ターゲット · 右上パネルで命令 · Space＝ジャンプ</p>
-            {!map3dReady && (
-              <p className="text-amber-200/90">3Dマップ読み込み中…</p>
-            )}
-          </>
-        ) : (
-          <p>WASDで移動 / 奥の列（3→4→5）ほど強い敵 / 左下ミニマップ / 敵クリックで戦闘</p>
-        )}
-        <p className="font-bold text-pink-300">
-          討伐で訓練士EXP +（敵Lv×5 目安）／ペットは攻撃・敵攻撃の直後それぞれ約
-          {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%でEXP（Wiki表）
-        </p>
-        <p className="text-pink-200/90">右上で回復・ペット変更・スキル</p>
-        {is3d && onBack && (
+      <div className="absolute left-3 top-3 z-40 max-w-[min(90vw,22rem)]">
+        {!showFieldGuide ? (
           <button
             type="button"
-            onClick={() => onBack()}
-            className="mt-2 rounded-lg border border-zinc-500 bg-zinc-800/90 px-3 py-1 text-[10px] font-semibold hover:bg-zinc-700"
+            onClick={() => setShowFieldGuide(true)}
+            className="rounded-lg border border-cyan-500/40 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-cyan-200 shadow-md backdrop-blur-sm transition hover:bg-black/75 active:scale-[0.98]"
+            aria-expanded={false}
+            aria-controls="moe-field-guide-panel"
           >
-            メニューへ戻る
+            操作ガイド
           </button>
+        ) : (
+          <div
+            id="moe-field-guide-panel"
+            className="rounded-lg border border-white/20 bg-black/55 px-3 py-2 text-xs text-white/90 backdrop-blur-sm"
+          >
+            <div className="mb-1 flex items-start justify-between gap-2">
+              <p className="font-bold text-cyan-300">
+                ミーリム海岸 (Master of Epic){is3d ? " · 3D" : ""}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowFieldGuide(false)}
+                className="shrink-0 rounded border border-white/20 px-1.5 py-0.5 text-[9px] text-white/70 hover:bg-white/10"
+                aria-label="操作ガイドを閉じる"
+              >
+                閉じる
+              </button>
+            </div>
+            {is3d ? (
+              <>
+                <p>WASD＝移動 · Shift＝走る · 南（手前）スタート→北へ行くほど強敵</p>
+                <p>敵クリック＝ターゲット（上部ウィンドウ・ドラッグ可） · 右上で命令 · 左下ミニマップ · Space＝ジャンプ</p>
+                {!map3dReady && (
+                  <p className="text-amber-200/90">3Dマップ読み込み中…</p>
+                )}
+              </>
+            ) : (
+              <p>WASDで移動 / 奥の列（3→4→5）ほど強い敵 / 左下ミニマップ / 敵クリックでターゲット</p>
+            )}
+            <p className="font-bold text-pink-300">
+              討伐で訓練士EXP +（敵Lv×5 目安）／ペットは攻撃・敵攻撃の直後それぞれ約
+              {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%でEXP（Wiki表）
+            </p>
+            <p className="text-pink-200/90">右上で回復・ペット変更・スキル</p>
+            {is3d && onBack && (
+              <button
+                type="button"
+                onClick={() => onBack()}
+                className="mt-2 rounded-lg border border-zinc-500 bg-zinc-800/90 px-3 py-1 text-[10px] font-semibold hover:bg-zinc-700"
+              >
+                メニューへ戻る
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {is3d && showPetStatusOverlay && (
-        <div
-          className="fixed inset-0 z-[56] flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
-          onClick={() => setShowPetStatusOverlay(false)}
-          role="presentation"
+      <MoeNpcDialogue
+        open={!!petMasterDialogue}
+        mode={
+          petMasterView === "menu"
+            ? "menu"
+            : petMasterView === "message"
+              ? "message"
+              : "lines"
+        }
+        lines={petMasterLines}
+        lineIndex={petMasterDialogue?.lineIndex ?? 0}
+        message={petMasterDialogue?.message}
+        menuPrompt={`${currentPetData.emoji} ${currentPetData.name}（Lv.${pet.level}）をどうする？`}
+        menuActions={[
+          { id: "talk", label: "💬 話を聞く" },
+          { id: "lv100", label: "✨ Lv.100 創造儀式（テスト）" },
+          {
+            id: "restore",
+            label: "↩ 元のLv・EXPに戻す",
+            disabled: !hasPetDebugSnapshot,
+          },
+        ]}
+        onMenuSelect={handlePetMasterMenuSelect}
+        onNext={() =>
+          setPetMasterDialogue((d) =>
+            d?.view === "talk"
+              ? { ...d, lineIndex: (d.lineIndex ?? 0) + 1 }
+              : d
+          )
+        }
+        onClose={() => closePetMasterDialogue(petMasterView === "menu")}
+        petData={currentPetData}
+        npc={MOE_PET_MASTER_NPC}
+      />
+
+      {is3d && nearPetHouse && !petMasterDialogue && (
+        <button
+          type="button"
+          onClick={handlePetMasterTalk}
+          className="absolute bottom-28 left-1/2 z-[54] -translate-x-1/2 rounded-xl border-2 border-amber-500/50 bg-zinc-950/92 px-4 py-2.5 text-sm font-bold text-amber-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
         >
-          <div
-            className="max-h-[min(85dvh,28rem)] w-[min(92vw,18rem)] overflow-y-auto rounded-xl border border-white/25 bg-zinc-950/95 p-4 text-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="ペットステータス"
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <span className="text-3xl">{currentPetData.emoji}</span>
-              <div>
-                <p className="text-sm font-bold">{currentPetData.name}</p>
-                <p className="text-xs text-gray-400">Lv.{pet.level}</p>
-              </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-300">HP</span>
-                <span className="font-mono tabular-nums">
-                  {precisePet
-                    ? `${formatPetStatUi(pet.hp)}/${formatPetStatUi(pet.hpMax)}`
-                    : `${Math.floor(pet.hp)}/${pet.hpMax}`}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-300">MP</span>
-                <span className="font-mono tabular-nums">
-                  {precisePet
-                    ? `${formatPetStatUi(pet.mp)}/${formatPetStatUi(pet.mpMax)}`
-                    : `${pet.mp}/${pet.mpMax}`}
-                </span>
-              </div>
-              {precisePet && petWikiStats && (
-                <>
-                  <div className="flex justify-between text-emerald-100">
-                    <span>攻撃</span>
-                    <span className="font-mono tabular-nums">
-                      {formatPetStatUi(petWikiStats.attack)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-emerald-100">
-                    <span>防御</span>
-                    <span className="font-mono tabular-nums">
-                      {formatPetStatUi(petWikiStats.defense)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-emerald-100/90">
-                    <span>命中</span>
-                    <span className="font-mono tabular-nums">
-                      {formatPetStatUi(petWikiStats.hit)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-emerald-100/90">
-                    <span>回避</span>
-                    <span className="font-mono tabular-nums">
-                      {formatPetStatUi(petWikiStats.evasion)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-emerald-100/90">
-                    <span>魔力</span>
-                    <span className="font-mono tabular-nums">
-                      {formatPetStatUi(petWikiStats.magic)}
-                    </span>
-                  </div>
-                  {wikiGrowthCaption && (
-                    <p className="text-[10px] leading-snug text-cyan-200/85">
-                      {wikiGrowthCaption}
-                    </p>
-                  )}
-                </>
-              )}
-              <div className="border-t border-white/15 pt-2">
-                <div className="flex justify-between text-amber-100">
-                  <span>ペットEXP</span>
-                  <span className="font-mono text-xs tabular-nums">
-                    {pet.level >= MOE_PET_MAX_LEVEL
-                      ? "MAX"
-                      : `${pet.expIntoLevel ?? 0}/${petNextNeed ?? "—"}`}
-                  </span>
-                </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full border border-amber-800/40 bg-amber-950/80">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-400 to-yellow-500"
-                    style={{ width: `${petExpPct}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-[10px] text-amber-200/80">累計 {petTotalExp} EXP</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPetStatusOverlay(false)}
-              className="mt-4 w-full rounded-lg bg-zinc-700 py-2 text-xs font-bold transition hover:bg-zinc-600 active:scale-[0.98]"
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
+          {MOE_PET_MASTER_NPC.emoji} ペットマスターと話す
+        </button>
       )}
 
       {is3d ? (
+        <>
         <MoeField3DCanvas
           enemies={enemies}
           battlePopups={battlePopups.filter((p) => p.space === "world")}
-          onEnemyClick={handleEnemySelect}
+          onEnemyClick={(id) => handleEnemySelect(id)}
+          onPetClick={() => handlePetSelect()}
           targetEnemyId={targetEnemyId}
+          petFocused={petFocused}
+          petLabel={{
+            name: currentPetData.name,
+            level: pet.level,
+            hp: pet.hp,
+            hpMax: pet.hpMax,
+          }}
           onMapReady={(bounds) => {
             setMap3dReady(true);
             if (!bounds?.halfW || !bounds?.halfD) return;
@@ -1998,12 +2599,45 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     halfD: bounds.halfD,
                     mw: bounds.halfW * 2,
                     mh: bounds.halfD * 2,
+                    midBossPos: bounds.midBossPos ?? w.midBossPos,
+                    superBossPos: bounds.superBossPos ?? w.superBossPos,
                   }
                 : w
             );
             setEnemies((prev) => {
               const zoneCount = MOE_3D_ENEMY_ZONES.length;
               return prev.map((en) => {
+                if (en.midBoss || en.superBoss) {
+                  const base =
+                    MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
+                  const pos = en.superBoss
+                    ? bounds.superBossPos ??
+                      moe3dSuperBossSpawnPosition(bounds.halfW, bounds.halfD)
+                    : bounds.midBossPos ??
+                      moe3dMidBossSpawnPosition(bounds.halfW, bounds.halfD);
+                  const scaled = moe3dEnemyStatsForZoneLevel(
+                    base,
+                    base.level
+                  );
+                  const hpMult = en.superBoss
+                    ? MOE_SUPER_BOSS_HP_MULTIPLIER
+                    : MOE_MID_BOSS_HP_MULTIPLIER;
+                  const hpMax = Math.max(
+                    1,
+                    Math.round(scaled.hpMax * hpMult)
+                  );
+                  return {
+                    ...en,
+                    x: pos.x,
+                    y: pos.y,
+                    level: scaled.level,
+                    hpMax,
+                    petDamage: scaled.petDamage,
+                    wiki: scaled.wiki,
+                    zoneLevel: base.level,
+                    hp: en.hp <= 0 ? en.hp : Math.min(en.hp, hpMax),
+                  };
+                }
                 const zoneIndex = en.zoneIndex ?? 0;
                 const slotInZone = en.slotInZone ?? 0;
                 const pos = moe3dZoneEnemyPosition(
@@ -2051,12 +2685,97 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerSprintRef={playerSprintRef}
           petRunAnimRef={petRunAnimRef}
           petPosRef={petPosRef}
+          petCommandRef={petCommandRef}
+          petHoldYawRef={petHoldYawRef}
           duelRef={duelRef}
           petStrikeUntilRef={petStrikeUntilRef}
           petAttackMsRef={petAttackMsRef}
           enemyStrikeUntilRef={enemyStrikeUntilRef}
           enemyAttackMsRef={enemyAttackMsRef}
         />
+
+        {world.mode3d && mini3Player && (
+          <div className="absolute bottom-6 left-3 z-[45] w-[9.75rem] rounded-lg border border-white/25 bg-black/78 p-1.5 text-white shadow-lg backdrop-blur-md">
+            <p className="mb-1 text-center text-[8px] font-bold tracking-wide text-cyan-200/95">
+              全体マップ
+            </p>
+            <svg
+              className="block w-full rounded border border-white/10"
+              style={minimapSvgStyle(mini3W, mini3H)}
+              viewBox={`0 0 ${mini3W} ${mini3H}`}
+              preserveAspectRatio="xMidYMid meet"
+              aria-label="3D全体マップミニマップ"
+            >
+              {moe3dMinimapZoneRects(
+                mini3HalfW,
+                mini3HalfD,
+                mini3W,
+                mini3H
+              ).map((rect) => (
+                <rect
+                  key={rect.key}
+                  x={rect.x}
+                  y={rect.y}
+                  width={rect.width}
+                  height={rect.height}
+                  fill={rect.fill}
+                  opacity={rect.opacity ?? 1}
+                />
+              ))}
+              {enemies
+                .filter((en) => en.hp > 0)
+                .map((en) => {
+                  const p = moe3dWorldToMinimap(
+                    en.x,
+                    en.y,
+                    mini3HalfW,
+                    mini3HalfD,
+                    mini3W,
+                    mini3H
+                  );
+                  return (
+                    <circle
+                      key={`mini3-en-${en.id}`}
+                      cx={p.x}
+                      cy={p.y}
+                      r={Math.max(4, mini3W * 0.018)}
+                      fill="#ef4444"
+                      opacity={0.9}
+                    />
+                  );
+                })}
+              {mini3ViewTip && mini3ViewLeft && mini3ViewRight && (
+                <polygon
+                  points={`${mini3ViewTip.x},${mini3ViewTip.y} ${mini3ViewLeft.x},${mini3ViewLeft.y} ${mini3ViewRight.x},${mini3ViewRight.y}`}
+                  fill="#fbbf24"
+                  opacity={0.75}
+                />
+              )}
+              <circle
+                cx={mini3Player.x}
+                cy={mini3Player.y}
+                r={Math.max(5, mini3W * 0.022)}
+                fill="#6366f1"
+                stroke="#ffffff"
+                strokeWidth={Math.max(2, mini3W * 0.008)}
+              />
+              <rect
+                x={0}
+                y={0}
+                width={mini3W}
+                height={mini3H}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth={Math.max(2, mini3W * 0.006)}
+                opacity={0.35}
+              />
+            </svg>
+            <p className="mt-1 text-center text-[7px] text-white/55">
+              黄＝視界 · 紫＝自分 · 赤＝敵 · 南↓北↑
+            </p>
+          </div>
+        )}
+        </>
       ) : (
       <>
       <div className="absolute will-change-transform" style={{ width: world.mw, height: world.mh, transform: `translate(${camX}px, ${camY}px)` }}>
@@ -2147,38 +2866,286 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           ビスクへ
         </div>
 
+        {world.rowLayout?.length > 0 &&
+          (() => {
+            const house = moe2dPetHouseLayout(world.rowLayout, world.mw);
+            const nearHouse = moe2dIsNearPetHouse(
+              player.x,
+              player.y,
+              world.rowLayout,
+              world.mw
+            );
+            return (
+              <>
+                <div
+                  className="pointer-events-none absolute z-[6] rounded-xl border-2 border-amber-700/45 bg-gradient-to-b from-amber-200/55 to-amber-900/35 shadow-md"
+                  style={{
+                    left: house.x,
+                    top: house.y,
+                    width: house.width,
+                    height: house.height,
+                  }}
+                />
+                <div
+                  className="pointer-events-none absolute z-[7] -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-[9px] font-bold text-amber-100"
+                  style={{
+                    left: house.x + house.width / 2,
+                    top: house.y - 12,
+                  }}
+                >
+                  {MOE_PET_MASTER_NPC.houseEmoji} {MOE_PET_MASTER_NPC.houseLabel}
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePetMasterTalk}
+                  className={`absolute z-[8] flex flex-col items-center rounded-lg transition active:scale-95 ${
+                    nearHouse
+                      ? "ring-2 ring-amber-400/80 ring-offset-1 ring-offset-sky-900"
+                      : ""
+                  }`}
+                  style={{
+                    left: house.npcX - 22,
+                    top: house.npcY - 28,
+                    width: 44,
+                  }}
+                  title={MOE_PET_MASTER_NPC.name}
+                >
+                  <span className="text-3xl drop-shadow-lg">
+                    {MOE_PET_MASTER_NPC.emoji}
+                  </span>
+                  {nearHouse && (
+                    <span className="mt-0.5 rounded bg-amber-900/85 px-1.5 py-0.5 text-[8px] font-bold text-amber-100">
+                      話す
+                    </span>
+                  )}
+                </button>
+              </>
+            );
+          })()}
+
+        {(() => {
+          const bossArea = moe2dBossAreaLayout(world.rowLayout, world.mw);
+          return (
+            <>
+              <div
+                className="pointer-events-none absolute z-[5] rounded-xl border-2 border-amber-600/50 bg-gradient-to-b from-amber-600/28 to-stone-900/35 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.25)]"
+                style={{
+                  left: bossArea.midArea.x,
+                  top: bossArea.midArea.y,
+                  width: bossArea.midArea.width,
+                  height: bossArea.midArea.height,
+                }}
+              />
+              <div
+                className="pointer-events-none absolute z-[5] -translate-x-1/2 rounded bg-black/55 px-2 py-0.5 text-[9px] font-bold text-amber-100"
+                style={{
+                  left: bossArea.midBossPos.x,
+                  top: bossArea.midArea.y - 14,
+                }}
+              >
+                ★ 中ボス
+              </div>
+              <div
+                className="pointer-events-none absolute z-[5] rounded-xl border-2 border-violet-600/50 bg-gradient-to-b from-violet-600/25 to-stone-900/40 shadow-[inset_0_0_0_1px_rgba(167,139,250,0.25)]"
+                style={{
+                  left: bossArea.superArea.x,
+                  top: bossArea.superArea.y,
+                  width: bossArea.superArea.width,
+                  height: bossArea.superArea.height,
+                }}
+              />
+              <div
+                className="pointer-events-none absolute z-[5] -translate-x-1/2 rounded bg-black/55 px-2 py-0.5 text-[9px] font-bold text-violet-100"
+                style={{
+                  left: bossArea.superBossPos.x,
+                  top: bossArea.superArea.y - 14,
+                }}
+              >
+                ◆ 超ボス
+              </div>
+            </>
+          );
+        })()}
+
         {/* Enemies */}
-        {enemies.map((en) => (
-          <button
-            key={en.id}
-            type="button"
-            title={enemyWikiStatsTitle(en)}
-            onClick={(e) => handleEnemyClick(e, en.id)}
-            className={`absolute flex flex-col items-center justify-center rounded-xl border-2 p-1 shadow-lg transition hover:scale-110 active:scale-95 ${en.color}`}
-            style={{ left: en.x - 35, top: en.y - 35, width: 70, minHeight: 70 }}
-          >
-            <span className="text-2xl">{en.emoji}</span>
-            <span className="text-[9px] font-bold text-white leading-tight">
-              Lv.{formatEnemyLevelUi(en.level)}
-            </span>
-            <span className="text-[9px] font-bold text-white leading-tight truncate w-full px-1">{en.name}</span>
-            <div className="w-full bg-black/40 h-1.5 mt-1 rounded-full overflow-hidden">
-              <div className="bg-red-500 h-full" style={{ width: `${(en.hp / en.hpMax) * 100}%` }} />
-            </div>
-          </button>
-        ))}
+        {enemies
+          .filter((en) => en.hp > 0)
+          .map((en) => {
+            const hpPct = petResourceBarPct(en.hp, en.hpMax);
+            const isTarget = targetEnemyId === en.id;
+            const pad = en.superBoss
+              ? MOE_2D_SUPER_BOSS_UI_PAD
+              : en.midBoss
+                ? MOE_2D_MID_BOSS_UI_PAD
+                : 35;
+            const hitPad = pad + (en.superBoss || en.midBoss ? 4 : 10);
+            const size = en.superBoss
+              ? MOE_2D_SUPER_BOSS_UI_SIZE
+              : en.midBoss
+                ? MOE_2D_MID_BOSS_UI_SIZE
+                : 70;
+            const nameTop = en.superBoss ? pad + 28 : en.midBoss ? pad + 22 : 58;
+            const prefix = en.superBoss ? "◆ " : en.midBoss ? "★ " : "";
+            const bossZ =
+              en.superBoss ? "z-[17]" : en.midBoss ? "z-[16]" : "z-[10]";
+            const bossRing = en.superBoss
+              ? "ring-2 ring-violet-400/75"
+              : en.midBoss
+                ? "ring-2 ring-amber-500/70"
+                : "";
+            return (
+              <React.Fragment key={en.id}>
+                <div
+                  className="pointer-events-none absolute z-[12]"
+                  style={{
+                    left: en.x - 42,
+                    top: en.y - nameTop,
+                    width: 84,
+                  }}
+                >
+                  <p className="truncate text-center text-[8px] font-bold text-white drop-shadow">
+                    {prefix}
+                    {en.name}
+                  </p>
+                </div>
+                {isTarget && (
+                  <>
+                    <div
+                      className="pointer-events-none absolute z-[13] -translate-x-1/2"
+                      style={{
+                        left: en.x,
+                        top: en.y - pad - 18,
+                      }}
+                    >
+                      <MoeCrystalMarker size={8} className="mx-auto" />
+                    </div>
+                    <div
+                      className="pointer-events-none absolute z-[12]"
+                      style={{
+                        left: en.x - 42,
+                        top: en.y - 46,
+                        width: 84,
+                      }}
+                    >
+                      <div className="ml-3 h-1.5 overflow-hidden rounded-full bg-black/55 ring-1 ring-yellow-400/70">
+                        <div
+                          className="h-full transition-all duration-150"
+                          style={{
+                            width: `${hpPct}%`,
+                            backgroundColor: enemyHpBarColor(hpPct),
+                          }}
+                        />
+                      </div>
+                      <p className="ml-3 mt-0.5 text-[7px] font-bold tabular-nums text-red-100/90 drop-shadow">
+                        {Math.ceil(en.hp)}/{en.hpMax}
+                      </p>
+                    </div>
+                  </>
+                )}
+                <button
+                  type="button"
+                  title={enemyWikiStatsTitle(en)}
+                  onPointerDown={(e) => handleEnemySelect(en.id, e)}
+                  className={`absolute flex flex-col items-center justify-center rounded-xl border-2 p-1 shadow-lg transition hover:scale-110 active:scale-95 ${en.color} ${
+                    isTarget ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-sky-900" : ""
+                  } ${bossZ} ${bossRing}`}
+                  style={{
+                    left: en.x - hitPad,
+                    top: en.y - hitPad,
+                    width: size + (hitPad - pad) * 2,
+                    minHeight: size + (hitPad - pad) * 2,
+                  }}
+                >
+                  <span
+                    className={
+                      en.superBoss
+                        ? "text-6xl"
+                        : en.midBoss
+                          ? "text-4xl"
+                          : "text-2xl"
+                    }
+                  >
+                    {en.emoji}
+                  </span>
+                  <span className="text-[9px] font-bold text-white leading-tight">
+                    Lv.{formatEnemyLevelUi(en.level)}
+                  </span>
+                </button>
+              </React.Fragment>
+            );
+          })}
 
         {/* Pet */}
-        <div className="absolute flex flex-col items-center transition-all duration-100"
-          style={{ left: pet.x - 20, top: pet.y - 20, width: 40 }}>
-          <span className="text-3xl drop-shadow-lg">{currentPetData.emoji}</span>
-          <div className="w-full bg-black/50 h-1 mt-0.5 rounded-full overflow-hidden">
+        <button
+          type="button"
+          onPointerDown={handlePetSelect}
+          className={`absolute z-[24] flex flex-col items-center ${
+            petCommandMode === "wait" || petCommandMode === "sit"
+              ? ""
+              : "transition-all duration-100"
+          } ${
+            petFocused ? "ring-2 ring-emerald-400 ring-offset-1 ring-offset-sky-900 rounded-lg" : ""
+          }`}
+          style={{ left: pet.x - 30, top: pet.y - 30, width: 60, padding: 8 }}
+          title={`${currentPetData.name} Lv.${pet.level}`}
+        >
+          {(petFocused ||
+            petCommandMode === "wait" ||
+            petCommandMode === "sit") && (
             <div
-              className="bg-green-400 h-full"
-              style={{ width: `${petResourceBarPct(pet.hp, pet.hpMax)}%` }}
-            />
-          </div>
-        </div>
+              className="pointer-events-none absolute left-1/2 bottom-full mb-1 w-[4.5rem] -translate-x-1/2"
+            >
+              {petFocused && (
+                <>
+                  <div className="mb-1 flex justify-center">
+                    <MoeCrystalMarker size={8} />
+                  </div>
+                  <p className="truncate text-center text-[8px] font-bold text-emerald-100 drop-shadow">
+                    {currentPetData.name}
+                  </p>
+                  <p className="text-center text-[7px] font-bold text-emerald-200/90">
+                    Lv.{pet.level}
+                  </p>
+                </>
+              )}
+              {(petCommandMode === "wait" || petCommandMode === "sit") && (
+                <p
+                  className={`text-center text-[7px] font-bold drop-shadow ${
+                    petCommandMode === "sit"
+                      ? "text-violet-200"
+                      : "text-zinc-200"
+                  }`}
+                >
+                  {MOE_PET_COMMAND_UI[petCommandMode].hint}
+                </p>
+              )}
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-black/55 ring-1 ring-emerald-400/60">
+                <div
+                  className="h-full bg-emerald-400 transition-all duration-150"
+                  style={{
+                    width: `${petResourceBarPct(pet.hp, pet.hpMax)}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-0.5 text-center text-[7px] font-bold tabular-nums text-white/85">
+                {precisePet
+                  ? `${formatPetStatUi(pet.hp)}/${formatPetStatUi(pet.hpMax)}`
+                  : `${Math.floor(pet.hp)}/${pet.hpMax}`}
+              </p>
+            </div>
+          )}
+          <span className="text-3xl drop-shadow-lg">{currentPetData.emoji}</span>
+          {!petFocused &&
+            petCommandMode !== "wait" &&
+            petCommandMode !== "sit" && (
+            <div className="w-full bg-black/50 h-1 mt-0.5 rounded-full overflow-hidden">
+              <div
+                className="bg-green-400 h-full"
+                style={{ width: `${petResourceBarPct(pet.hp, pet.hpMax)}%` }}
+              />
+            </div>
+          )}
+        </button>
 
         {battlePopups
           .filter((p) => p.space === "world")
@@ -2203,8 +3170,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           ))}
 
         {/* Player */}
-        <div className="pointer-events-none absolute flex items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-2xl shadow-xl"
-          style={{ left: player.x - PLAYER_R, top: player.y - PLAYER_R, width: PLAYER_R * 2, height: PLAYER_R * 2 }}>
+        <div
+          className="pointer-events-none absolute z-[25] flex items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-2xl shadow-xl"
+          style={{
+            left: player.x - PLAYER_R,
+            top: player.y - PLAYER_R,
+            width: PLAYER_R * 2,
+            height: PLAYER_R * 2,
+          }}
+        >
           🧙
         </div>
       </div>
@@ -2216,6 +3190,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           </p>
           <svg
             className="block w-full rounded border border-white/10"
+            style={minimapSvgStyle(world.mw, world.mh)}
             viewBox={`0 0 ${world.mw} ${world.mh}`}
             preserveAspectRatio="xMidYMid meet"
             aria-label="全体マップミニマップ"

@@ -104,6 +104,7 @@ export function moe2dPickRespawnInZone2d(
   for (let n = 0; n < 24; n++) {
     const x = cx + (Math.random() - 0.5) * cellW * 0.55;
     const y = cy + (Math.random() - 0.5) * row.h * 0.45;
+    if (moe2dIsInBossArea(x, y, rowLayout, mw)) continue;
     let ok = true;
     for (const o of others) {
       if (o.id === excludeId || o.hp <= 0) continue;
@@ -151,13 +152,121 @@ export function moe2dZoneRowStyle(zoneRow) {
 
 const ZONE_ROW_MINI_FILLS = ["#86efac", "#4ade80", "#22c55e", "#16a34a"];
 
+export const MOE_2D_BISK_EXIT_W = 150;
+export const MOE_2D_BISK_EXIT_H = 120;
+
+/** 左下「ビスクへ」タイル内のみメニューへ戻る */
+export function moe2dIsBiskExitZone(px, py, rowLayout) {
+  const start = rowLayout.find((r) => r.kind === "start");
+  if (!start) return false;
+  return (
+    px <= MOE_2D_BISK_EXIT_W &&
+    py >= start.y + start.h - MOE_2D_BISK_EXIT_H &&
+    py <= start.y + start.h + 4
+  );
+}
+
+/** 2D UI（ボスアイコン） */
+export const MOE_2D_MID_BOSS_UI_SIZE = 129;
+export const MOE_2D_MID_BOSS_UI_PAD = 65;
+export const MOE_2D_SUPER_BOSS_UI_SIZE = 384;
+export const MOE_2D_SUPER_BOSS_UI_PAD = 192;
+
+/** 2D・初期位置そばの専用ボスエリア（中ボス・超ボスは横並び・非重複） */
+export function moe2dBossAreaLayout(rowLayout, mw) {
+  const start = moe2dPlayerStartPosition(rowLayout, mw);
+  const startRow = rowLayout.find((r) => r.kind === "start");
+  const rowH = startRow?.h ?? 80;
+  const east = Math.max(48, mw * 0.1);
+  const gap = 24;
+  const midW = MOE_2D_MID_BOSS_UI_SIZE;
+  const superW = MOE_2D_SUPER_BOSS_UI_SIZE;
+  const y = start.y - rowH * 0.32;
+
+  const midBossPos = { x: start.x + east + midW / 2, y };
+  const superBossPos = {
+    x: midBossPos.x + midW / 2 + gap + superW / 2,
+    y,
+  };
+
+  const midArea = {
+    x: midBossPos.x - midW / 2 - 10,
+    y: y - midW / 2 - 8,
+    width: midW + 20,
+    height: midW + 16,
+  };
+  const superArea = {
+    x: superBossPos.x - superW / 2 - 10,
+    y: y - superW / 2 - 8,
+    width: superW + 20,
+    height: superW + 16,
+  };
+
+  return {
+    center: { x: (midBossPos.x + superBossPos.x) / 2, y },
+    midBossPos,
+    superBossPos,
+    midArea,
+    superArea,
+    width: superArea.x + superArea.width - midArea.x,
+    height: Math.max(midArea.height, superArea.height),
+  };
+}
+
+/** 初期位置横・スタート列（中ボス） */
+export function moe2dMidBossSpawnPosition(rowLayout, mw) {
+  return moe2dBossAreaLayout(rowLayout, mw).midBossPos;
+}
+
+/** 超ボス（アウズンブラ）— ボスエリア内 */
+export function moe2dSuperBossSpawnPosition(rowLayout, mw) {
+  return moe2dBossAreaLayout(rowLayout, mw).superBossPos;
+}
+
+/** 2Dボスエリア内か */
+export function moe2dIsInBossArea(x, y, rowLayout, mw, padding = 12) {
+  const area = moe2dBossAreaLayout(rowLayout, mw);
+  const inRect = (r) =>
+    x >= r.x - padding &&
+    x <= r.x + r.width + padding &&
+    y >= r.y - padding &&
+    y <= r.y + r.height + padding;
+  return inRect(area.midArea) || inRect(area.superArea);
+}
+
 export function moe2dPlayerStartPosition(rowLayout, mw) {
   const start = rowLayout.find((r) => r.kind === "start");
   if (!start) return { x: mw / 2, y: 0 };
   return {
-    x: Math.round(mw * 0.26),
-    y: start.y + start.h * 0.82,
+    x: Math.round(mw * 0.38),
+    y: start.y + start.h * 0.58,
   };
+}
+
+/** スタート列・西側のペット小屋（ビスク左下・東ボスエリアと離す） */
+export function moe2dPetHouseLayout(rowLayout, mw) {
+  const start = rowLayout.find((r) => r.kind === "start");
+  const rowH = start?.h ?? 80;
+  const width = 108;
+  const height = 92;
+  const x = Math.max(88, mw * 0.1);
+  const y = start ? start.y + rowH * 0.38 : 0;
+  return {
+    x,
+    y,
+    width,
+    height,
+    npcX: x + width * 0.52,
+    npcY: y + height * 0.62,
+    interactRadius: 56,
+  };
+}
+
+export function moe2dIsNearPetHouse(px, py, rowLayout, mw) {
+  const house = moe2dPetHouseLayout(rowLayout, mw);
+  const cx = house.npcX;
+  const cy = house.npcY;
+  return Math.hypot(px - cx, py - cy) <= house.interactRadius;
 }
 
 export function moe2dRowLayoutTotalHeight(rowLayout) {
