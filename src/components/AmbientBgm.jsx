@@ -8,6 +8,28 @@ import {
 } from "@/lib/bgmControl";
 
 const STORAGE_KEY = "life-rpg-bgm-track";
+const VOLUME_STORAGE_KEY = "life-rpg-bgm-volume-v5";
+/** 初期音量（未保存時のデフォルト） */
+const DEFAULT_BGM_VOLUME = 0.22;
+
+function readInitialBgmVolume() {
+  if (typeof window === "undefined") return DEFAULT_BGM_VOLUME;
+  try {
+    const saved = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (saved != null && saved !== "") {
+      const v = Number(saved);
+      if (Number.isFinite(v) && v >= 0 && v <= 1) return v;
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_BGM_VOLUME;
+}
+
+function applyBgmVolume(audio, vol) {
+  if (!audio) return;
+  audio.volume = Math.max(0, Math.min(1, vol));
+}
 
 const BGM_DIR = "/assets/bgm";
 
@@ -73,11 +95,12 @@ function isValidTrackId(id) {
 export default function AmbientBgm() {
   const pathname = usePathname();
   const audioRef = useRef(null);
+  const volumeRef = useRef(DEFAULT_BGM_VOLUME);
   /** サーバーとクライアントの初回を揃える（localStorage はマウント後に読む） */
   const [trackId, setTrackId] = useState(LOCAL_ID);
   const [playing, setPlaying] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [volume, setVolume] = useState(0.11);
+  const [volume, setVolume] = useState(DEFAULT_BGM_VOLUME);
   const [panelOpen, setPanelOpen] = useState(false);
   const [needsGesture, setNeedsGesture] = useState(false);
   const autoFallbackRef = useRef(false);
@@ -95,6 +118,10 @@ export default function AmbientBgm() {
       } else if (isMoeFieldPath(pathname)) {
         setTrackId("field");
       }
+      const initialVol = readInitialBgmVolume();
+      volumeRef.current = initialVol;
+      setVolume(initialVol);
+      applyBgmVolume(audioRef.current, initialVol);
     } catch {
       /* ignore */
     }
@@ -115,10 +142,19 @@ export default function AmbientBgm() {
   }, [activeSrc]);
 
   useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.volume = volume;
+    volumeRef.current = volume;
+    applyBgmVolume(audioRef.current, volume);
+    try {
+      window.localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
+    } catch {
+      /* ignore */
+    }
   }, [volume]);
+
+  const bindAudioRef = useCallback((node) => {
+    audioRef.current = node;
+    applyBgmVolume(node, volumeRef.current);
+  }, []);
 
   const handleAudioError = useCallback(() => {
     if (isLocalTrackId(trackId) && !autoFallbackRef.current) {
@@ -149,6 +185,7 @@ export default function AmbientBgm() {
     setPlaying(true);
     const a = audioRef.current;
     if (!a) return;
+    applyBgmVolume(a, volumeRef.current);
     void a.play().catch(() => {
       setPlaying(false);
       setNeedsGesture(true);
@@ -158,6 +195,7 @@ export default function AmbientBgm() {
   useEffect(() => {
     const a = audioRef.current;
     if (!a || loadError) return;
+    applyBgmVolume(a, volumeRef.current);
     if (playing) {
       void a.play()
         .then(() => setNeedsGesture(false))
@@ -208,11 +246,14 @@ export default function AmbientBgm() {
       {audioMounted ? (
         <audio
           key={activeSrc}
-          ref={audioRef}
+          ref={bindAudioRef}
           src={activeSrc}
           loop
           preload="metadata"
           onError={handleAudioError}
+          onLoadedMetadata={(e) =>
+            applyBgmVolume(e.currentTarget, volumeRef.current)
+          }
         />
       ) : null}
       <div

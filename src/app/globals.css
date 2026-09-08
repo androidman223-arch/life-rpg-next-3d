@@ -29,24 +29,165 @@ body {
 @keyframes moe-battle-popup-rise {
   0% {
     opacity: 0;
-    transform: translateY(32px) scale(0.2);
+    transform: translateY(18px) scale(0.2);
   }
   14% {
     opacity: 1;
-    transform: translateY(8px) scale(1.14);
+    transform: translateY(2px) scale(1.14);
   }
   26% {
-    transform: translateY(2px) scale(1);
+    transform: translateY(-6px) scale(1);
   }
   68% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateY(-68px) scale(0.82);
+    transform: translateY(-76px) scale(0.82);
   }
 }
 
 .moe-battle-popup-rise {
   animation: moe-battle-popup-rise 2s ease-out forwards;
+}
+
+/* 連撃コンボ：左右に散って上昇 → 同方向へ流れながらゆっくり落下 */
+@keyframes moe-battle-popup-combo-firework {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.42);
+  }
+  8% {
+    opacity: 1;
+    transform: translate3d(
+        calc(var(--combo-drift-x) * 0.32 + var(--combo-hop-x) * 0.4),
+        -2px,
+        0
+      )
+      scale(1.22);
+  }
+  18% {
+    transform: translate3d(var(--combo-peak-x), var(--combo-peak-y), 0) scale(1.1);
+  }
+  28% {
+    transform: translate3d(
+        var(--combo-peak-x),
+        calc(var(--combo-peak-y) * 0.5),
+        0
+      )
+      scale(1.02);
+  }
+  40% {
+    transform: translate3d(var(--combo-peak-x), -2px, 0) scale(1);
+  }
+  54% {
+    opacity: 1;
+    transform: translate3d(var(--combo-fall-x54), 18px, 0) scale(0.97);
+  }
+  68% {
+    transform: translate3d(var(--combo-fall-x68), 34px, 0) scale(0.92);
+  }
+  82% {
+    opacity: 0.78;
+    transform: translate3d(var(--combo-fall-x82), 50px, 0) scale(0.82);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--combo-fall-x100), 68px, 0) scale(0.68);
+  }
+}
+
+.moe-battle-popup-combo-firework {
+  --combo-drift-x: 0px;
+  --combo-hop-x: 0px;
+  --combo-peak-x: 0px;
+  --combo-peak-y: -36px;
+  --combo-fall-x54: 0px;
+  --combo-fall-x68: 0px;
+  --combo-fall-x82: 0px;
+  --combo-fall-x100: 0px;
+  animation: moe-battle-popup-combo-firework 2.25s cubic-bezier(0.28, 0.92, 0.42, 1)
+    forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes moe-heal-popup-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.35);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.06);
+  }
+  26% {
+    transform: translateY(1px) scale(1);
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-34px) scale(0.88);
+  }
+}
+
+.moe-heal-popup-rise {
+  animation: moe-heal-popup-rise 2.4s ease-out forwards;
+}
+
+@keyframes moe-tenth-level-banner {
+  0%,
+  100% {
+    box-shadow:
+      0 0 36px rgba(34, 211, 238, 0.75),
+      0 0 48px rgba(251, 191, 36, 0.45);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 52px rgba(34, 211, 238, 0.95),
+      0 0 72px rgba(251, 191, 36, 0.65);
+    filter: brightness(1.08);
+  }
+}
+
+.moe-tenth-level-banner {
+  animation: moe-tenth-level-banner 0.85s ease-in-out infinite;
+}
+
+/* Level 0.1 up — ペット付近から下→上（1秒） */
+@keyframes moe-tenth-banner-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 14px) scale(0.88);
+  }
+  14% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -32px) scale(0.94);
+  }
+}
+
+.moe-tenth-banner-rise {
+  animation: moe-tenth-banner-rise 1s ease-out forwards;
+}
+
+@keyframes moe-pet-celebrate-bounce {
+  from {
+    transform: scale(1) translateY(0);
+  }
+  to {
+    transform: scale(1.1) translateY(-5px);
+  }
+}
+
+.moe-pet-celebrate-bounce {
+  animation: moe-pet-celebrate-bounce 0.42s ease-in-out infinite alternate;
 }

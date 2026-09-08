@@ -82,7 +82,7 @@ export const MOE_MEERIM_ENEMIES = [
     hpMax: 240,
     petDamage: 40,
     emoji: "🪱",
-    color: "bg-stone-600 border-stone-800",
+    color: "bg-red-700 border-red-950",
   },
   {
     key: "sea_snake",
@@ -120,7 +120,7 @@ export const MOE_MEERIM_ENEMIES = [
     hpMax: 300,
     petDamage: 48,
     emoji: "🦎",
-    color: "bg-indigo-800 border-indigo-950",
+    color: "bg-stone-500 border-stone-700",
   },
   /** ミーリム海岸・丘の上の中ボス（エルビン渓谷のはぐれバイソン系） */
   {
@@ -142,6 +142,71 @@ export const MOE_MEERIM_ENEMIES = [
     emoji: "🐂",
     color: "bg-amber-900 border-amber-950",
     midBoss: true,
+  },
+  /**
+   * フィールドボス — ゲオの大空洞「ギュスターヴ ジャイアント」簡易版（Lv80）
+   * 中ボス（エルビン）とは別スポーン · 低ポリ緑ワニ glb（GustavGiant.glb）
+   */
+  {
+    key: "gustav_junior",
+    name: "ギュスターヴ ジャイアント（簡易）",
+    mapLabel: "ギュスターヴ",
+    level: 80.0,
+    attackInterval: 192.0,
+    wiki: {
+      hp: 0.5,
+      mp: 80.0,
+      attack: 95.0,
+      defense: 84.5,
+      hit: 72.0,
+      evasion: 45.0,
+      magic: 50.0,
+    },
+    hpMax: 540,
+    petDamage: 52,
+    petDamageStrong: 78,
+    emoji: "🐊",
+    color: "bg-emerald-900 border-emerald-950",
+  },
+  /** 低ポリ・小サイズ — エルビン バイソンの近く */
+  {
+    key: "mountain_bison",
+    name: "マウンテンバイソン",
+    level: 18.4,
+    attackInterval: 72.0,
+    wiki: {
+      hp: 0.45,
+      mp: 18.0,
+      attack: 21.5,
+      defense: 18.0,
+      hit: 18.0,
+      evasion: 0.5,
+      magic: 9.0,
+    },
+    hpMax: 95,
+    petDamage: 18,
+    emoji: "🐂",
+    color: "bg-stone-600 border-stone-800",
+  },
+  /** 低ポリ・大サイズ — アウズンブラの近く */
+  {
+    key: "rough_bison",
+    name: "荒くれバイソン",
+    level: 34.6,
+    attackInterval: 128.0,
+    wiki: {
+      hp: 0.5,
+      mp: 34.0,
+      attack: 40.5,
+      defense: 34.0,
+      hit: 34.0,
+      evasion: 0.5,
+      magic: 17.0,
+    },
+    hpMax: 255,
+    petDamage: 35,
+    emoji: "🦬",
+    color: "bg-amber-950 border-stone-900",
   },
   /** エルビン山脈の超ボス系 — 2つ目の丘（バグテスト用） */
   {
@@ -167,7 +232,11 @@ export const MOE_MEERIM_ENEMIES = [
 ];
 
 export const MOE_MEERIM_MID_BOSS_KEY = "elvin_bison";
+export const MOE_MEERIM_GUSTAV_JUNIOR_KEY = "gustav_junior";
+export const MOE_MEERIM_ELVIN_BISON_KEY = "elvin_bison";
 export const MOE_MEERIM_SUPER_BOSS_KEY = "auzun_bura";
+export const MOE_MEERIM_MOUNTAIN_BISON_KEY = "mountain_bison";
+export const MOE_MEERIM_ROUGH_BISON_KEY = "rough_bison";
 /** 中ボス HP 倍率（通常よりタフ） */
 export const MOE_MID_BOSS_HP_MULTIPLIER = 2;
 /** 超ボス HP 倍率 */

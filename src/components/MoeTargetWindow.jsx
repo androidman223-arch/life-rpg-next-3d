@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import MoeNameWindowChargeRow from "@/components/MoeNameWindowChargeRow";
 
 const WINDOW_W = 130;
 const SIDE_CAP_W = 7;
 const MOE_HP_RED = "#ef4444";
+const MOE_ENEMY_CHARGE = "#f97316";
 
 function hpPct(current, max) {
   const m = Number(max);
@@ -12,24 +14,15 @@ function hpPct(current, max) {
   return Math.max(0, Math.min(100, (Number(current) / m) * 100));
 }
 
-function enemyLevelInt(level) {
-  return Math.max(0, Math.round(Number(level) || 0));
-}
-
-export default function MoeTargetWindow({ target }) {
-  const [pos, setPos] = useState(null);
+export default function MoeTargetWindow({ target, duelUi = null }) {
+  const [pos, setPos] = useState(() => ({
+    x:
+      typeof window !== "undefined"
+        ? Math.max(8, (window.innerWidth - WINDOW_W) / 2)
+        : 8,
+    y: 56,
+  }));
   const sizeRef = useRef({ w: WINDOW_W, h: 32 });
-
-  useEffect(() => {
-    if (!target) return;
-    setPos(
-      (p) =>
-        p ?? {
-          x: Math.max(8, (window.innerWidth - WINDOW_W) / 2),
-          y: 56,
-        }
-    );
-  }, [target]);
 
   const clampPos = useCallback((x, y) => {
     const { w, h } = sizeRef.current;
@@ -41,7 +34,7 @@ export default function MoeTargetWindow({ target }) {
 
   const onHeaderPointerDown = useCallback(
     (e) => {
-      if (e.button !== 0 || pos == null) return;
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       const drag = {
@@ -73,13 +66,10 @@ export default function MoeTargetWindow({ target }) {
     [clampPos, pos]
   );
 
-  if (!target || pos == null) return null;
-
-  const pct = hpPct(target.hp, target.hpMax);
-  const hpNow = Math.ceil(target.hp);
-  const hpMax = target.hpMax;
-  const lv = enemyLevelInt(target.level);
-  const prefix = target.superBoss ? "◆ " : target.midBoss ? "★ " : "";
+  const pct = target ? hpPct(target.hp, target.hpMax) : 0;
+  const hpNow = target ? Math.ceil(target.hp) : 0;
+  const hpMax = target?.hpMax ?? 0;
+  const prefix = target?.superBoss ? "◆ " : target?.midBoss ? "★ " : "";
 
   return (
     <div
@@ -89,7 +79,14 @@ export default function MoeTargetWindow({ target }) {
         }
       }}
       className="fixed z-[48] select-none"
-      style={{ left: pos.x, top: pos.y, width: WINDOW_W }}
+      style={{
+        left: pos.x,
+        top: pos.y,
+        width: WINDOW_W,
+        visibility: target ? "visible" : "hidden",
+        pointerEvents: target ? "auto" : "none",
+      }}
+      aria-hidden={!target}
     >
       <div className="overflow-hidden rounded-[4px] border border-slate-300/90 bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)]">
         <div
@@ -98,9 +95,14 @@ export default function MoeTargetWindow({ target }) {
           title="ドラッグで移動"
         >
           <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
-            {prefix}
-            {target.emoji} {target.name}{" "}
-            <span className="tabular-nums text-blue-100/90">Lv.{lv}</span>
+            {target ? (
+              <>
+                {prefix}
+                {target.emoji} {target.name}
+              </>
+            ) : (
+              "\u00a0"
+            )}
           </p>
         </div>
         <div className="h-px shrink-0 bg-white/60" aria-hidden />
@@ -110,7 +112,7 @@ export default function MoeTargetWindow({ target }) {
           aria-valuenow={hpNow}
           aria-valuemin={0}
           aria-valuemax={hpMax}
-          aria-label={`${target.name} HP`}
+          aria-label={target ? `${target.name} HP` : "ターゲット HP"}
         >
           <div
             className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
@@ -137,6 +139,15 @@ export default function MoeTargetWindow({ target }) {
             aria-hidden
           />
         </div>
+        {duelUi ? (
+          <MoeNameWindowChargeRow
+            phase={duelUi.phase}
+            duelRef={duelUi.duelRef}
+            barKey={duelUi.barKey}
+            fillColor={MOE_ENEMY_CHARGE}
+            ariaLabel={target ? `${target.name} 攻撃チャージ` : "敵 攻撃チャージ"}
+          />
+        ) : null}
       </div>
     </div>
   );

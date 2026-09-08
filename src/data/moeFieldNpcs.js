@@ -2,6 +2,16 @@
 
 /** @typedef {{ speaker: 'master' | 'pet' | 'narrator', text: string }} MoeDialogueLine */
 
+export { MOE_PET_EXP_VENDOR_NPC } from "./moePetExpShopCatalog";
+export { MOE_JOSEPH_NPC } from "./moeJosephExpCrystal";
+export {
+  MOE_SOUL_MEMORY_RHODA_NPC,
+  MOE_SOUL_MEMORY_RHODA_BUTTON,
+  MOE_SOUL_MEMORY_RHODA_FIELD,
+  MOE_SOUL_MEMORY_RHODA_LINES,
+  MOE_SOUL_MEMORY_RHODA_GIVE_ACTIONS,
+} from "./moeSoulMemoryRhoda";
+
 export const MOE_PET_MASTER_NPC = {
   id: "pet_master",
   name: "ペットマスター・ハーヴ",

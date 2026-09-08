@@ -6,7 +6,10 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:monsters": "node scripts/generateAllMonsterGlbs.mjs",
+    "generate:pets": "node scripts/generateAllPetGlbs.mjs",
+    "generate:player": "node scripts/generatePlayerCogniteMaleGlb.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

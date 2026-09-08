@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import MoeNameWindowChargeRow from "@/components/MoeNameWindowChargeRow";
 
 const WINDOW_W = 130;
 const SIDE_CAP_W = 7;
 const STORAGE_KEY = "life-rpg-moe-pet-hp-window-pos";
 const MOE_HP_RED = "#ef4444";
+const MOE_PET_CHARGE = "#eab308";
 
 function hpPct(current, max) {
   const m = Number(max);
@@ -30,21 +32,27 @@ function loadSavedPos() {
 
 /**
  * MOE風ペットHP窓（上：青・名前 / 中央：区切り線 / 下：赤HPバー）
- * @param {{ emoji: string, name: string, hp: number, hpMax: number }} props
+ * @param {{ emoji: string, name: string, levelLabel?: string, hp: number, hpMax: number, duelUi?: { phase: string, bar?: number, chargeFrozenUntil?: number } | null }} props
  */
-export default function MoePetHpWindow({ emoji, name, hp, hpMax }) {
-  const [pos, setPos] = useState(null);
-  const sizeRef = useRef({ w: WINDOW_W, h: 32 });
-
-  useEffect(() => {
+export default function MoePetHpWindow({
+  emoji,
+  name,
+  levelLabel = null,
+  hp,
+  hpMax,
+  duelUi = null,
+}) {
+  const [pos, setPos] = useState(() => {
+    if (typeof window === "undefined") return { x: 12, y: 56 };
     const saved = loadSavedPos();
-    setPos(
+    return (
       saved ?? {
         x: Math.max(8, 12),
         y: Math.max(56, window.innerHeight * 0.12),
       }
     );
-  }, []);
+  });
+  const sizeRef = useRef({ w: WINDOW_W, h: 32 });
 
   useEffect(() => {
     if (!pos) return;
@@ -65,7 +73,7 @@ export default function MoePetHpWindow({ emoji, name, hp, hpMax }) {
 
   const onDragPointerDown = useCallback(
     (e) => {
-      if (e.button !== 0 || pos == null) return;
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       const drag = {
@@ -97,8 +105,6 @@ export default function MoePetHpWindow({ emoji, name, hp, hpMax }) {
     [clampPos, pos]
   );
 
-  if (pos == null) return null;
-
   const pct = hpPct(hp, hpMax);
 
   return (
@@ -120,6 +126,14 @@ export default function MoePetHpWindow({ emoji, name, hp, hpMax }) {
           <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
             {emoji} {name}
           </p>
+          {levelLabel ? (
+            <p
+              key={`pet-hp-lv-${levelLabel}`}
+              className="text-center text-[8px] tabular-nums leading-none text-blue-100/90"
+            >
+              Lv.{levelLabel}
+            </p>
+          ) : null}
         </div>
         <div className="h-px shrink-0 bg-white/60" aria-hidden />
         <div
@@ -147,6 +161,15 @@ export default function MoePetHpWindow({ emoji, name, hp, hpMax }) {
             aria-hidden
           />
         </div>
+        {duelUi ? (
+          <MoeNameWindowChargeRow
+            phase={duelUi.phase}
+            duelRef={duelUi.duelRef}
+            barKey={duelUi.barKey}
+            fillColor={MOE_PET_CHARGE}
+            ariaLabel={`${name} アタックチャージ`}
+          />
+        ) : null}
       </div>
     </div>
   );

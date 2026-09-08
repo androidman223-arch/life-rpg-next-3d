@@ -1,32 +1,54 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { flushSync } from "react-dom";
 import { loadGameStatus } from "@/lib/gameStatus";
 import {
   getDefaultPetForId,
   loadInitialMoePetFromStorage,
   loadMoePetsSave,
+  loadJosephCrystallizedPetIds,
+  addJosephCrystallizedPetId,
+  clearJosephCrystallizedPetIds,
+  petFromSaveSlot,
   loadMoePetDebugSnapshot,
   saveMoePetDebugSnapshot,
   clearMoePetDebugSnapshot,
   petFromDebugSnapshot,
   MOE_SAVED_PET_INITIAL_LEVEL,
   persistCurrentMoePet,
-  petFromSaveSlot,
+  persistMoePetSlot,
+  flushPersistActivePet,
+  buildMoeExternalSavePayload,
+  getMoeExternalSaveFolderLabel,
+  getMoeExternalSaveLocationHint,
+  importMoeExternalSavePayload,
+  pickMoeExternalSaveDirectory,
+  pickMoeExternalSaveFile,
+  saveMoeExternalSaveJson,
   writeMoePetsSave,
 } from "@/lib/moePetSave";
 import { playSfx } from "@/lib/sfx";
-import { MOE_MEERIM_ENEMIES, MOE_MEERIM_MID_BOSS_KEY, MOE_MEERIM_SUPER_BOSS_KEY, MOE_MID_BOSS_HP_MULTIPLIER, MOE_SUPER_BOSS_HP_MULTIPLIER, enemyWikiStatsTitle, formatEnemyLevelUi } from "@/data/moeMeerimEnemies";
+import { MOE_MEERIM_ENEMIES, MOE_MEERIM_MID_BOSS_KEY, MOE_MEERIM_GUSTAV_JUNIOR_KEY, MOE_MEERIM_SUPER_BOSS_KEY, MOE_MEERIM_MOUNTAIN_BISON_KEY, MOE_MEERIM_ROUGH_BISON_KEY, MOE_MID_BOSS_HP_MULTIPLIER, MOE_SUPER_BOSS_HP_MULTIPLIER, enemyWikiStatsTitle, formatEnemyLevelUi } from "@/data/moeMeerimEnemies";
 import {
   applyMoePetExpGain,
+  applyMoePetExpLoss,
+  formatMoePetTenthLevelBanner,
+  formatMoePetTenthLevelDownBanner,
   getMoePetExpBaseOnHitSuccess,
-  getMoePetExpRemainingToNextLevel,
-  getMoePetExpToNextLevel,
+  getMoePetExpIntoLevelFromTotal,
+  getMoePetExpRemainingToNextTenth,
+  getMoePetExpTenthBarPct,
+  getMoePetFractionalLevelFromTotalExp,
   getMoePetFreshTotalExpForLevel,
+  getMoePetLevelFromTotalExp,
   getMoePetTotalExpFromLegacyProgress,
+  resolvePetTotalExp,
+  isMoePetTenthLevelUpMessage,
+  isMoePetTenthLevelDownMessage,
   MOE_PET_ATTACK_EXP_SUCCESS_RATE,
   MOE_PET_MAX_LEVEL,
+  MOE_PET_TENTH_LEVEL_UP_LABEL,
 } from "@/data/moePetExpTable";
 import {
   MOE_PET_DATA,
@@ -39,14 +61,120 @@ import {
 } from "../data/moePets";
 import { resolveMoeDuelSkillSequence } from "../data/moePetCombatSkills";
 import MoeField3DCanvas from "@/components/MoeField3DCanvas";
+import MoeField3DBattleOverlay from "@/components/MoeField3DBattleOverlay";
+import MoeField3DTreasureOverlay from "@/components/MoeField3DTreasureOverlay";
 import MoeTargetWindow from "@/components/MoeTargetWindow";
 import MoeCrystalMarker from "@/components/MoeCrystalMarker";
 import MoeNpcDialogue from "@/components/MoeNpcDialogue";
 import MoePetHpWindow from "@/components/MoePetHpWindow";
+import MoeDuelTimeBarWindow from "@/components/MoeDuelTimeBarWindow";
+import MoeSkillIconBar, {
+  MOE_SKILL_ICON_SLOT_COUNT,
+} from "@/components/MoeSkillIconBar";
+import MoePlayerSkillIconBar from "@/components/MoePlayerSkillIconBar";
+import MoeVerticalSkillPanel from "@/components/MoeVerticalSkillPanel";
+import {
+  buildPlayerNinjaSkillSlots,
+  loadPlayerSkillUnlocks,
+  savePlayerSkillUnlocks,
+  removePlayerSkillUnlock,
+  MOE_SHINSOKU_ACTIVE_MS,
+  MOE_SHINSOKU_COOLDOWN_MS,
+} from "@/data/moePlayerNinjaSkills";
+import {
+  loadPlayerSkillSlotOrder,
+  savePlayerSkillSlotOrder,
+  swapPlayerSkillSlotOrder,
+} from "@/data/moePlayerSkillSlotOrder";
+import { buildPlayerSkillSlotEntry } from "@/lib/moePlayerSkillSlotUi";
+import MoeItemBox from "@/components/MoeItemBox";
+import {
+  createMoeFieldTreasureDrop,
+  moeTreasureDropPositionNearEnemy,
+  shouldMoeEnemyDropTreasure,
+  isGustavJuniorTreasure,
+  MOE_ITEM_EXPERIENCE_POWDER,
+  MOE_ITEM_EXPERIENCE_CUBE,
+  MOE_ITEM_LEVEL_DOWN_POWDER,
+  MOE_ITEM_LEVEL_DOWN_CUBE,
+  getMoeFieldLootItem,
+  isMoeExpConsumableItemId,
+  isMoePhoenixFeatherItemId,
+  MOE_ITEM_PHOENIX_FEATHER,
+} from "@/data/moeFieldTreasures";
+import {
+  buildPetCombatSkillSlots,
+  getMysteryDragonDisplayName,
+  getMysteryDragonMaxHpBonus,
+  canRebirthMysteryDragon,
+  isMoePetSkillUsableAtLevel,
+} from "@/data/moePhoenixDragon";
+import {
+  loadMoePetSkillMode,
+  saveMoePetSkillMode,
+  MOE_PET_SKILL_MODE_ALL,
+  MOE_PET_SKILL_MODE_LEARNED,
+  moePetSkillModeLabel,
+} from "@/lib/moePetSkillSettings";
+import { formatMoePetSkillDescription } from "@/lib/moePetSkillDescription";
+import {
+  addMoeItemBoxItem,
+  loadMoeItemBoxSlots,
+  moeFieldLootToBoxItem,
+  notifyMoeItemBoxSlotsChanged,
+  removeMoeItemBoxSlot,
+  saveMoeItemBoxSlots,
+} from "@/lib/moeItemBoxStorage";
+import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import {
   buildPetMasterDialogue,
   MOE_PET_MASTER_NPC,
+  MOE_PET_EXP_VENDOR_NPC,
+  MOE_SOUL_MEMORY_RHODA_NPC,
+  MOE_SOUL_MEMORY_RHODA_BUTTON,
+  MOE_SOUL_MEMORY_RHODA_FIELD,
+  MOE_SOUL_MEMORY_RHODA_LINES,
+  MOE_SOUL_MEMORY_RHODA_GIVE_ACTIONS,
 } from "@/data/moeFieldNpcs";
+import {
+  MOE_PET_EXP_SHOP_CATALOG,
+  MOE_PET_EXP_SHOP_SKILLS,
+  MOE_PET_EXP_VENDOR_SECRET_LINES,
+} from "@/data/moePetExpShopCatalog";
+import {
+  MOE_JOSEPH_NPC,
+  MOE_JOSEPH_EXP_CRYSTAL_BUTTON,
+  MOE_JOSEPH_EXP_CRYSTAL_LINES,
+  MOE_JOSEPH_EXP_CRYSTAL_STEPS,
+  MOE_JOSEPH_EXP_CRYSTAL_TIERS,
+  MOE_JOSEPH_CATALOG_ACTIONS,
+  MOE_JOSEPH_TRIAL_PET_LEVELS,
+  MOE_JOSEPH_TIME_TABLET_OPTION,
+  MOE_JOSEPH_RITUAL_WAIT_MESSAGE,
+  MOE_JOSEPH_RITUAL_PROCESS_MESSAGE,
+  rollJosephExpCrystalTrialTier,
+  createJosephExpCrystal,
+  createJosephExpCrystalFromPet,
+  formatJosephCrystalResultMessage,
+  getJosephCrystalResultHeadline,
+  getJosephCrystalUsePreview,
+  formatJosephCrystalUseConfirmPrompt,
+  formatJosephCrystalUseAppliedMessage,
+  formatJosephFullTierProbabilityNote,
+  getJosephExpCrystalTierById,
+  formatJosephSacrificePickPrompt,
+  buildJosephSacrificePetMenuActions,
+  getJosephPetSlotTotalExp,
+  MOE_JOSEPH_SACRIFICE_MIN_LEVEL,
+} from "@/data/moeJosephExpCrystal";
+import {
+  MOE_JOSEPH_SYNTH_NPC,
+  MOE_JOSEPH_SYNTH_BUTTON,
+  MOE_JOSEPH_SYNTH_LINES,
+  MOE_JOSEPH_SYNTH_CATALOG_ACTIONS,
+  formatJosephSynthTierPickPrompt,
+  buildJosephSynthTierMenuActions,
+} from "@/data/moeJosephSynth";
 import {
   MOE_3D_ENEMIES_PER_ZONE,
   MOE_3D_ENEMY_ZONES,
@@ -54,21 +182,43 @@ import {
   MOE_3D_HALF_D,
   MOE_3D_HALF_W,
   MOE_SNAKE_ATTACK_MS,
-  MOE_STRIKE_RECOVERY_MS,
+  MOE_TENTH_BANNER_MS_2D,
+  MOE_TENTH_BANNER_MS_3D,
   moe3dClampPosition,
+  moe3dClampToPlayBounds,
   moe3dDuelSlotFromPet,
   moe3dEnemyStatsForZoneLevel,
   moe3dMinimapZoneRects,
   moe3dPickRespawnInZone,
   moe3dMidBossSpawnPosition,
   moe3dSuperBossSpawnPosition,
+  moe3dMountainBisonSpawnPosition,
+  moe3dRoughBisonSpawnPosition,
   moe3dBossAreaLayout,
   buildMeerimMidBossEnemy,
   buildMeerimSuperBossEnemy,
+  buildMeerimFieldBisonEnemy,
+  buildMeerimGustavJuniorEnemy,
+  moe3dGustavJuniorSpawnPosition,
   moe3dPlayerStartPosition,
+  moe3dPetStartNearPlayer,
   moe3dIsNearPetHouse,
+  moe3dIsNearRhoda,
+  moe3dRhodaPosition,
   moe3dWorldToMinimap,
   moe3dZoneEnemyPosition,
+  enemyStrikeAnimMsForKey,
+  MOE_ORC_STRONG_ATTACK_MS,
+  MOE_ORC_WEAK_ATTACK_MS,
+  MOE_GUSTAV_STRONG_ATTACK_MS,
+  MOE_GUSTAV_WEAK_ATTACK_MS,
+  MOE_POPUP_COLOR_ALLY_DAMAGE,
+  MOE_POPUP_COLOR_ENEMY_DAMAGE,
+  MOE_COMBO_DAMAGE_STACK_PX,
+  MOE_COMBO_POPUP_MS,
+  MOE_DAMAGE_POPUP_2D_TOP_OFFSET_PX,
+  rollMoeComboPopupMotion,
+  moeComboPopupCssVars,
 } from "@/lib/moeField3DModels";
 import {
   buildMoe2dRowLayout,
@@ -79,10 +229,14 @@ import {
   moe2dPickRespawnInZone2d,
   moe2dMidBossSpawnPosition,
   moe2dSuperBossSpawnPosition,
+  moe2dMountainBisonSpawnPosition,
+  moe2dRoughBisonSpawnPosition,
   moe2dBossAreaLayout,
   moe2dPlayerStartPosition,
   moe2dPetHouseLayout,
   moe2dIsNearPetHouse,
+  moe2dRhodaLayout,
+  moe2dIsNearRhoda,
   moe2dRiverBoundaries,
   moe2dZoneRowStyle,
   moe2dZoneRowMiniFill,
@@ -147,19 +301,38 @@ const MOVE_SPEED = 4.5;
 /** 3Dマップは座標範囲が狭いので、同じ数値だと約10倍速く感じる */
 const MOVE_SPEED_3D = 0.18;
 const SPRINT_MULTIPLIER_3D = 2;
+/** Shift ダッシュ ON 時の追加倍率（通常ダッシュ × この値） */
+const SPRINT_BOOST_MULT_3D = 3;
 const JUMP_VELOCITY_3D = 15;
 const GRAVITY_3D = 24;
-const HEAL_AMOUNT = 20; // プレイヤーの回復量
+/** プレイヤー操作の回復量（Wiki比率寄り: ライト基準 ×1 / ×1.5 / ×3） */
+const HEAL_AMOUNT_LIGHT = 30;
+const HEAL_AMOUNT_HEALING = 45;
+const HEAL_AMOUNT_HEAL_ALL = 90;
+const HEAL_COOLDOWN_HEALING_SEC = 10;
+const HEAL_COOLDOWN_HEAL_ALL_SEC = 20;
+/** リジェネ：2秒ごとの小回復（トグル） */
+const PET_REGEN_INTERVAL_SEC = 2;
+const PET_REGEN_HP = 20;
+const PET_REGEN_MP = 2;
+
+/** リジェネポップ表示用（異常値・内部ID混入を除外） */
+function formatRegenHealPopupAmount(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0 || n > PET_REGEN_HP + 0.05) return null;
+  const rounded = Math.round(n * 10) / 10;
+  return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
+}
 /** 座れ：自然回復（秒あたり） */
 const PET_SIT_REGEN_HP = 3;
 const PET_SIT_REGEN_MP = 2;
 const PET_AUTO_ATTACK_COOLDOWN_MS = 1400;
-const PET_FOLLOW_DIST_3D = 4;
-const PET_FOLLOW_DIST_3D_AUTO = 6;
+const PET_FOLLOW_DIST_3D = 5.5;
+const PET_FOLLOW_DIST_3D_AUTO = 8;
 const PET_FOLLOW_DIST_3D_TIGHT = 1.2;
-const PET_FOLLOW_DIST_2D = 50;
+const PET_FOLLOW_DIST_2D = 60;
 const PET_FOLLOW_DIST_2D_TIGHT = 16;
-const PET_APPROACH_THRESHOLD_3D = 0.35;
+const PET_APPROACH_THRESHOLD_3D = 0.55;
 const PET_APPROACH_THRESHOLD_2D = 10;
 
 const MOE_PET_COMMAND_UI = {
@@ -258,6 +431,113 @@ function advancePetFieldPosition({
   return { ...pos, reachedApproach: false };
 }
 
+/** MOE: Level 0.1 up — ペットがそばを離れてから喜んで戻る */
+const PET_TENTH_CELEBRATION_LEAVE_3D = 5.5;
+const PET_TENTH_CELEBRATION_LEAVE_2D = 88;
+const PET_TENTH_CELEBRATION_SPEED_MULT = 1.65;
+const PET_TENTH_CELEBRATION_JOY_MS = 520;
+
+function clampPetCelebrationPoint(x, y, world) {
+  if (!world) return { x, y };
+  if (world.mode3d) {
+    const hw = world.halfW ?? world.mw / 2;
+    const hd = world.halfD ?? world.mh / 2;
+    const margin = 2;
+    return {
+      x: Math.max(-hw + margin, Math.min(hw - margin, x)),
+      y: Math.max(-hd + margin, Math.min(hd - margin, y)),
+    };
+  }
+  const margin = PLAYER_R;
+  return {
+    x: Math.max(margin, Math.min(world.mw - margin, x)),
+    y: Math.max(margin, Math.min(world.mh - margin, y)),
+  };
+}
+
+function createPetTenthCelebrationState(playerPos, petPos, world) {
+  let ux = petPos.x - playerPos.x;
+  let uy = petPos.y - playerPos.y;
+  const len = Math.hypot(ux, uy);
+  if (len < 0.05) {
+    const angle = Math.random() * Math.PI * 2;
+    ux = Math.cos(angle);
+    uy = Math.sin(angle);
+  } else {
+    ux /= len;
+    uy /= len;
+  }
+  const leaveDist = world?.mode3d
+    ? PET_TENTH_CELEBRATION_LEAVE_3D
+    : PET_TENTH_CELEBRATION_LEAVE_2D;
+  const away = clampPetCelebrationPoint(
+    playerPos.x + ux * leaveDist,
+    playerPos.y + uy * leaveDist,
+    world
+  );
+  return {
+    active: true,
+    phase: "leave",
+    awayX: away.x,
+    awayY: away.y,
+    pauseUntil: 0,
+  };
+}
+
+function advancePetTenthCelebration(pos, playerPos, speed, world, now) {
+  const reach = world?.mode3d ? 0.28 : 6;
+  const followDist = world?.mode3d ? PET_FOLLOW_DIST_3D : PET_FOLLOW_DIST_2D;
+  const sp = speed * PET_TENTH_CELEBRATION_SPEED_MULT;
+
+  return (cel) => {
+    if (!cel?.active) return { pos, cel, finished: false };
+
+    if (cel.phase === "leave") {
+      const ddx = cel.awayX - pos.x;
+      const ddy = cel.awayY - pos.y;
+      const dist = Math.hypot(ddx, ddy);
+      if (dist <= reach) {
+        return {
+          pos: { x: cel.awayX, y: cel.awayY },
+          cel: {
+            ...cel,
+            phase: "joy",
+            pauseUntil: now + PET_TENTH_CELEBRATION_JOY_MS,
+          },
+          finished: false,
+        };
+      }
+      return {
+        pos: {
+          x: pos.x + (ddx / dist) * sp,
+          y: pos.y + (ddy / dist) * sp,
+        },
+        cel,
+        finished: false,
+      };
+    }
+
+    if (cel.phase === "joy" && now < cel.pauseUntil) {
+      return { pos, cel, finished: false };
+    }
+
+    const pdx = playerPos.x - pos.x;
+    const pdy = playerPos.y - pos.y;
+    const dist = Math.hypot(pdx, pdy);
+    if (dist <= followDist * 1.05) {
+      return { pos, cel: { ...cel, active: false }, finished: true };
+    }
+    return {
+      pos: {
+        x: pos.x + (pdx / dist) * sp,
+        y: pos.y + (pdy / dist) * sp,
+      },
+      cel: { ...cel, phase: "return" },
+      finished: false,
+    };
+  };
+}
+
 const SKILL_SLOT_LABELS = [
   "スキル１",
   "スキル２",
@@ -266,7 +546,12 @@ const SKILL_SLOT_LABELS = [
   "スキル５",
   "スキル６",
   "スキル７",
+  "スキル８",
+  "スキル９",
+  "スキル１０",
 ];
+
+const SKILL_SLOT_LABELS_LEARNED = SKILL_SLOT_LABELS.slice(0, 7);
 
 /** 太陽の大精霊：トースト文言（サンバのみ表示専用・他は戦闘スキルと併用） */
 const SUN_SPIRIT_SKILL_TOASTS = [
@@ -275,6 +560,33 @@ const SUN_SPIRIT_SKILL_TOASTS = [
   "灼熱の円舞曲",
   "紅蓮の炎帝",
 ];
+
+/** 整数レベルアップの画面上フラッシュ（複数行で折り返し表示） */
+function formatPetLevelUpFlashText(messages) {
+  const lines = messages.filter((m) => !isMoePetTenthLevelUpMessage(m));
+  if (lines.length === 0) return "";
+  return lines.join("\n");
+}
+
+/** 経験値パウダー・キューブ使用時のLv変化ページ */
+function buildExpConsumableAdjustPages(messages) {
+  const pages = [];
+  const tenthUp = messages.filter(isMoePetTenthLevelUpMessage);
+  const tenthDown = messages.filter(isMoePetTenthLevelDownMessage);
+  const intMsgs = messages.filter(
+    (m) => !isMoePetTenthLevelUpMessage(m) && !isMoePetTenthLevelDownMessage(m)
+  );
+  if (tenthUp.length) {
+    pages.push(formatMoePetTenthLevelBanner(tenthUp.length));
+  }
+  if (tenthDown.length) {
+    pages.push(formatMoePetTenthLevelDownBanner(tenthDown.length));
+  }
+  for (const msg of intMsgs) {
+    if (msg) pages.push(msg);
+  }
+  return pages;
+}
 
 function skillToastMessage(petId, slotIndex, skill) {
   if (petId === "sun_spirit" && slotIndex < SUN_SPIRIT_SKILL_TOASTS.length) {
@@ -285,11 +597,18 @@ function skillToastMessage(petId, slotIndex, skill) {
 
 const MOE_PET_IDS = Object.keys(MOE_PET_DATA);
 
+const MOE_ITEM_USE_NPC = { name: "アイテム", emoji: "✨" };
+
 /** フィールド同時チャージバー：通常アタック間隔（必殺技の Wiki ディレイは使わない） */
 const MOE_PET_FIELD_ATTACK_CHARGE_SEC = 3;
+/** 戦闘テンポ加速（チャージ・スタン・攻撃アニメ・3D mixer） */
+const MOE_BATTLE_SPEED_FAST_MULT = 2;
 
 /** スキルボタン発動メッセージの表示時間（コンボヒットで消えない専用 UI） */
 const MOE_SKILL_TOAST_MS = 1000;
+
+/** ギュスターヴ再戦 — 神速リセット確認イベント */
+const MOE_GUSTAV_EVENT_NPC = { name: "ギュスターヴ", emoji: "🐊" };
 
 /** ペットの次の攻撃までのチャージ秒数（同時チャージ UI＝アタック想定） */
 function getPetChargeSeconds(petId, petLevel) {
@@ -378,7 +697,18 @@ function moveInputForCameraYaw(inputX, inputZ, camYaw) {
 
 export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" }) {
   const is3d = worldMode === "3d";
+  const initial3dSpawn = is3d
+    ? (() => {
+        const start = moe3dPlayerStartPosition(MOE_3D_HALF_W, MOE_3D_HALF_D);
+        return { player: start, pet: moe3dPetStartNearPlayer(start) };
+      })()
+    : null;
   const [map3dReady, setMap3dReady] = useState(false);
+  const map3dReadyRef = useRef(false);
+  /** 3D: ペット初期位置が確定するまで追従移動を止める */
+  const pet3dSpawnSyncedRef = useRef(is3d);
+  /** 3D Canvas: 走行アニメ判定のリセット用 */
+  const petSpawnEpochRef = useRef(is3d ? 1 : 0);
   const cameraYawRef = useRef(0);
   const lastMinimap3dSyncRef = useRef(0);
   const [minimap3d, setMinimap3d] = useState({ x: 0, y: 0, yaw: 0 });
@@ -389,7 +719,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const [world, setWorld] = useState(null);
   const [enemies, setEnemies] = useState([]);
-  const [player, setPlayer] = useState({ x: 100, y: 100 });
+  const [player, setPlayer] = useState(
+    () => initial3dSpawn?.player ?? { x: 100, y: 100 }
+  );
   const [toast, setToast] = useState(null);
   const [skillToast, setSkillToast] = useState(null);
   /** 3D：左クリックで選択した敵（攻撃はコマンドボタン） */
@@ -397,29 +729,73 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [petFocused, setPetFocused] = useState(false);
   const [showPetStatusOverlay, setShowPetStatusOverlay] = useState(false);
   const [petMasterDialogue, setPetMasterDialogue] = useState(null);
+  const [expVendorOpen, setExpVendorOpen] = useState(false);
+  const [expVendorView, setExpVendorView] = useState("lines");
+  const [expVendorLineIndex, setExpVendorLineIndex] = useState(0);
+  const [rhodaOpen, setRhodaOpen] = useState(false);
+  const [rhodaView, setRhodaView] = useState("lines");
+  const [rhodaLineIndex, setRhodaLineIndex] = useState(0);
+  /** @type {[null | { slotIndex: number }, Function]} */
+  const [phoenixRebirthFlow, setPhoenixRebirthFlow] = useState(null);
+  const [dragonFormFlow, setDragonFormFlow] = useState(false);
+  const [josephOpen, setJosephOpen] = useState(false);
+  const [josephView, setJosephView] = useState("lines");
+  const [josephLineIndex, setJosephLineIndex] = useState(0);
+  const [josephResultMessage, setJosephResultMessage] = useState(null);
+  const [josephUseTimeTablet, setJosephUseTimeTablet] = useState(false);
+  const [josephSacrificePetId, setJosephSacrificePetId] = useState(null);
+  const [josephCrystallizedPetIds, setJosephCrystallizedPetIds] = useState([]);
+  const [josephSynthOpen, setJosephSynthOpen] = useState(false);
+  const [josephSynthView, setJosephSynthView] = useState("lines");
+  const [josephSynthLineIndex, setJosephSynthLineIndex] = useState(0);
+  const [josephSynthTrialPetLevel, setJosephSynthTrialPetLevel] = useState(100);
+  const [josephSynthLastCrystal, setJosephSynthLastCrystal] = useState(null);
+  const [josephSynthResultMessage, setJosephSynthResultMessage] = useState(null);
   const [nearPetHouse, setNearPetHouse] = useState(false);
   const nearPetHouseRef = useRef(false);
+  const [nearRhoda, setNearRhoda] = useState(false);
+  const nearRhodaRef = useRef(false);
   const petDebugSnapshotRef = useRef(null);
   const [hasPetDebugSnapshot, setHasPetDebugSnapshot] = useState(false);
   const [showFieldGuide, setShowFieldGuide] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [petSkillMode, setPetSkillMode] = useState(MOE_PET_SKILL_MODE_ALL);
+  const [externalSaveFolderLabel, setExternalSaveFolderLabel] = useState(null);
   /** 3D：follow | wait | sit | auto */
   const [petCommandMode, setPetCommandMode] = useState("follow");
   const [petFollowTight, setPetFollowTight] = useState(false);
   /** ワールド座標上のダメージ（赤）・ペットEXP（黄・+N） */
   const [battlePopups, setBattlePopups] = useState([]);
   const battlePopupIdRef = useRef(0);
+  const externalSaveImportInputRef = useRef(null);
+  /** 3D：フィールドに落ちた宝（オーク等） */
+  const [fieldTreasures, setFieldTreasures] = useState([]);
+  const fieldTreasureIdRef = useRef(1);
+  /** @type {[null | { slotIndex: number, view: 'pick_pet' | 'confirm', targetPetId?: string }, Function]} */
+  const [powderUseFlow, setPowderUseFlow] = useState(null);
+  const [playerSkillUnlocks, setPlayerSkillUnlocks] = useState(
+    () => new Set()
+  );
+  const [playerSkillSlotOrder, setPlayerSkillSlotOrder] = useState(
+    () => loadPlayerSkillSlotOrder()
+  );
+  const playerSkillUnlocksRef = useRef(playerSkillUnlocks);
+  const [gustavResetPromptOpen, setGustavResetPromptOpen] = useState(false);
+  const pendingGustavDuelIdRef = useRef(null);
   /** ペットLvアップだけ大きく長めに表示（通常トーストに埋もれないようにする） */
   const [petLevelUpFlash, setPetLevelUpFlash] = useState(null);
+  /** 経験値パウダー・キューブ使用時の一気Lvアップ（クリックで次ページ） */
+  /** @type {[{ pages: string[], index: number, tone?: 'up' | 'down' } | null]} */
+  const [expConsumableLevelUpFlow, setExpConsumableLevelUpFlow] = useState(null);
+  const [petTenthCelebrationActive, setPetTenthCelebrationActive] = useState(false);
   const [trainerStatus, setTrainerStatus] = useState(() => loadGameStatus());
+  /** ヒーリング / ヒーリングオールのクールダウン終了時刻（ms） */
+  const healCdUntilRef = useRef({ healing: 0, healAll: 0 });
+  const [healCdSec, setHealCdSec] = useState({ healing: 0, healAll: 0 });
 
   // Pet State（SSR/初回HTMLはデフォルト → クライアントマウント後に localStorage 復元）
   const [pet, setPet] = useState(() => getDefaultPetForId("sun_spirit"));
   const [moePetHydrated, setMoePetHydrated] = useState(false);
-
-  useEffect(() => {
-    setPet(loadInitialMoePetFromStorage());
-    setMoePetHydrated(true);
-  }, []);
 
   useEffect(() => {
     if (!moePetHydrated) return;
@@ -431,31 +807,59 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [moePetHydrated, pet.id]);
 
   useEffect(() => {
+    setPetSkillMode(loadMoePetSkillMode());
+  }, []);
+
+  useEffect(() => {
     if (!moePetHydrated) return;
-    const t = window.setTimeout(() => {
-      persistCurrentMoePet(pet);
-    }, 280);
-    return () => window.clearTimeout(t);
-  }, [
-    moePetHydrated,
-    pet.id,
-    pet.totalExp,
-    pet.hp,
-    pet.mp,
-    pet.level,
-    pet.expIntoLevel,
-  ]);
+    const onPageHide = () => {
+      flushPersistActivePet(petStateRef.current);
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [moePetHydrated]);
+
+  const petTotalExp = resolvePetTotalExp(pet);
+  const petLevelDisplay =
+    getMoePetFractionalLevelFromTotalExp(petTotalExp).displayLabel;
+  const petCombatLevel = getMoePetLevelFromTotalExp(petTotalExp);
 
   const keysRef = useRef(createEmptyInputKeys());
   const enemyIdRef = useRef(0);
-  const playerPosRef = useRef({ x: 100, y: 100 });
+  const playerPosRef = useRef(initial3dSpawn?.player ?? { x: 100, y: 100 });
   /** 3D: ジャンプの高さオフセットと上向き速度 */
   const playerJumpRef = useRef({ offset: 0, vy: 0 });
   /** 3D: Shift 押下中かつ移動入力あり */
   const playerSprintRef = useRef(false);
   /** 3D: ペットに RUN アニメを出す（走行追従中） */
   const petRunAnimRef = useRef(false);
-  const petPosRef = useRef({ x: 100, y: 100 });
+  const petPosRef = useRef(initial3dSpawn?.pet ?? { x: 100, y: 100 });
+
+  const snapPet3dNearPlayer = useCallback((halfW, halfD, playerPos = null) => {
+    const hw = halfW ?? MOE_3D_HALF_W;
+    const hd = halfD ?? MOE_3D_HALF_D;
+    const start = playerPos ?? moe3dPlayerStartPosition(hw, hd);
+    const playerAt = moe3dClampToPlayBounds(start.x, start.y, { halfW: hw, halfD: hd }, 1.5);
+    const petAt = moe3dPetStartNearPlayer(playerAt);
+    petPosRef.current = petAt;
+    pet3dSpawnSyncedRef.current = true;
+    petSpawnEpochRef.current += 1;
+    return { playerAt, petAt };
+  }, []);
+
+  useEffect(() => {
+    const loaded = loadInitialMoePetFromStorage();
+    if (is3d) {
+      snapPet3dNearPlayer(MOE_3D_HALF_W, MOE_3D_HALF_D);
+      const petAt = petPosRef.current;
+      loaded.x = petAt.x;
+      loaded.y = petAt.y;
+    }
+    setPet(loaded);
+    setJosephCrystallizedPetIds(loadJosephCrystallizedPetIds());
+    setMoePetHydrated(true);
+  }, [is3d, snapPet3dNearPlayer]);
+
   const petStateRef = useRef(pet);
   useEffect(() => {
     petStateRef.current = pet;
@@ -470,7 +874,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const petHoldYawRef = useRef(null);
   const autoAttackCooldownRef = useRef(0);
   const sitRegenAccRef = useRef(0);
+  const [regenActive, setRegenActive] = useState(false);
+  const regenActiveRef = useRef(false);
+  const regenAccRef = useRef(0);
+  /** 3D：リジェネ回復ポップ（React state を介さず毎フレーム描画） */
+  const worldHealPopupsRef = useRef([]);
+  /** 3D: world → screen 投影（MoeField3DCanvas が毎フレーム更新） */
+  const overlayProjectRef = useRef(null);
+  /** 3D: 戦闘距離計算用（ペット・敵モデルの正面オフセット実測） */
+  const moe3dCombatExtentsRef = useRef({ pet: null, enemies: {} });
   const targetEnemyIdRef = useRef(null);
+  const scheduleTargetEnemyIdRef = useRef((id) => {
+    targetEnemyIdRef.current = id;
+    startTransition(() => setTargetEnemyId(id));
+  });
   const startDuelWithEnemyRef = useRef(() => {});
   /** 3D: ペット攻撃アニメを再生する期限（performance.now） */
   const petStrikeUntilRef = useRef(0);
@@ -478,15 +895,70 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** 3D: 敵攻撃アニメを再生する期限 */
   const enemyStrikeUntilRef = useRef(0);
   const enemyAttackMsRef = useRef(MOE_SNAKE_ATTACK_MS);
+  /** 3D: 敵攻撃 weak/strong（applyEnemyStrike → MoeField3DCanvas で共有） */
+  const enemyStrikeSeqRef = useRef(0);
+  const enemyStrikeVariantRef = useRef({ enemyId: null, variant: "weak" });
   const petRef = useRef(pet);
   const duelRef = useRef(null);
   /** 接近完了→simultaneous_charge への遷移を1回だけ（毎フレーム queueMicrotask すると撃破後に戦闘が復活する） */
   const approachChargeScheduledRef = useRef(false);
   /** 交戦中スキル連撃の未実行タイマーを打ち切る（太陽・カルゴーシュ等） */
   const moeSkillComboGenRef = useRef(0);
+  /** デュエル tick の世代。クリーンアップ・StrictMode 二重マウントで古い rAF が戦闘処理を重ねないようにする */
+  const duelCombatSessionRef = useRef(0);
 
   /** 接近 → 両バー同時チャージ → 満タンごとにその側が即攻撃（速い側は複数回可） */
   const [duel, setDuel] = useState(null);
+  const [battleSpeed2x, setBattleSpeed2x] = useState(false);
+  const battleSpeedMultRef = useRef(1);
+  const [dashBoost3x, setDashBoost3x] = useState(false);
+  const dashBoost3xRef = useRef(false);
+  /** 神速クールダウン表示（秒）。null = 使用可能 */
+  const [shinsokuCooldownSec, setShinsokuCooldownSec] = useState(null);
+  const shinsokuActiveUntilRef = useRef(0);
+  const shinsokuCooldownUntilRef = useRef(0);
+  const shinsokuTimersRef = useRef({ active: null, cooldown: null });
+  const [shinobiashiOn, setShinobiashiOn] = useState(false);
+  const shinobiashiOnRef = useRef(false);
+  useEffect(() => {
+    battleSpeedMultRef.current = battleSpeed2x ? MOE_BATTLE_SPEED_FAST_MULT : 1;
+  }, [battleSpeed2x]);
+  useEffect(() => {
+    dashBoost3xRef.current = dashBoost3x;
+  }, [dashBoost3x]);
+  useEffect(() => {
+    shinobiashiOnRef.current = shinobiashiOn;
+  }, [shinobiashiOn]);
+  const sprintSpeedMult3d = useCallback((sprinting) => {
+    if (!sprinting) return 1;
+    return (
+      SPRINT_MULTIPLIER_3D *
+      (dashBoost3xRef.current ? SPRINT_BOOST_MULT_3D : 1)
+    );
+  }, []);
+  const scaleBattleMs = useCallback(
+    (ms) => ms / battleSpeedMultRef.current,
+    []
+  );
+  const endActiveDuel = useCallback(() => {
+    approachChargeScheduledRef.current = false;
+    duelCombatSessionRef.current += 1;
+    moeSkillComboGenRef.current += 1;
+    petStrikeUntilRef.current = 0;
+    enemyStrikeUntilRef.current = 0;
+    enemyStrikeSeqRef.current = 0;
+    enemyStrikeVariantRef.current = { enemyId: null, variant: "weak" };
+    duelRef.current = null;
+    setDuel(null);
+    flushPersistActivePet(petStateRef.current);
+  }, []);
+
+  useEffect(() => {
+    setPlayerSkillUnlocks(loadPlayerSkillUnlocks());
+  }, []);
+  useEffect(() => {
+    playerSkillUnlocksRef.current = playerSkillUnlocks;
+  }, [playerSkillUnlocks]);
 
   useEffect(() => {
     petRef.current = pet;
@@ -498,7 +970,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const worldRef = useRef(null);
   /** ペットEXPポップの基準位置（右上パネル「ペットEXP」周り） */
+  const petTenthCelebrationRef = useRef(null);
   const petExpUiAnchorRef = useRef(null);
+  const integerLevelFlashTimerRef = useRef(null);
   const enemiesRef = useRef(enemies);
   useEffect(() => {
     worldRef.current = world;
@@ -507,29 +981,31 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     enemiesRef.current = enemies;
   }, [enemies]);
   useEffect(() => {
+    map3dReadyRef.current = map3dReady;
+  }, [map3dReady]);
+
+  useEffect(() => {
     targetEnemyIdRef.current = targetEnemyId;
   }, [targetEnemyId]);
   useEffect(() => {
     petCommandRef.current = petCommandMode;
   }, [petCommandMode]);
 
-  const freezeDuelChargeBars = useCallback((enemyId, ms) => {
-    const until = performance.now() + ms;
-    setDuel((cur) => {
-      if (!cur || cur.enemyId !== enemyId || cur.phase !== "simultaneous_charge") {
-        return cur;
-      }
-      const prev = cur.chargeFrozenUntil;
-      const nextUntil =
-        typeof prev === "number" && prev > until ? prev : until;
-      const next = { ...cur, chargeFrozenUntil: nextUntil };
-      duelRef.current = next;
-      return next;
-    });
-  }, []);
+  useEffect(() => {
+    regenActiveRef.current = regenActive;
+    if (!regenActive) regenAccRef.current = 0;
+  }, [regenActive]);
 
   const pushWorldDamagePopup = useCallback(
-    (worldX, worldY, value, fromEnemy, skipPetDamageDedupe = false) => {
+    (
+      worldX,
+      worldY,
+      value,
+      fromEnemy,
+      skipPetDamageDedupe = false,
+      stackIndex = null,
+      enemyId = null
+    ) => {
     if (!fromEnemy && !skipPetDamageDedupe) {
       const now =
         typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -545,10 +1021,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         return;
       }
       lastPetDamagePopupRef.current = { t: now, v: value, qx, qy };
+      } else if (!fromEnemy && skipPetDamageDedupe) {
+        lastPetDamagePopupRef.current = { t: 0, v: -1, qx: 0, qy: 0 };
     }
     const id = ++battlePopupIdRef.current;
-    const jitterX = (Math.random() - 0.5) * 18;
-    const jitterY = (Math.random() - 0.5) * 10;
+    const comboStack = stackIndex != null;
+    const comboMotion = comboStack ? rollMoeComboPopupMotion() : null;
+    const jitterX = comboStack ? 0 : (Math.random() - 0.5) * 18;
+    const jitterY = comboStack ? 0 : (Math.random() - 0.5) * 10;
     setBattlePopups((prev) => [
       ...prev,
       {
@@ -559,6 +1039,49 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         type: "damage",
         value,
         fromEnemy,
+        stackIndex: comboStack ? stackIndex : null,
+        enemyId: comboStack ? enemyId : null,
+        ...(comboMotion ?? {}),
+        },
+      ]);
+      window.setTimeout(() => {
+        setBattlePopups((prev) => prev.filter((p) => p.id !== id));
+      }, comboStack ? MOE_COMBO_POPUP_MS : 2100);
+    },
+    []
+  );
+
+  /** ワールド座標：水色 +HP（リジェネ等） */
+  const pushWorldHealPopup = useCallback((worldX, worldY, hpAmount) => {
+    const label = formatRegenHealPopupAmount(hpAmount);
+    if (label == null) return;
+    const id = ++battlePopupIdRef.current;
+    const is3dMode = worldRef.current?.mode3d;
+    const jitterX = is3dMode ? 0 : (Math.random() - 0.5) * 12;
+    const jitterY = is3dMode ? 0 : (Math.random() - 0.5) * 8;
+    const x = worldX + jitterX;
+    const y = worldY + jitterY;
+    const born =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (worldRef.current?.mode3d) {
+      const live = worldHealPopupsRef.current.filter(
+        (p) => born - p.born < 2200
+      );
+      worldHealPopupsRef.current = [
+        ...live,
+        { id, label, born, x, y },
+      ];
+      return;
+    }
+    setBattlePopups((prev) => [
+      ...prev,
+      {
+        id,
+        space: "world",
+        x,
+        y,
+        type: "heal",
+        value: label,
       },
     ]);
     window.setTimeout(() => {
@@ -596,32 +1119,177 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }, 2100);
   }, []);
 
+  const pushTenthLevelBanner = useCallback((wx, wy, text) => {
+    const id = ++battlePopupIdRef.current;
+    const spawnedAt =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    setBattlePopups((prev) => [
+      ...prev,
+      {
+        id,
+        space: "world",
+        x: wx,
+        y: wy,
+        type: "tenthBanner",
+        value: text,
+        createdAt: spawnedAt,
+      },
+    ]);
+    window.setTimeout(() => {
+      setBattlePopups((prev) => prev.filter((p) => p.id !== id));
+    }, worldRef.current?.mode3d ? MOE_TENTH_BANNER_MS_3D : MOE_TENTH_BANNER_MS_2D);
+  }, []);
+
+  const pushTenthLevelSparkles = useCallback((wx, wy) => {
+    const sparks = ["✨", "♪", "★", "💛", "✨"];
+    const base = Date.now();
+    setBattlePopups((prev) => [
+      ...prev,
+      ...sparks.map((value, i) => ({
+        id: `tenth-${base}-${i}`,
+        space: "world",
+        x: wx + (Math.random() - 0.5) * (worldRef.current?.mode3d ? 2.2 : 36),
+        y: wy + (Math.random() - 0.5) * (worldRef.current?.mode3d ? 2.2 : 36),
+        type: "tenth",
+        value,
+      })),
+    ]);
+    window.setTimeout(() => {
+      setBattlePopups((prev) =>
+        prev.filter((p) => !String(p.id).startsWith(`tenth-${base}-`))
+      );
+    }, 2400);
+  }, []);
+
+  const openExpConsumableLevelUpFlow = useCallback((messages, tone = "up") => {
+    const pages = buildExpConsumableAdjustPages(messages);
+    if (!pages.length) return;
+    setExpConsumableLevelUpFlow({ pages, index: 0, tone });
+    playSfx(tone === "down" ? "enemyHit" : "levelUp");
+  }, []);
+
+  const advanceExpConsumableLevelUp = useCallback(() => {
+    setExpConsumableLevelUpFlow((flow) => {
+      if (!flow) return null;
+      const nextIndex = flow.index + 1;
+      if (nextIndex < flow.pages.length) {
+        playSfx(flow.tone === "down" ? "enemyHit" : "levelUp");
+        return { ...flow, index: nextIndex };
+      }
+      return null;
+    });
+  }, []);
+
+  const triggerPetTenthLevelUpCelebration = useCallback(
+    (messages = [MOE_PET_TENTH_LEVEL_UP_LABEL]) => {
+      const world = worldRef.current;
+      const pp = playerPosRef.current;
+      const petp = petPosRef.current;
+      petTenthCelebrationRef.current = createPetTenthCelebrationState(
+        pp,
+        petp,
+        world
+      );
+      setPetTenthCelebrationActive(true);
+      if (!world?.mode3d) {
+        pushTenthLevelSparkles(petp.x, petp.y);
+      }
+
+      const tenthMsgs = messages.filter(isMoePetTenthLevelUpMessage);
+      const intMsgs = messages.filter((m) => !isMoePetTenthLevelUpMessage(m));
+      if (integerLevelFlashTimerRef.current) {
+        window.clearTimeout(integerLevelFlashTimerRef.current);
+        integerLevelFlashTimerRef.current = null;
+      }
+      if (tenthMsgs.length) {
+        pushTenthLevelBanner(
+          petp.x,
+          petp.y,
+          formatMoePetTenthLevelBanner(tenthMsgs.length)
+        );
+        playSfx("levelUp");
+      }
+      if (intMsgs.length) {
+        integerLevelFlashTimerRef.current = window.setTimeout(() => {
+          setPetLevelUpFlash(formatPetLevelUpFlashText(messages));
+          playSfx("levelUp");
+          integerLevelFlashTimerRef.current = null;
+        }, tenthMsgs.length ? 1100 : 0);
+      }
+    },
+    [pushTenthLevelBanner, pushTenthLevelSparkles]
+  );
+
+  const previewPetTenthLevelUpEffect = useCallback(() => {
+    triggerPetTenthLevelUpCelebration([MOE_PET_TENTH_LEVEL_UP_LABEL]);
+  }, [triggerPetTenthLevelUpCelebration]);
+
   /** ペット攻撃・敵攻撃のいずれかの直後に共通（MOE系・約55%・Wiki表ベース） */
   const rollPetExpOnHit = React.useCallback((petBefore, enemyLevel) => {
-    const expBase = getMoePetExpBaseOnHitSuccess(petBefore.level, enemyLevel);
+    const totalBefore = resolvePetTotalExp(petBefore);
+    const combatLevel = getMoePetLevelFromTotalExp(totalBefore);
+    const expBase = getMoePetExpBaseOnHitSuccess(combatLevel, enemyLevel);
     const petExpRoll = Math.random() < MOE_PET_ATTACK_EXP_SUCCESS_RATE;
     let petAfter = { ...petBefore };
     let petExpGained = null;
-    if (petExpRoll && expBase > 0 && petBefore.level < MOE_PET_MAX_LEVEL) {
+    if (petExpRoll && expBase > 0 && combatLevel < MOE_PET_MAX_LEVEL) {
       const r = applyMoePetExpGain(petAfter, expBase, calculatePetStats);
       petAfter = r.pet;
       if (r.gained > 0) {
         petExpGained = r.gained;
-        if (r.messages.length) {
+        petRef.current = petAfter;
+        petStateRef.current = petAfter;
+        if (r.tenthLeveled) {
           queueMicrotask(() => {
-            setPetLevelUpFlash(r.messages.join("　"));
+            triggerPetTenthLevelUpCelebration(r.messages);
+          });
+        } else if (r.leveled) {
+          queueMicrotask(() => {
+            setPetLevelUpFlash(formatPetLevelUpFlashText(r.messages));
             playSfx("levelUp");
           });
         }
       }
     }
     return { petAfter, petExpGained };
+  }, [triggerPetTenthLevelUpCelebration]);
+
+  const commitPetExpFromHit = useCallback((petAfter) => {
+    const totalExp = Math.max(0, Math.floor(Number(petAfter.totalExp) || 0));
+    const level = getMoePetLevelFromTotalExp(totalExp);
+    const levelDisplay =
+      getMoePetFractionalLevelFromTotalExp(totalExp).displayLabel;
+    const expIntoLevel = getMoePetExpIntoLevelFromTotal(totalExp, level);
+    const next = {
+      ...petAfter,
+      totalExp,
+      level,
+      levelDisplay,
+      expIntoLevel,
+    };
+    petRef.current = next;
+    petStateRef.current = next;
+    setPet((prev) => ({
+      ...prev,
+      totalExp,
+      level,
+      levelDisplay,
+      expIntoLevel,
+      hp: next.hp,
+      mp: next.mp,
+      hpMax: next.hpMax,
+      mpMax: next.mpMax,
+      x: prev.x,
+      y: prev.y,
+    }));
+    clearMoePetDebugSnapshot(petAfter.id);
   }, []);
 
   /**
    * ペットの1ヒット分（通常アタック・連撃スキル共通）
    * @param opts.grantExp コンボ中は最終ヒットだけ true 推奨
    * @param opts.skipPetDamageDedupe 同一ダメージ連打をデデュープしない（8連表示用）
+   * @param opts.stackIndex 連撃スキル時の縦積み位置（0=下）
    * @param opts.clearToastWhenNoDefeatMsg false のとき、撃破以外でトーストを消さない（コンボ途中）
    * @param opts.attackScale 指定時は (攻撃力×係数) でダメージ式（通常アタック相当の減衰）
    * @param opts.magicScale 指定時は (魔力×係数) でダメージ式（attackScale より優先）
@@ -638,10 +1306,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         clearToastWhenNoDefeatMsg = true,
         attackScale = null,
         magicScale = null,
+        stackIndex = null,
       } = opts;
       const w = worldRef.current;
       let defeated = false;
       let abortDuel = false;
+      let treasureDropped = false;
+      /** @type {null | {
+       *   petExpGained: number | null,
+       *   petAfter: object,
+       *   ex: number, ey: number, damage: number,
+       *   skipPetDamageDedupe: boolean, stackIndex: number | null, enemyId: number,
+       *   toastBits: string[], clearToastWhenNoDefeatMsg: boolean,
+       *   defeated: boolean, enemyLevel: number, enemyKey: string,
+       * }} */
+      let hitFollowUp = null;
       flushSync(() => {
         setEnemies((prevEn) => {
           const target = prevEn.find((e) => e.id === enemyId);
@@ -683,27 +1362,36 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
           const ex = target.x;
           const ey = target.y;
+          const pt = petPosRef.current;
+          let dropX = ex;
+          let dropY = ey;
+          if (defeated) {
+            const drop = moeTreasureDropPositionNearEnemy({ x: ex, y: ey }, pt);
+            dropX = drop.x;
+            dropY = drop.y;
+          }
           const toastBits = [];
           if (defeated) {
             toastBits.push(`${target.name}を倒した！`);
           }
 
-          queueMicrotask(() => {
-            setPet(petAfter);
-            pushWorldDamagePopup(ex, ey, damage, false, skipPetDamageDedupe);
-            if (petExpGained != null) {
-              pushPetExpPopup(petExpGained, true);
-            }
-            if (toastBits.length) {
-              setToast(toastBits.filter(Boolean).join("　"));
-            } else if (clearToastWhenNoDefeatMsg) {
-              setToast(null);
-            }
-            if (defeated) {
-              onEnemyDefeat?.(target.level);
-              setTrainerStatus(loadGameStatus());
-            }
-          });
+          hitFollowUp = {
+            petExpGained,
+            petAfter,
+            ex,
+            ey,
+            dropX,
+            dropY,
+            damage,
+            skipPetDamageDedupe,
+            stackIndex,
+            enemyId,
+            toastBits,
+            clearToastWhenNoDefeatMsg,
+            defeated,
+            enemyLevel: target.level,
+            enemyKey: target.key,
+          };
 
           if (defeated) {
             approachChargeScheduledRef.current = false;
@@ -713,6 +1401,37 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           return prevEn.map((en) => {
             if (en.id !== enemyId) return en;
             if (defeated && w) {
+              if (en.fieldBison) {
+                const base =
+                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
+                const pos = w.mode3d
+                  ? en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
+                    ? w.mountainBisonPos ??
+                      moe3dMountainBisonSpawnPosition(
+                        w.halfW ?? w.mw / 2,
+                        w.halfD ?? w.mh / 2
+                      )
+                    : w.roughBisonPos ??
+                      moe3dRoughBisonSpawnPosition(
+                        w.halfW ?? w.mw / 2,
+                        w.halfD ?? w.mh / 2
+                      )
+                  : en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
+                    ? moe2dMountainBisonSpawnPosition(w.rowLayout, w.mw)
+                    : moe2dRoughBisonSpawnPosition(w.rowLayout, w.mw);
+                const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
+                return {
+                  ...en,
+                  x: pos.x,
+                  y: pos.y,
+                  level: scaled.level,
+                  hpMax: scaled.hpMax,
+                  hp: scaled.hpMax,
+                  petDamage: scaled.petDamage,
+                  wiki: scaled.wiki,
+                  zoneLevel: base.level,
+                };
+              }
               if (en.midBoss || en.superBoss) {
                 const base =
                   MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
@@ -826,28 +1545,420 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           });
         });
       });
+      if (hitFollowUp?.petExpGained != null) {
+        flushSync(() => commitPetExpFromHit(hitFollowUp.petAfter));
+      }
+      if (
+        hitFollowUp?.defeated &&
+        is3d &&
+        shouldMoeEnemyDropTreasure(hitFollowUp.enemyKey)
+      ) {
+        const dropId = fieldTreasureIdRef.current++;
+        treasureDropped = true;
+        setFieldTreasures((prev) => [
+          ...prev,
+          createMoeFieldTreasureDrop(
+            dropId,
+            hitFollowUp.dropX,
+            hitFollowUp.dropY,
+            hitFollowUp.enemyKey
+          ),
+        ]);
+      }
+      if (hitFollowUp) {
+        const h = hitFollowUp;
+        queueMicrotask(() => {
+          pushWorldDamagePopup(
+            h.ex,
+            h.ey,
+            h.damage,
+            false,
+            h.skipPetDamageDedupe,
+            h.stackIndex,
+            h.enemyId
+          );
+          if (h.petExpGained != null) {
+            pushPetExpPopup(h.petExpGained, true);
+          }
+          if (treasureDropped) {
+            h.toastBits.push("💎宝が落ちた！");
+          }
+          if (h.toastBits.length) {
+            setToast(h.toastBits.filter(Boolean).join("　"));
+          } else if (h.clearToastWhenNoDefeatMsg) {
+            setToast(null);
+          }
+          if (h.defeated) {
+            onEnemyDefeat?.(h.enemyLevel);
+            setTrainerStatus(loadGameStatus());
+          }
+        });
+      }
       if (abortDuel) {
-        approachChargeScheduledRef.current = false;
-        duelRef.current = null;
-        setDuel(null);
+        endActiveDuel();
         return true;
       }
-      if (playSound) {
+      if (playSound && !defeated) {
         playSfx("petAttack");
         petStrikeUntilRef.current =
-          performance.now() + petAttackMsRef.current;
-        freezeDuelChargeBars(enemyId, MOE_STRIKE_RECOVERY_MS);
+          performance.now() + scaleBattleMs(petAttackMsRef.current);
       }
       if (defeated) {
         window.setTimeout(() => playSfx("enemyDefeated"), 90);
-      }
-      if (defeated) {
-        setDuel(null);
+        endActiveDuel();
         return true;
       }
       return false;
     },
-    [onEnemyDefeat, pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, freezeDuelChargeBars]
+    [is3d, onEnemyDefeat, pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, scaleBattleMs, endActiveDuel, commitPetExpFromHit]
+  );
+
+  const handleTreasureClick = useCallback((treasureId) => {
+    setFieldTreasures((prev) => {
+      const t = prev.find((tr) => tr.id === treasureId);
+      if (!t) return prev;
+      if (t.state === "closed") {
+        return prev.map((tr) =>
+          tr.id === treasureId
+            ? { ...tr, state: "open", openedAt: performance.now() }
+            : tr
+        );
+      }
+      return prev;
+    });
+  }, []);
+
+  const handleTreasureClose = useCallback((treasureId) => {
+    setFieldTreasures((prev) =>
+      prev.map((tr) =>
+        tr.id === treasureId && tr.state === "open"
+          ? { ...tr, state: "closed" }
+          : tr
+      )
+    );
+  }, []);
+
+  const handleTreasureLootClick = useCallback((treasureId, loot) => {
+    if (!loot) return;
+    if (loot.unlocksPlayerSkillId) {
+      setPlayerSkillUnlocks((prev) => {
+        if (prev.has(loot.unlocksPlayerSkillId)) return prev;
+        const next = new Set(prev);
+        next.add(loot.unlocksPlayerSkillId);
+        savePlayerSkillUnlocks(next);
+        return next;
+      });
+      setFieldTreasures((prev) =>
+        prev.map((tr) =>
+          tr.id === treasureId ? { ...tr, state: "looted" } : tr
+        )
+      );
+      if (loot.unlocksPlayerSkillId === "ninja_shinsoku") {
+        setToast("忍者の足袋 — 神速が使えるようになった！");
+      } else {
+        setToast(`${loot.label} — スキルを習得した！`);
+      }
+      return;
+    }
+    const boxItem = moeFieldLootToBoxItem(loot);
+    if (!boxItem || !addMoeItemBoxItem(boxItem)) {
+      setToast("アイテムボックスに空きがありません");
+      return;
+    }
+    setFieldTreasures((prev) =>
+      prev.map((tr) =>
+        tr.id === treasureId ? { ...tr, state: "looted" } : tr
+      )
+    );
+    setToast(`${loot.label}を手に入れた！`);
+  }, []);
+
+  const closePowderUseFlow = useCallback(() => {
+    setPowderUseFlow(null);
+  }, []);
+
+  const handleItemBoxUse = useCallback((slotIndex, item) => {
+    if (!item) return;
+    if (isMoeExpConsumableItemId(item.id)) {
+      setPowderUseFlow({ slotIndex, view: "pick_pet", itemId: item.id });
+      return;
+    }
+    if (isMoePhoenixFeatherItemId(item.id)) {
+      if (!canRebirthMysteryDragon(petStateRef.current?.id, petStateRef.current?.rebornPhoenix)) {
+        setToast("連れ歩きのミステリー ドラゴン（未転生）にだけ使えます");
+        return;
+      }
+      setPhoenixRebirthFlow({ slotIndex });
+      return;
+    }
+    setToast(`${item.label ?? "アイテム"}はまだ使えません`);
+  }, []);
+
+  const applyPhoenixRebirth = useCallback(() => {
+    if (phoenixRebirthFlow?.slotIndex == null) return;
+    const cur = petStateRef.current;
+    if (!canRebirthMysteryDragon(cur?.id, cur?.rebornPhoenix)) {
+      setToast("ミステリー ドラゴン（未転生）にだけ使えます");
+      setPhoenixRebirthFlow(null);
+      return;
+    }
+    const stats = calculatePetStats(cur.id, cur.level);
+    const bonus = getMysteryDragonMaxHpBonus(cur.level, true);
+    const hpMax = (stats?.hpMax ?? cur.hpMax) + bonus;
+    setPet((prev) => {
+      const next = {
+        ...prev,
+        rebornPhoenix: true,
+        activeSkillSet: 2,
+        phoenixHpBonus: bonus,
+        hpMax,
+        hp: Math.min(hpMax, prev.hp + bonus),
+      };
+      petRef.current = next;
+      petStateRef.current = next;
+      flushPersistActivePet(next);
+      return next;
+    });
+    removeMoeItemBoxSlot(phoenixRebirthFlow.slotIndex);
+    setPhoenixRebirthFlow(null);
+    setToast(
+      "死ぬな、生き返れ！　ミステリー ドラゴンⅡ（フェニックス）へ転生した！"
+    );
+  }, [phoenixRebirthFlow]);
+
+  const applyMysterySkillSet = useCallback((setNum) => {
+    const cur = petStateRef.current;
+    if (cur?.id !== "mystery_dragon" || !cur?.rebornPhoenix) return;
+    const nextSet = setNum === 2 ? 2 : 1;
+    setPet((prev) => {
+      const next = { ...prev, activeSkillSet: nextSet };
+      petRef.current = next;
+      petStateRef.current = next;
+      flushPersistActivePet(next);
+      return next;
+    });
+    setToast(
+      nextSet === 2
+        ? "ミステリー ドラゴンⅡ（フェニックス）へ変化 — 技②"
+        : "ミステリー ドラゴンⅠへ変化 — 技①"
+    );
+  }, []);
+
+  const powderPetMenuActions = useMemo(() => {
+    const save = loadMoePetsSave();
+    return MOE_PET_IDS.filter((id) => !josephCrystallizedPetIds.includes(id)).map(
+      (id) => {
+        const slotPet = petFromSaveSlot(id, save.byId[id]);
+        const data = MOE_PET_DATA[id];
+        return {
+          id,
+          label: `${data.emoji} ${data.name}  Lv.${slotPet.levelDisplay}`,
+        };
+      }
+    );
+  }, [josephCrystallizedPetIds, powderUseFlow?.view]);
+
+  const powderConfirmPrompt = useMemo(() => {
+    if (!powderUseFlow?.targetPetId || !powderUseFlow?.itemId) return "";
+    const loot = getMoeFieldLootItem(powderUseFlow.itemId);
+    const save = loadMoePetsSave();
+    const slotPet = petFromSaveSlot(
+      powderUseFlow.targetPetId,
+      save.byId[powderUseFlow.targetPetId]
+    );
+    const data = MOE_PET_DATA[powderUseFlow.targetPetId];
+    const name = data?.name ?? "ペット";
+    const expAmount = loot?.expAmount ?? 1000;
+    const itemLabel = loot?.label ?? "経験値アイテム";
+    const expSign = expAmount >= 0 ? "+" : "";
+    return `${name}（Lv.${slotPet.levelDisplay}）に\n${itemLabel}を使いますか？\n\n${expSign}${expAmount.toLocaleString()} EXP`;
+  }, [powderUseFlow?.targetPetId, powderUseFlow?.itemId]);
+
+  const handlePowderPetPick = useCallback((petId) => {
+    if (!MOE_PET_DATA[petId] || josephCrystallizedPetIds.includes(petId)) {
+      setToast("そのペットには使えません");
+      return;
+    }
+    setPowderUseFlow((prev) =>
+      prev ? { ...prev, view: "confirm", targetPetId: petId } : null
+    );
+  }, [josephCrystallizedPetIds]);
+
+  const applyExpConsumableItem = useCallback(() => {
+    if (!powderUseFlow?.targetPetId || powderUseFlow.slotIndex == null) return;
+    const loot = getMoeFieldLootItem(powderUseFlow.itemId);
+    const expAmount = loot?.expAmount ?? 0;
+    if (expAmount === 0) return;
+    const targetId = powderUseFlow.targetPetId;
+    const save = loadMoePetsSave();
+    const slotPet = petFromSaveSlot(targetId, save.byId[targetId]);
+    const isLevelDown = expAmount < 0;
+    const r = isLevelDown
+      ? applyMoePetExpLoss(
+          slotPet,
+          -expAmount,
+          calculatePetStats,
+          MOE_SAVED_PET_INITIAL_LEVEL
+        )
+      : applyMoePetExpGain(slotPet, expAmount, calculatePetStats);
+    const delta = isLevelDown ? r.lost : r.gained;
+    if (delta <= 0) {
+      setToast(
+        isLevelDown
+          ? "これ以上レベルが下がりません"
+          : "これ以上レベルが上がりません"
+      );
+      return;
+    }
+    const nextPet = { ...r.pet, x: pet.x, y: pet.y };
+    clearMoePetDebugSnapshot(targetId);
+    if (targetId === pet.id) {
+      petRef.current = nextPet;
+      petStateRef.current = nextPet;
+      setPet((prev) => ({
+        ...nextPet,
+        x: prev.x,
+        y: prev.y,
+      }));
+      flushPersistActivePet(nextPet);
+    } else {
+      persistMoePetSlot(targetId, nextPet);
+    }
+    removeMoeItemBoxSlot(powderUseFlow.slotIndex);
+    setPowderUseFlow(null);
+    pushPetExpPopup(isLevelDown ? -delta : delta, false);
+    const petName = MOE_PET_DATA[targetId]?.name ?? "ペット";
+    const itemLabel = loot?.label ?? "アイテム";
+    const leveled = isLevelDown
+      ? r.leveledDown || r.tenthLeveledDown
+      : r.leveled || r.tenthLeveled;
+    if (leveled) {
+      setToast(`${petName}に${itemLabel}を使った！`);
+      if (targetId === pet.id) {
+        queueMicrotask(() =>
+          openExpConsumableLevelUpFlow(r.messages, isLevelDown ? "down" : "up")
+        );
+      }
+    } else {
+      const sign = isLevelDown ? "-" : "+";
+      setToast(
+        `${petName}に${itemLabel}を使った！　${sign}${delta.toLocaleString()} EXP`
+      );
+    }
+  }, [
+    pet.id,
+    pet.x,
+    pet.y,
+    powderUseFlow,
+    pushPetExpPopup,
+    openExpConsumableLevelUpFlow,
+  ]);
+
+  const handlePowderConfirmMenu = useCallback(
+    (actionId) => {
+      if (actionId === "use_powder") {
+        applyExpConsumableItem();
+        return;
+      }
+      if (actionId === "back_pick") {
+        setPowderUseFlow((prev) =>
+          prev ? { ...prev, view: "pick_pet", targetPetId: undefined } : null
+        );
+      }
+    },
+    [applyExpConsumableItem]
+  );
+
+  useEffect(() => {
+    if (!showSettings) return;
+    let cancelled = false;
+    getMoeExternalSaveFolderLabel().then((label) => {
+      if (!cancelled) setExternalSaveFolderLabel(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showSettings]);
+
+  const applyExternalSaveFile = useCallback(
+    (file) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result ?? ""));
+          const { pets, itemBox } = importMoeExternalSavePayload(parsed);
+          if (itemBox) {
+            saveMoeItemBoxSlots(itemBox);
+            notifyMoeItemBoxSlotsChanged();
+          }
+          if (pets) {
+            const activeId = pets.activeId ?? pet.id;
+            const next = petFromSaveSlot(activeId, pets.byId[activeId]);
+            setPet((prev) => {
+              const merged = { ...next, x: prev.x, y: prev.y };
+              petRef.current = merged;
+              petStateRef.current = merged;
+              return merged;
+            });
+          }
+          setToast("外部保存データを読み込んだ");
+          setShowSettings(false);
+        } catch {
+          setToast("読み込みに失敗した（JSON形式を確認）");
+        }
+      };
+      reader.readAsText(file);
+    },
+    [pet.id]
+  );
+
+  const handleExternalSave = useCallback(async () => {
+    flushPersistActivePet(petStateRef.current);
+    const payload = buildMoeExternalSavePayload(loadMoeItemBoxSlots());
+    const json = JSON.stringify(payload, null, 2);
+    const result = await saveMoeExternalSaveJson(json);
+    if (result.aborted) return;
+    if (!result.ok) {
+      setToast("保存に失敗しました");
+      return;
+    }
+    if (result.method === "download") {
+      setToast(`新規ファイル「${result.fileName}」をダウンロードフォルダに保存した`);
+    } else if (result.folderName) {
+      setToast(`新規ファイル「${result.fileName}」を 📁${result.folderName} に保存した`);
+      setExternalSaveFolderLabel(result.folderName);
+    } else {
+      setToast(`新規ファイル「${result.fileName}」に保存した`);
+    }
+  }, []);
+
+  const handleChangeExternalSaveFolder = useCallback(async () => {
+    const result = await pickMoeExternalSaveDirectory();
+    if (result.aborted) return;
+    if (!result.ok) {
+      setToast("このブラウザでは保存フォルダを記憶できません");
+      return;
+    }
+    setExternalSaveFolderLabel(result.folderName);
+    setToast(`保存フォルダを「${result.folderName}」に変更した`);
+  }, []);
+
+  const handleExternalSaveImportPick = useCallback(async () => {
+    const picked = await pickMoeExternalSaveFile();
+    if (picked.aborted) return;
+    if (picked.ok && picked.file) {
+      applyExternalSaveFile(picked.file);
+      return;
+    }
+    externalSaveImportInputRef.current?.click();
+  }, [applyExternalSaveFile]);
+
+  const handleExternalSaveImport = useCallback(
+    (file) => {
+      applyExternalSaveFile(file);
+    },
+    [applyExternalSaveFile]
   );
 
   const applyPetComboHitRef = useRef(applyPetComboHit);
@@ -867,24 +1978,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** resolveMoeDuelSkillSequence のヒット列を時間差で実行 */
   const scheduleMoeDuelSkillHits = useCallback((enemyId, sequence) => {
     if (!sequence?.hits?.length) return;
-    const freezeMs = sequence.freezeChargeBarsMs;
-    if (typeof freezeMs === "number" && freezeMs > 0) {
-      const until = performance.now() + freezeMs;
-      setDuel((cur) => {
-        if (
-          !cur ||
-          cur.enemyId !== enemyId ||
-          cur.phase !== "simultaneous_charge"
-        ) {
-          return cur;
-        }
-        const next = { ...cur, chargeFrozenUntil: until };
-        duelRef.current = next;
-        return next;
-      });
-    }
     const gen = ++moeSkillComboGenRef.current;
-    const multi = sequence.hits.length > 1;
     sequence.hits.forEach((hit, idx) => {
       const isLast = idx === sequence.hits.length - 1;
       const o = hit.opts;
@@ -906,17 +2000,110 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const ended = applyPetComboHitRef.current(enemyId, {
           grantExp: o.grantExp ?? false,
           playSound: o.playSound !== false,
-          skipPetDamageDedupe: o.skipPetDamageDedupe ?? multi,
+          skipPetDamageDedupe: o.skipPetDamageDedupe ?? true,
           clearToastWhenNoDefeatMsg:
             o.clearToastWhenNoDefeatMsg ?? isLast,
           attackScale: o.attackScale ?? null,
           magicScale: o.magicScale ?? null,
+          stackIndex: o.stackIndex ?? idx,
         });
         if (ended) {
           moeSkillComboGenRef.current += 1;
         }
-      }, hit.atMs);
+      }, scaleBattleMs(hit.atMs));
     });
+  }, [scaleBattleMs]);
+
+  const activateCombatSkillSlot = useCallback(
+    (slotIndex, skill) => {
+      if (!skill) return;
+      if (!isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode)) {
+        setToast(`Lv.${skill.level}で習得`);
+        return;
+      }
+      const msg = skillToastMessage(pet.id, slotIndex, skill);
+      if (msg) setSkillToast(msg);
+      setToast(formatMoePetSkillDescription(skill));
+
+      if (
+        skill.type === "heal" ||
+        skill.type === "heal_regen" ||
+        skill.id === "phoenix_deep_sleep"
+      ) {
+        const ratio =
+          skill.healRatio ?? (skill.id === "phoenix_deep_sleep" ? 0.45 : 1);
+        setPet((prev) => {
+          const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
+          const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
+          const next = { ...prev, hp: nextHp };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          const pos = petPosRef.current;
+          pushWorldHealPopup(pos.x, pos.y, healAmt);
+          return next;
+        });
+      }
+
+      const d = duelRef.current;
+      const duelSkillSeq =
+        d?.phase === "simultaneous_charge" && d.enemyId != null
+          ? resolveMoeDuelSkillSequence(pet.id, skill)
+          : null;
+      if (duelSkillSeq) {
+        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq);
+      }
+    },
+    [pet.id, petCombatLevel, petSkillMode, scheduleMoeDuelSkillHits, pushWorldHealPopup]
+  );
+
+  const activatePlayerSkillSlot = useCallback((_slotIndex, skill) => {
+    if (!skill) return;
+    if (skill.id === "ninja_shinobiashi") {
+      setShinobiashiOn((v) => {
+        const next = !v;
+        setToast(
+          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`
+        );
+        return next;
+      });
+      return;
+    }
+    if (skill.id === "ninja_shinsoku") {
+      const now = Date.now();
+      if (now < shinsokuActiveUntilRef.current) return;
+      if (now < shinsokuCooldownUntilRef.current) return;
+
+      setDashBoost3x(true);
+      dashBoost3xRef.current = true;
+      shinsokuActiveUntilRef.current = now + MOE_SHINSOKU_ACTIVE_MS;
+      setShinsokuCooldownSec(null);
+      setToast(formatMoePetSkillDescription(skill));
+
+      if (shinsokuTimersRef.current.cooldown) {
+        clearTimeout(shinsokuTimersRef.current.cooldown);
+        shinsokuTimersRef.current.cooldown = null;
+      }
+      if (shinsokuTimersRef.current.active) {
+        clearTimeout(shinsokuTimersRef.current.active);
+      }
+      shinsokuTimersRef.current.active = window.setTimeout(() => {
+        setDashBoost3x(false);
+        dashBoost3xRef.current = false;
+        shinsokuActiveUntilRef.current = 0;
+        shinsokuCooldownUntilRef.current =
+          Date.now() + MOE_SHINSOKU_COOLDOWN_MS;
+        setShinsokuCooldownSec(
+          Math.ceil(MOE_SHINSOKU_COOLDOWN_MS / 1000)
+        );
+      }, MOE_SHINSOKU_ACTIVE_MS);
+      return;
+    }
+    if (skill.id === "ninja_kakuremino") {
+      setToast(formatMoePetSkillDescription(skill));
+      return;
+    }
+    setToast(formatMoePetSkillDescription(skill));
   }, []);
 
   const applyEnemyStrike = React.useCallback((enemyId) => {
@@ -926,14 +2113,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }
     const target = enemiesRef.current.find((e) => e.id === enemyId);
     if (!target || target.hp <= 0) {
-      approachChargeScheduledRef.current = false;
-      duelRef.current = null;
-      setDuel(null);
+      endActiveDuel();
       return true;
     }
-    const dmg = target.petDamage ?? 1;
+    const dmgBase = target.petDamage ?? 1;
+    const dmgStrong = target.petDamageStrong ?? Math.round(dmgBase * 1.5);
     const tname = target.name;
     const p = petRef.current;
+    const seq = enemyStrikeSeqRef.current;
+    const isOrc = target.key === "orc_infantry";
+    const isGustav = target.key === "gustav_junior";
+    const isBison =
+      target.key === "mountain_bison" ||
+      target.key === "rough_bison" ||
+      target.key === "elvin_bison" ||
+      target.key === "auzun_bura";
+    const useStrong = (isOrc || isBison || isGustav) && seq % 2 === 1;
+    const dmg = useStrong ? dmgStrong : dmgBase;
     let nh = Math.max(0, p.hp - dmg);
     if (petUsesPreciseWikiStats(p.id)) nh = roundPetStatInternal(nh);
     const ends = nh <= 0;
@@ -942,9 +2138,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     else playSfx("enemyHit");
 
     if (!ends) {
+      enemyStrikeVariantRef.current = {
+        enemyId,
+        variant: useStrong ? "strong" : "weak",
+      };
+      enemyStrikeSeqRef.current = seq + 1;
+      let animMs = enemyAttackMsRef.current;
+      if (isOrc) {
+        animMs = useStrong ? MOE_ORC_STRONG_ATTACK_MS : MOE_ORC_WEAK_ATTACK_MS;
+      }
+      if (isGustav) {
+        animMs = useStrong
+          ? MOE_GUSTAV_STRONG_ATTACK_MS
+          : MOE_GUSTAV_WEAK_ATTACK_MS;
+      }
       enemyStrikeUntilRef.current =
-        performance.now() + enemyAttackMsRef.current;
-      freezeDuelChargeBars(enemyId, MOE_STRIKE_RECOVERY_MS);
+        performance.now() +
+        scaleBattleMs(enemyStrikeAnimMsForKey(target.key, animMs));
     }
 
     const petDamaged = { ...p, hp: nh };
@@ -956,15 +2166,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       petExpGained = r.petExpGained;
     }
 
-    if (ends) {
-      approachChargeScheduledRef.current = false;
-      duelRef.current = null;
-      setDuel(null);
+    const pt = petPosRef.current;
+    const px = pt.x;
+    const py = pt.y;
+    if (petExpGained != null) {
+      flushSync(() => commitPetExpFromHit(petAfter));
+    } else {
+      flushSync(() =>
+        setPet((prev) => {
+          const updated = { ...prev, hp: nh };
+          petRef.current = updated;
+          petStateRef.current = updated;
+          return updated;
+        })
+      );
     }
-    const px = p.x;
-    const py = p.y;
+    if (ends) {
+      endActiveDuel();
+    }
     queueMicrotask(() => {
-      setPet(ends ? petDamaged : petAfter);
       pushWorldDamagePopup(px, py, dmg, true);
       if (!ends && petExpGained != null) {
         pushPetExpPopup(petExpGained, false);
@@ -973,16 +2193,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       setToast(toastBits.length ? toastBits.filter(Boolean).join("　") : null);
     });
     return ends;
-  }, [pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, freezeDuelChargeBars]);
+  }, [pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, scaleBattleMs, endActiveDuel, commitPetExpFromHit]);
 
   /** rAF デュエルループの useEffect 依存に含めない（参照の変化でループが二重化し同一フレームで2ヒットするのを防ぐ） */
   const applyPetStrikeRef = useRef(applyPetStrike);
   const applyEnemyStrikeRef = useRef(applyEnemyStrike);
+  const pushWorldHealPopupRef = useRef(pushWorldHealPopup);
   applyPetStrikeRef.current = applyPetStrike;
   applyEnemyStrikeRef.current = applyEnemyStrike;
+  pushWorldHealPopupRef.current = pushWorldHealPopup;
 
-  /** デュエル tick の世代。クリーンアップ・StrictMode 二重マウントで古い rAF が戦闘処理を重ねないようにする */
-  const duelCombatSessionRef = useRef(0);
   /** 与ダメージポップが同一フレーム付近で二重に積まれるのを防ぐ（ループ二重化の保険） */
   const lastPetDamagePopupRef = useRef({ t: 0, v: -1, qx: 0, qy: 0 });
   /** ペットEXPポップの短時間デデュープ（経路別：同一ヒットの二重呼びのみ抑止。ペット→敵と敵→ペットの同額は別扱い） */
@@ -1003,6 +2223,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(() => {
     if (is3d) {
+      map3dReadyRef.current = false;
+      pet3dSpawnSyncedRef.current = false;
+      setMap3dReady(false);
       const halfW = MOE_3D_HALF_W;
       const halfD = MOE_3D_HALF_D;
       const mw = halfW * 2;
@@ -1057,6 +2280,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           )
         );
       }
+      const gustavBase = MOE_MEERIM_ENEMIES.find(
+        (d) => d.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY
+      );
+      if (gustavBase) {
+        newEnemies.push(
+          buildMeerimGustavJuniorEnemy(
+            gustavBase,
+            enemyIdRef.current++,
+            moe3dGustavJuniorSpawnPosition(halfW, halfD)
+          )
+        );
+      }
       const superBase = MOE_MEERIM_ENEMIES.find(
         (d) => d.key === MOE_MEERIM_SUPER_BOSS_KEY
       );
@@ -1070,6 +2305,30 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           )
         );
       }
+      const mountainBase = MOE_MEERIM_ENEMIES.find(
+        (d) => d.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
+      );
+      if (mountainBase) {
+        newEnemies.push(
+          buildMeerimFieldBisonEnemy(
+            mountainBase,
+            enemyIdRef.current++,
+            moe3dMountainBisonSpawnPosition(halfW, halfD)
+          )
+        );
+      }
+      const roughBase = MOE_MEERIM_ENEMIES.find(
+        (d) => d.key === MOE_MEERIM_ROUGH_BISON_KEY
+      );
+      if (roughBase) {
+        newEnemies.push(
+          buildMeerimFieldBisonEnemy(
+            roughBase,
+            enemyIdRef.current++,
+            moe3dRoughBisonSpawnPosition(halfW, halfD)
+          )
+        );
+      }
       setWorld({ mw, mh, mode3d: true, halfW, halfD });
       setEnemies(newEnemies);
       approachChargeScheduledRef.current = false;
@@ -1079,8 +2338,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       playerPosRef.current = start;
       setPlayer(start);
       setMinimap3d({ x: start.x, y: start.y, yaw: cameraYawRef.current });
-      setPet((prev) => ({ ...prev, x: start.x + 2, y: start.y - 1.5 }));
-      petPosRef.current = { x: start.x + 2, y: start.y - 1.5 };
+      const { petAt } = snapPet3dNearPlayer(halfW, halfD, start);
+      setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
       playerJumpRef.current = { offset: 0, vy: 0 };
       return;
     }
@@ -1088,7 +2347,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     const { mw, mh } = computeMoe2dWorldSize(view.w, view.h);
     const rowLayout = buildMoe2dRowLayout(mw, mh);
     const zoneCount = MOE_3D_ENEMY_ZONES.length;
-
+    
     const newEnemies = [];
     MOE_3D_ENEMY_ZONES.forEach((zone, zoneIndex) => {
       const data = MOE_MEERIM_ENEMIES.find((d) => d.key === zone.key);
@@ -1132,6 +2391,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         )
       );
     }
+    const gustavBase2d = MOE_MEERIM_ENEMIES.find(
+      (d) => d.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY
+    );
+    if (gustavBase2d) {
+      const midPos = moe2dMidBossSpawnPosition(rowLayout, mw);
+      newEnemies.push(
+        buildMeerimGustavJuniorEnemy(
+          gustavBase2d,
+          enemyIdRef.current++,
+          { x: midPos.x + 48, y: midPos.y + 36 }
+        )
+      );
+    }
     const superBase = MOE_MEERIM_ENEMIES.find(
       (d) => d.key === MOE_MEERIM_SUPER_BOSS_KEY
     );
@@ -1142,6 +2414,30 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           enemyIdRef.current++,
           moe2dSuperBossSpawnPosition(rowLayout, mw),
           MOE_SUPER_BOSS_HP_MULTIPLIER
+        )
+      );
+    }
+    const mountainBase = MOE_MEERIM_ENEMIES.find(
+      (d) => d.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
+    );
+    if (mountainBase) {
+      newEnemies.push(
+        buildMeerimFieldBisonEnemy(
+          mountainBase,
+          enemyIdRef.current++,
+          moe2dMountainBisonSpawnPosition(rowLayout, mw)
+        )
+      );
+    }
+    const roughBase = MOE_MEERIM_ENEMIES.find(
+      (d) => d.key === MOE_MEERIM_ROUGH_BISON_KEY
+    );
+    if (roughBase) {
+      newEnemies.push(
+        buildMeerimFieldBisonEnemy(
+          roughBase,
+          enemyIdRef.current++,
+          moe2dRoughBisonSpawnPosition(rowLayout, mw)
         )
       );
     }
@@ -1160,7 +2456,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   useEffect(() => {
     if (!toast) return;
     const hasPetLevelUp = toast.includes("に上がった");
-    const ms = hasPetLevelUp ? 5200 : 2200;
+    const isSkillDesc = toast.includes("\n");
+    const ms = hasPetLevelUp ? 5200 : isSkillDesc ? 3600 : 2200;
     const t = setTimeout(() => setToast(null), ms);
     return () => clearTimeout(t);
   }, [toast]);
@@ -1172,10 +2469,75 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [skillToast]);
 
   useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      setHealCdSec({
+        healing: Math.max(
+          0,
+          Math.ceil((healCdUntilRef.current.healing - now) / 1000)
+        ),
+        healAll: Math.max(
+          0,
+          Math.ceil((healCdUntilRef.current.healAll - now) / 1000)
+        ),
+      });
+
+      const cdUntil = shinsokuCooldownUntilRef.current;
+      if (cdUntil > now) {
+        setShinsokuCooldownSec(Math.max(0, Math.ceil((cdUntil - now) / 1000)));
+      } else if (cdUntil !== 0) {
+        shinsokuCooldownUntilRef.current = 0;
+        setShinsokuCooldownSec(0);
+        if (!shinsokuTimersRef.current.cooldown) {
+          shinsokuTimersRef.current.cooldown = window.setTimeout(() => {
+            setShinsokuCooldownSec(null);
+            shinsokuTimersRef.current.cooldown = null;
+          }, 350);
+        }
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!expConsumableLevelUpFlow) return;
+    const onKey = (e) => {
+      if (e.repeat) return;
+      if (e.key === "Escape") {
+        setExpConsumableLevelUpFlow(null);
+        return;
+      }
+      if (["Enter", " ", "z", "Z", "x", "X"].includes(e.key)) {
+        e.preventDefault();
+        advanceExpConsumableLevelUp();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expConsumableLevelUpFlow, advanceExpConsumableLevelUp]);
+
+  useEffect(() => {
     if (!petLevelUpFlash) return;
     const t = setTimeout(() => setPetLevelUpFlash(null), 5500);
     return () => clearTimeout(t);
   }, [petLevelUpFlash]);
+
+  useEffect(
+    () => () => {
+      if (integerLevelFlashTimerRef.current) {
+        window.clearTimeout(integerLevelFlashTimerRef.current);
+      }
+      if (shinsokuTimersRef.current.active) {
+        clearTimeout(shinsokuTimersRef.current.active);
+      }
+      if (shinsokuTimersRef.current.cooldown) {
+        clearTimeout(shinsokuTimersRef.current.cooldown);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const sync = () => setTrainerStatus(loadGameStatus());
@@ -1220,11 +2582,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   useEffect(() => {
-    if (!petMasterDialogue && !showPetStatusOverlay && !showFieldGuide) return;
+    if (
+      !petMasterDialogue &&
+      !expVendorOpen &&
+      !rhodaOpen &&
+      !josephOpen &&
+      !josephSynthOpen &&
+      !expConsumableLevelUpFlow &&
+      !showPetStatusOverlay &&
+      !showFieldGuide
+    )
+      return;
     keysRef.current = createEmptyInputKeys();
     playerSprintRef.current = false;
     petRunAnimRef.current = false;
-  }, [petMasterDialogue, showPetStatusOverlay, showFieldGuide]);
+  }, [petMasterDialogue, expVendorOpen, rhodaOpen, josephOpen, josephSynthOpen, expConsumableLevelUpFlow, showPetStatusOverlay, showFieldGuide]);
 
   useEffect(() => {
     if (!world) return;
@@ -1233,52 +2605,58 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
     const scheduleApproachToCharge = (enemyIdSnapshot) => {
       if (approachChargeScheduledRef.current) return;
-      approachChargeScheduledRef.current = true;
-      queueMicrotask(() => {
-        if (duelRef.current == null || duelRef.current.phase !== "approach") {
-          approachChargeScheduledRef.current = false;
-          return;
-        }
-        if (duelRef.current.enemyId !== enemyIdSnapshot) {
-          approachChargeScheduledRef.current = false;
-          return;
-        }
-        const en = enemiesRef.current.find((e) => e.id === enemyIdSnapshot);
-        if (!en || en.hp <= 0) {
-          approachChargeScheduledRef.current = false;
-          duelRef.current = null;
-          setDuel(null);
-          return;
-        }
-        setDuel((cur) => {
+              approachChargeScheduledRef.current = true;
+              queueMicrotask(() => {
+                if (duelRef.current == null || duelRef.current.phase !== "approach") {
+                  approachChargeScheduledRef.current = false;
+                  return;
+                }
+                if (duelRef.current.enemyId !== enemyIdSnapshot) {
+                  approachChargeScheduledRef.current = false;
+                  return;
+                }
+                const en = enemiesRef.current.find((e) => e.id === enemyIdSnapshot);
+                if (!en || en.hp <= 0) {
+                  approachChargeScheduledRef.current = false;
+                  duelRef.current = null;
+                  setDuel(null);
+                  return;
+                }
+                setDuel((cur) => {
           if (!cur || cur.phase !== "approach" || cur.enemyId !== enemyIdSnapshot) {
-            return cur;
-          }
+                    return cur;
+                  }
           let slotX = cur.slotX;
           let slotY = cur.slotY;
           if (worldRef.current?.mode3d) {
+            const ext = moe3dCombatExtentsRef.current;
             const slot = moe3dDuelSlotFromPet(
               en,
               petPosRef.current.x,
-              petPosRef.current.y
+              petPosRef.current.y,
+              {
+                petFront: ext.pet ?? undefined,
+                enemyFront: ext.enemies?.[en.id] ?? undefined,
+              }
             );
             slotX = slot.x;
             slotY = slot.y;
             petPosRef.current = { x: slotX, y: slotY };
-          }
-          const next = {
-            ...cur,
-            phase: "simultaneous_charge",
-            petBar: 0,
-            enemyBar: 0,
+                  }
+                  const next = {
+                    ...cur,
+                    phase: "simultaneous_charge",
+                    petBar: 0,
+                    enemyBar: 0,
             slotX,
             slotY,
-          };
-          duelRef.current = next;
-          playSfx("combatReady");
-          return next;
-        });
-      });
+                  };
+                  duelRef.current = next;
+                  playSfx("combatReady");
+          approachChargeScheduledRef.current = false;
+                  return next;
+                });
+              });
     };
 
     const tickSitRegen = (cmd, dt) => {
@@ -1290,14 +2668,76 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (sitRegenAccRef.current >= 1) {
         sitRegenAccRef.current = 0;
         setPet((prev) => ({
-          ...prev,
+            ...prev,
           hp: Math.min(prev.hpMax, prev.hp + PET_SIT_REGEN_HP),
           mp: Math.min(prev.mpMax, prev.mp + PET_SIT_REGEN_MP),
         }));
       }
     };
 
+    const tickRegen = (dt) => {
+      if (!regenActiveRef.current) {
+        regenAccRef.current = 0;
+        return;
+      }
+      regenAccRef.current += dt;
+      if (regenAccRef.current < PET_REGEN_INTERVAL_SEC) return;
+      regenAccRef.current -= PET_REGEN_INTERVAL_SEC;
+
+      setPet((prev) => {
+        if (prev.hp >= prev.hpMax && prev.mp >= prev.mpMax) return prev;
+
+        const hpRaw = Math.min(prev.hpMax, prev.hp + PET_REGEN_HP);
+        const mpRaw = Math.min(prev.mpMax, prev.mp + PET_REGEN_MP);
+        const hp = petUsesPreciseWikiStats(prev.id)
+          ? roundPetStatInternal(hpRaw)
+          : hpRaw;
+        const mp = petUsesPreciseWikiStats(prev.id)
+          ? roundPetStatInternal(mpRaw)
+          : mpRaw;
+        const hpGain = Math.max(0, hp - prev.hp);
+        if (hpGain <= 0 && mp >= prev.mp) return prev;
+
+        if (hpGain > 0) {
+          const pt = petPosRef.current;
+          pushWorldHealPopupRef.current(pt.x, pt.y, hpGain);
+        }
+        return { ...prev, hp, mp };
+      });
+    };
+
+    const ensureDuelStillValid = () => {
+      const d = duelRef.current;
+      if (!d || (d.phase !== "approach" && d.phase !== "simultaneous_charge")) {
+        return;
+      }
+      const live = enemiesRef.current.find((e) => e.id === d.enemyId);
+      if (!live || live.hp <= 0) {
+        endActiveDuel();
+      }
+    };
+
     const tickPet3d = (speed, dt, now) => {
+      if (!map3dReadyRef.current || !pet3dSpawnSyncedRef.current) return;
+      const cel = petTenthCelebrationRef.current;
+      if (cel?.active) {
+        const adv = advancePetTenthCelebration(
+          { ...petPosRef.current },
+          playerPosRef.current,
+          speed,
+          worldRef.current,
+          now
+        );
+        const { pos, cel: nextCel, finished } = adv(cel);
+        petTenthCelebrationRef.current = nextCel;
+        petPosRef.current = { x: pos.x, y: pos.y };
+        petRunAnimRef.current =
+          nextCel.phase === "leave" || nextCel.phase === "return";
+        if (finished) {
+          setPetTenthCelebrationActive(false);
+        }
+        return;
+      }
       const cmd = petCommandRef.current;
       tickSitRegen(cmd, dt);
       const result = advancePetFieldPosition({
@@ -1316,18 +2756,24 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         autoAttackCooldownRef,
         targetEnemyIdRef,
         enemiesRef,
-        setTargetEnemyId,
+        setTargetEnemyId: (id) => scheduleTargetEnemyIdRef.current(id),
         startDuelWithEnemyRef,
       });
       if (result.reachedApproach && duelRef.current?.phase === "approach") {
         scheduleApproachToCharge(duelRef.current.enemyId);
       }
       petPosRef.current = { x: result.x, y: result.y };
+      const duelNow = duelRef.current;
+      if (duelNow?.phase === "simultaneous_charge") {
+        petPosRef.current = { x: duelNow.slotX, y: duelNow.slotY };
+      }
     };
 
     const loop = (now) => {
       const dt = Math.min(0.05, (now - lastFrame) / 1000);
       lastFrame = now;
+      ensureDuelStillValid();
+      tickRegen(dt);
 
       const k = keysRef.current;
       let inputX = 0;
@@ -1342,7 +2788,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (inputX !== 0 || inputZ !== 0) {
         if (world.mode3d) {
           const sprinting = !!(k.shift && (inputX !== 0 || inputZ !== 0));
-          const speedMult = sprinting ? SPRINT_MULTIPLIER_3D : 1;
+          const speedMult = sprintSpeedMult3d(sprinting);
           const speed = MOVE_SPEED_3D * 60 * dt * speedMult;
           const { mx, my, facing } = moveInputForCameraYaw(
             inputX,
@@ -1368,7 +2814,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           sprinting &&
           (cmd === "follow" || cmd === "auto") &&
           duelRef.current?.phase !== "simultaneous_charge";
-        const speedMult = sprinting ? SPRINT_MULTIPLIER_3D : 1;
+        const speedMult = sprintSpeedMult3d(sprinting);
         const petSpeed = MOVE_SPEED_3D * 60 * dt * speedMult;
 
         const jump = playerJumpRef.current;
@@ -1382,22 +2828,43 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           jump.vy = Math.max(0, jump.vy);
         }
 
-        let nx = playerPosRef.current.x + dx;
-        let ny = playerPosRef.current.y + dy;
-        const hw = world.halfW ?? world.mw / 2;
-        const hd = world.halfD ?? world.mh / 2;
-        const margin = 1.5;
-        nx = Math.max(-hw + margin, Math.min(hw - margin, nx));
-        ny = Math.max(-hd + margin, Math.min(hd - margin, ny));
-        playerPosRef.current = { x: nx, y: ny };
-        if (now - lastMinimap3dSyncRef.current >= 75) {
-          lastMinimap3dSyncRef.current = now;
-          setMinimap3d({ x: nx, y: ny, yaw: cameraYawRef.current });
-        }
-        const nearHouse = moe3dIsNearPetHouse(nx, ny, hw, hd);
-        if (nearHouse !== nearPetHouseRef.current) {
-          nearPetHouseRef.current = nearHouse;
-          setNearPetHouse(nearHouse);
+        if (map3dReadyRef.current) {
+          let nx = playerPosRef.current.x + dx;
+          let ny = playerPosRef.current.y + dy;
+          const clamped = moe3dClampToPlayBounds(
+            nx,
+            ny,
+            worldRef.current,
+            1.5
+          );
+          nx = clamped.x;
+          ny = clamped.y;
+          playerPosRef.current = { x: nx, y: ny };
+          if (now - lastMinimap3dSyncRef.current >= 75) {
+            lastMinimap3dSyncRef.current = now;
+            startTransition(() => {
+              setMinimap3d({ x: nx, y: ny, yaw: cameraYawRef.current });
+            });
+          }
+          const hw = worldRef.current?.halfW ?? world.halfW ?? world.mw / 2;
+          const hd = worldRef.current?.halfD ?? world.halfD ?? world.mh / 2;
+          const nearHouse = moe3dIsNearPetHouse(nx, ny, hw, hd);
+          if (nearHouse !== nearPetHouseRef.current) {
+            nearPetHouseRef.current = nearHouse;
+            startTransition(() => setNearPetHouse(nearHouse));
+          }
+          const nearRhodaSpot = moe3dIsNearRhoda(
+            nx,
+            ny,
+            hw,
+            hd,
+            12,
+            worldRef.current?.rhodaPos
+          );
+          if (nearRhodaSpot !== nearRhodaRef.current) {
+            nearRhodaRef.current = nearRhodaSpot;
+            startTransition(() => setNearRhoda(nearRhodaSpot));
+          }
         }
         tickPet3d(petSpeed, dt, now);
       } else {
@@ -1436,25 +2903,43 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerPosRef.current = { x: nx, y: ny };
 
           const petBefore = petPosRef.current;
-          const petResult = advancePetFieldPosition({
-            pos: petBefore,
-            cmd,
-            duel: duelRef.current,
-            waitAnchor: waitAnchorRef.current,
-            playerPos: playerPosRef.current,
-            speed: MOVE_SPEED,
-            approachThreshold: PET_APPROACH_THRESHOLD_2D,
-            followDist: petFollowTightRef.current
-              ? PET_FOLLOW_DIST_2D_TIGHT
-              : PET_FOLLOW_DIST_2D,
-            followDistAuto: PET_FOLLOW_DIST_2D * 1.2,
-            now,
-            autoAttackCooldownRef,
-            targetEnemyIdRef,
-            enemiesRef,
-            setTargetEnemyId,
-            startDuelWithEnemyRef,
-          });
+          let petResult;
+          const cel = petTenthCelebrationRef.current;
+          if (cel?.active) {
+            const adv = advancePetTenthCelebration(
+              { ...petBefore },
+              playerPosRef.current,
+              MOVE_SPEED,
+              world,
+              now
+            );
+            const stepped = adv(cel);
+            petTenthCelebrationRef.current = stepped.cel;
+            petResult = { x: stepped.pos.x, y: stepped.pos.y, reachedApproach: false };
+            if (stepped.finished) {
+              setPetTenthCelebrationActive(false);
+            }
+          } else {
+            petResult = advancePetFieldPosition({
+              pos: petBefore,
+              cmd,
+              duel: duelRef.current,
+              waitAnchor: waitAnchorRef.current,
+              playerPos: playerPosRef.current,
+              speed: MOVE_SPEED,
+              approachThreshold: PET_APPROACH_THRESHOLD_2D,
+              followDist: petFollowTightRef.current
+                ? PET_FOLLOW_DIST_2D_TIGHT
+                : PET_FOLLOW_DIST_2D,
+              followDistAuto: PET_FOLLOW_DIST_2D * 1.2,
+              now,
+              autoAttackCooldownRef,
+              targetEnemyIdRef,
+              enemiesRef,
+              setTargetEnemyId: (id) => scheduleTargetEnemyIdRef.current(id),
+              startDuelWithEnemyRef,
+            });
+          }
           if (
             petResult.reachedApproach &&
             duelRef.current?.phase === "approach"
@@ -1483,11 +2968,58 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [world, onBack]);
 
   const dataForSkillSlots = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
-  const combatSkillSlots = (dataForSkillSlots.skills || [])
-    .filter((s) => s.level > 1)
-    .slice(0, 7);
+  const combatSkillSlots = buildPetCombatSkillSlots(
+    pet.id,
+    dataForSkillSlots.skills || [],
+    petCombatLevel,
+    {
+      rebornPhoenix: pet.rebornPhoenix,
+      activeSkillSet: pet.activeSkillSet,
+      skillMode: petSkillMode,
+    }
+  );
+  const skillPanelLabels =
+    petSkillMode === MOE_PET_SKILL_MODE_ALL
+      ? SKILL_SLOT_LABELS
+      : SKILL_SLOT_LABELS_LEARNED;
+  const skillIconSlots = Array.from({ length: MOE_SKILL_ICON_SLOT_COUNT }, (_, i) =>
+    combatSkillSlots[i] ?? null
+  );
+  const playerSkillIconSlots = buildPlayerNinjaSkillSlots(50, playerSkillUnlocks);
+  const playerSkillCooldownSec =
+    shinsokuCooldownSec !== null
+      ? { ninja_shinsoku: shinsokuCooldownSec }
+      : {};
 
-  const startDuelWithEnemy = useCallback(
+  const swapPlayerSkillSlots = useCallback((from, to) => {
+    setPlayerSkillSlotOrder((prev) => {
+      const next = swapPlayerSkillSlotOrder(prev, from, to);
+      savePlayerSkillSlotOrder(next);
+      return next;
+    });
+  }, []);
+
+  const resetShinsokuForGustavRematch = useCallback(() => {
+    setPlayerSkillUnlocks((prev) =>
+      removePlayerSkillUnlock(prev, "ninja_shinsoku")
+    );
+    setDashBoost3x(false);
+    dashBoost3xRef.current = false;
+    shinsokuActiveUntilRef.current = 0;
+    shinsokuCooldownUntilRef.current = 0;
+    setShinsokuCooldownSec(null);
+    if (shinsokuTimersRef.current.active) {
+      clearTimeout(shinsokuTimersRef.current.active);
+      shinsokuTimersRef.current.active = null;
+    }
+    if (shinsokuTimersRef.current.cooldown) {
+      clearTimeout(shinsokuTimersRef.current.cooldown);
+      shinsokuTimersRef.current.cooldown = null;
+    }
+    setFieldTreasures((prev) => prev.filter((tr) => !isGustavJuniorTreasure(tr)));
+  }, []);
+
+  const beginDuelWithEnemy = useCallback(
     (id) => {
       const cur = duelRef.current;
       if (cur) {
@@ -1496,11 +3028,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
       const target = enemiesRef.current.find((en) => en.id === id);
       if (!target || target.hp <= 0) return;
+      const ext = moe3dCombatExtentsRef.current;
       const slot = is3d
         ? moe3dDuelSlotFromPet(
             target,
             petPosRef.current.x,
-            petPosRef.current.y
+            petPosRef.current.y,
+            {
+              petFront: ext.pet ?? undefined,
+              enemyFront: ext.enemies?.[target.id] ?? undefined,
+            }
           )
         : slotInFrontOfEnemy(
             target,
@@ -1515,7 +3052,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         enemyBar: 0,
         slotX: slot.x,
         slotY: slot.y,
-        petChargeSec: getPetChargeSeconds(pet.id, pet.level),
+        petChargeSec: getPetChargeSeconds(pet.id, petCombatLevel),
         enemyChargeSec: getEnemyChargeSeconds(target),
       };
       approachChargeScheduledRef.current = false;
@@ -1523,21 +3060,49 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       setDuel(next);
       playSfx("duelEngage");
     },
-    [is3d, pet.id, pet.level]
+    [is3d, pet.id, petCombatLevel]
+  );
+
+  const startDuelWithEnemy = useCallback(
+    (id) => {
+      const target = enemiesRef.current.find((en) => en.id === id);
+      if (!target || target.hp <= 0) return;
+      if (is3d && target.fieldGustav) {
+        pendingGustavDuelIdRef.current = id;
+        setGustavResetPromptOpen(true);
+        return;
+      }
+      beginDuelWithEnemy(id);
+    },
+    [is3d, beginDuelWithEnemy]
   );
   startDuelWithEnemyRef.current = startDuelWithEnemy;
 
+  const closeGustavResetPrompt = useCallback(() => {
+    pendingGustavDuelIdRef.current = null;
+    setGustavResetPromptOpen(false);
+  }, []);
+
+  const handleGustavResetMenu = useCallback(
+    (actionId) => {
+      const enemyId = pendingGustavDuelIdRef.current;
+      pendingGustavDuelIdRef.current = null;
+      setGustavResetPromptOpen(false);
+      if (enemyId == null) return;
+      if (actionId === "yes_reset") {
+        resetShinsokuForGustavRematch();
+        setToast("神速をリセット — 倒すと忍者の足袋の宝が出る");
+      }
+      beginDuelWithEnemy(enemyId);
+    },
+    [beginDuelWithEnemy, resetShinsokuForGustavRematch]
+  );
+
   const cancelActiveDuel = useCallback(() => {
     if (!duelRef.current) return false;
-    approachChargeScheduledRef.current = false;
-    duelCombatSessionRef.current += 1;
-    moeSkillComboGenRef.current += 1;
-    petStrikeUntilRef.current = 0;
-    enemyStrikeUntilRef.current = 0;
-    duelRef.current = null;
-    setDuel(null);
+    endActiveDuel();
     return true;
-  }, []);
+  }, [endActiveDuel]);
 
   const applyPetCommand = useCallback((mode) => {
     petCommandRef.current = mode;
@@ -1614,14 +3179,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       e?.stopPropagation?.();
       const target = enemiesRef.current.find((en) => en.id === id);
       if (!target || target.hp <= 0) return;
-      setPetFocused(false);
-      setTargetEnemyId(id);
-      setToast(null);
+      targetEnemyIdRef.current = id;
+      queueMicrotask(() => {
+        startTransition(() => {
+          setPetFocused(false);
+          setTargetEnemyId(id);
+          setToast(null);
+        });
+      });
     },
     []
   );
 
   const handlePetSelect = useCallback((e) => {
+    if (e?.button === 2) return;
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setPetFocused((prev) => {
@@ -1629,11 +3200,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (next) {
         setTargetEnemyId(null);
         const data = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
-        setToast(`ペット: ${data.name} Lv.${pet.level}`);
+        setToast(`ペット: ${data.name} Lv.${petLevelDisplay}`);
       }
       return next;
     });
-  }, [pet.id, pet.level]);
+  }, [pet.id, petLevelDisplay]);
+
+  const handlePetDoubleClick = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    if (pet.id !== "mystery_dragon" || !pet.rebornPhoenix) return;
+    setDragonFormFlow(true);
+  }, [pet.id, pet.rebornPhoenix]);
 
   const handlePetAttackCommand = useCallback(() => {
     if (targetEnemyId == null) {
@@ -1666,21 +3244,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (d && d.phase === "simultaneous_charge") {
         const live = enemiesRef.current.find((e) => e.id === d.enemyId);
         if (!live || live.hp <= 0) {
-          approachChargeScheduledRef.current = false;
-          duelRef.current = null;
-          setDuel(null);
+          endActiveDuel();
         } else {
-          const dt = Math.min(0.08, (now - last) / 1000);
+          const dt =
+            Math.min(0.08, (now - last) / 1000) * battleSpeedMultRef.current;
           last = now;
-          const chargeFrozenUntil = d.chargeFrozenUntil;
-          const barsPaused =
-            typeof chargeFrozenUntil === "number" && now < chargeFrozenUntil;
-          let petBar = d.petBar;
-          let enemyBar = d.enemyBar;
-          if (!barsPaused) {
-            petBar = d.petBar + dt / d.petChargeSec;
-            enemyBar = d.enemyBar + dt / d.enemyChargeSec;
-          }
+          let petBar = d.petBar + dt / d.petChargeSec;
+          let enemyBar = d.enemyBar + dt / d.enemyChargeSec;
           const enemyId = d.enemyId;
           let duelEnded = false;
 
@@ -1688,6 +3258,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             petBar -= 1;
             const ended = applyPetStrikeRef.current(enemyId);
             if (ended) {
+              endActiveDuel();
               duelEnded = true;
               break;
             }
@@ -1705,9 +3276,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             }
             const live2 = enemiesRef.current.find((e) => e.id === enemyId);
             if (!live2 || live2.hp <= 0) {
-              approachChargeScheduledRef.current = false;
-              duelRef.current = null;
-              setDuel(null);
+              endActiveDuel();
               duelEnded = true;
               break;
             }
@@ -1720,23 +3289,17 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           }
 
           if (!duelEnded && sessionId === duelCombatSessionRef.current) {
-            setDuel((cur) => {
-              if (!cur || cur.enemyId !== enemyId || cur.phase !== "simultaneous_charge") {
-                return cur;
-              }
-              const nextFrozen =
-                cur.chargeFrozenUntil != null && now < cur.chargeFrozenUntil
-                  ? cur.chargeFrozenUntil
-                  : undefined;
+            const liveCheck = enemiesRef.current.find((e) => e.id === enemyId);
+            if (!liveCheck || liveCheck.hp <= 0) {
+              endActiveDuel();
+            } else {
               const next = {
-                ...cur,
+                ...d,
                 petBar,
                 enemyBar,
-                chargeFrozenUntil: nextFrozen,
               };
               duelRef.current = next;
-              return next;
-            });
+            }
           }
         }
       }
@@ -1751,19 +3314,107 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       duelCombatSessionRef.current += 1;
       cancelAnimationFrame(raf);
     };
-  }, [duel?.phase, duel?.enemyId, duel?.petChargeSec, duel?.enemyChargeSec]);
+  }, [duel?.phase, duel?.enemyId, duel?.petChargeSec, duel?.enemyChargeSec, endActiveDuel]);
 
-  const handleHeal = () => {
+  const handleHeal = (amount, label, cooldownKey = null, cooldownSec = 0) => {
+    if (cooldownKey) {
+      const now = Date.now();
+      if (now < healCdUntilRef.current[cooldownKey]) return;
+      healCdUntilRef.current[cooldownKey] = now + cooldownSec * 1000;
+      setHealCdSec((prev) => ({ ...prev, [cooldownKey]: cooldownSec }));
+    }
     playSfx("heal");
     setPet((prev) => {
-      const raw = Math.min(prev.hpMax, prev.hp + HEAL_AMOUNT);
+      const raw = Math.min(prev.hpMax, prev.hp + amount);
       const hp = petUsesPreciseWikiStats(prev.id)
         ? roundPetStatInternal(raw)
         : raw;
       return { ...prev, hp };
     });
-    setToast("ペットを回復した！✨");
+    setToast(`${label}！✨ (+${amount})`);
   };
+
+  const handleRegenToggle = useCallback(() => {
+    setRegenActive((on) => {
+      const next = !on;
+      setToast(
+        next
+          ? `リジェネ ON（${PET_REGEN_INTERVAL_SEC}秒ごと HP+${PET_REGEN_HP} MP+${PET_REGEN_MP}）`
+          : "リジェネ OFF"
+      );
+      if (next) playSfx("heal");
+      return next;
+    });
+  }, []);
+
+  const playerOrderedSkillSlots = useMemo(() => {
+    const ninjaById = {
+      ninja_shinobiashi: playerSkillIconSlots[0],
+      ninja_shinsoku: playerSkillIconSlots[1],
+      ninja_kakuremino: playerSkillIconSlots[2],
+    };
+    const ctx = {
+      healCdSec,
+      regenActive,
+      shinobiashiOn,
+      dashBoost3x,
+      playerSkillCooldownSec,
+      ninjaById,
+      healAmountLight: HEAL_AMOUNT_LIGHT,
+      healAmountHeal: HEAL_AMOUNT_HEALING,
+      healAmountAll: HEAL_AMOUNT_HEAL_ALL,
+      petRegenHp: PET_REGEN_HP,
+      petRegenMp: PET_REGEN_MP,
+      onLight: () => handleHeal(HEAL_AMOUNT_LIGHT, "ライトヒール"),
+      onHeal: () =>
+        handleHeal(
+          HEAL_AMOUNT_HEALING,
+          "ヒーリング",
+          "healing",
+          HEAL_COOLDOWN_HEALING_SEC
+        ),
+      onHealAll: () =>
+        handleHeal(
+          HEAL_AMOUNT_HEAL_ALL,
+          "ヒーリングオール",
+          "healAll",
+          HEAL_COOLDOWN_HEAL_ALL_SEC
+        ),
+      onRegenToggle: handleRegenToggle,
+      onNinja: (skill) => activatePlayerSkillSlot(0, skill),
+    };
+    return playerSkillSlotOrder.map((key, slotIndex) =>
+      buildPlayerSkillSlotEntry(key, slotIndex, ctx)
+    );
+  }, [
+    playerSkillSlotOrder,
+    playerSkillIconSlots,
+    healCdSec,
+    regenActive,
+    shinobiashiOn,
+    dashBoost3x,
+    playerSkillCooldownSec,
+    handleRegenToggle,
+    activatePlayerSkillSlot,
+  ]);
+
+  const playerVerticalSkillSlots = useMemo(
+    () =>
+      playerOrderedSkillSlots.map(
+        ({ label, disabled, active, cooldownSec, title, onClick, reorderable }) => ({
+          label,
+          disabled,
+          active,
+          cooldownSec,
+          title,
+          onClick,
+          reorderable,
+        })
+      ),
+    [playerOrderedSkillSlots]
+  );
+
+  const playerIconBarSlots = playerOrderedSkillSlots;
 
   const handlePetExpReset = () => {
     if (
@@ -1794,33 +3445,53 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const applyPetId = (newId) => {
     if (newId === pet.id || !MOE_PET_DATA[newId]) return;
-    restorePetDebugSnapshot({ silent: true });
+    if (josephCrystallizedPetIds.includes(newId)) {
+      setToast("そのペットはクリスタル化されています（リロードで戻ります）");
+      return;
+    }
     const prevSave = loadMoePetsSave();
-    const totalExpNow =
-      pet.totalExp != null
-        ? pet.totalExp
-        : getMoePetTotalExpFromLegacyProgress(
-            pet.level,
-            pet.expIntoLevel ?? 0
-          );
-    const byId = {
-      ...prevSave.byId,
-      [pet.id]: { totalExp: totalExpNow, hp: pet.hp, mp: pet.mp },
-    };
-    writeMoePetsSave({ activeId: newId, byId });
-    const next = petFromSaveSlot(newId, byId[newId]);
+    writeMoePetsSave({ activeId: newId, byId: prevSave.byId });
+    const next = petFromSaveSlot(newId, prevSave.byId[newId]);
     setPet((prev) => ({ ...next, x: prev.x, y: prev.y }));
+    petRef.current = { ...next, x: pet.x, y: pet.y };
+    petStateRef.current = petRef.current;
     setToast(`${MOE_PET_DATA[newId].name}に交代！`);
   };
 
   const cyclePet = (delta) => {
-    const n = MOE_PET_IDS.length;
+    const ids = MOE_PET_IDS.filter((id) => !josephCrystallizedPetIds.includes(id));
+    const n = ids.length;
     if (n < 2) return;
-    let idx = MOE_PET_IDS.indexOf(pet.id);
+    let idx = ids.indexOf(pet.id);
     if (idx < 0) idx = 0;
     const nextIdx = (idx + delta + n) % n;
-    applyPetId(MOE_PET_IDS[nextIdx]);
+    applyPetId(ids[nextIdx]);
   };
+
+  const markJosephPetCrystallized = useCallback((petId) => {
+    addJosephCrystallizedPetId(petId);
+    setJosephCrystallizedPetIds((prev) => {
+      const next = prev.includes(petId) ? prev : [...prev, petId];
+      if (petStateRef.current?.id === petId) {
+        const switchId = MOE_PET_IDS.find(
+          (id) => id !== petId && !next.includes(id)
+        );
+        if (switchId) {
+          queueMicrotask(() => {
+            const save = loadMoePetsSave();
+            writeMoePetsSave({
+              ...save,
+              activeId: switchId,
+            });
+            const switched = petFromSaveSlot(switchId, save.byId[switchId]);
+            setPet((prev) => ({ ...switched, x: prev.x, y: prev.y }));
+            setToast(`${MOE_PET_DATA[switchId].name}に交代（${MOE_PET_DATA[petId].name}はクリスタル化）`);
+          });
+        }
+      }
+      return next;
+    });
+  }, []);
 
   const openPetMasterDialogue = useCallback(() => {
     setPetMasterDialogue({ view: "menu" });
@@ -1844,7 +3515,166 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     openPetMasterDialogue();
   }, [is3d, openPetMasterDialogue, world?.rowLayout, world?.mw]);
 
-  const applyPetDebugLevel100 = useCallback(() => {
+  const handleExpVendorTalk = useCallback(() => {
+    if (is3d) {
+      if (!nearPetHouseRef.current) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    } else if (world?.rowLayout?.length) {
+      const pos = playerPosRef.current;
+      if (
+        !moe2dIsNearPetHouse(pos.x, pos.y, world.rowLayout, world.mw)
+      ) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    }
+    setExpVendorLineIndex(0);
+    setExpVendorView("lines");
+    setExpVendorOpen(true);
+  }, [is3d, world?.rowLayout, world?.mw]);
+
+  const closeExpVendor = useCallback(() => {
+    setExpVendorOpen(false);
+    setExpVendorView("lines");
+    setExpVendorLineIndex(0);
+  }, []);
+
+  const handleRhodaTalk = useCallback(() => {
+    if (is3d) {
+      if (!nearRhodaRef.current) {
+        setToast(`${MOE_SOUL_MEMORY_RHODA_FIELD.spotLabel}の近くで話しかけてください`);
+        return;
+      }
+    } else if (world?.rowLayout?.length) {
+      const pos = playerPosRef.current;
+      if (
+        !moe2dIsNearRhoda(pos.x, pos.y, world.rowLayout, world.mw)
+      ) {
+        setToast(`${MOE_SOUL_MEMORY_RHODA_FIELD.spotLabel}の近くで話しかけてください`);
+        return;
+      }
+    }
+    setRhodaLineIndex(0);
+    setRhodaView("lines");
+    setRhodaOpen(true);
+  }, [is3d, world?.rowLayout, world?.mw]);
+
+  const handleRhodaShrineClick = useCallback(() => {
+    setRhodaLineIndex(0);
+    setRhodaView("lines");
+    setRhodaOpen(true);
+  }, []);
+
+  const closeRhoda = useCallback(() => {
+    setRhodaOpen(false);
+    setRhodaView("lines");
+    setRhodaLineIndex(0);
+  }, []);
+
+  const handleRhodaCatalogAction = useCallback((actionId) => {
+    const lootByAction = {
+      give_experience_powder: MOE_ITEM_EXPERIENCE_POWDER,
+      give_experience_cube: MOE_ITEM_EXPERIENCE_CUBE,
+      give_level_down_powder: MOE_ITEM_LEVEL_DOWN_POWDER,
+      give_level_down_cube: MOE_ITEM_LEVEL_DOWN_CUBE,
+      give_phoenix_feather: MOE_ITEM_PHOENIX_FEATHER,
+    };
+    const loot = lootByAction[actionId];
+    if (!loot) return;
+    const boxItem = moeFieldLootToBoxItem(loot);
+    if (!boxItem || !addMoeItemBoxItem(boxItem)) {
+      setToast("アイテムボックスに空きがありません");
+      return;
+    }
+    setToast(`${loot.label}を受け取った！`);
+  }, []);
+
+  const handleJosephTalk = useCallback(() => {
+    if (is3d) {
+      if (!nearPetHouseRef.current) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    } else if (world?.rowLayout?.length) {
+      const pos = playerPosRef.current;
+      if (
+        !moe2dIsNearPetHouse(pos.x, pos.y, world.rowLayout, world.mw)
+      ) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    }
+    setJosephLineIndex(0);
+    setJosephView("lines");
+    setJosephOpen(true);
+  }, [is3d, world?.rowLayout, world?.mw]);
+
+  const closeJoseph = useCallback(() => {
+    setJosephOpen(false);
+    setJosephView("lines");
+    setJosephLineIndex(0);
+    setJosephResultMessage(null);
+    setJosephSacrificePetId(null);
+  }, []);
+
+  const handleJosephSynthTalk = useCallback(() => {
+    if (is3d) {
+      if (!nearPetHouseRef.current) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    } else if (world?.rowLayout?.length) {
+      const pos = playerPosRef.current;
+      if (
+        !moe2dIsNearPetHouse(pos.x, pos.y, world.rowLayout, world.mw)
+      ) {
+        setToast("ペット小屋の近くで話しかけてください");
+        return;
+      }
+    }
+    setJosephSynthLineIndex(0);
+    setJosephSynthView("lines");
+    setJosephSynthOpen(true);
+  }, [is3d, world?.rowLayout, world?.mw]);
+
+  const closeJosephSynth = useCallback(() => {
+    setJosephSynthOpen(false);
+    setJosephSynthView("lines");
+    setJosephSynthLineIndex(0);
+    setJosephSynthResultMessage(null);
+    setJosephSynthLastCrystal(null);
+  }, []);
+
+  const cancelJosephRitual = useCallback(() => {
+    setJosephView("pick_sacrifice");
+    setJosephResultMessage(null);
+    setJosephSacrificePetId(null);
+  }, []);
+
+  const ensureJosephTrialSnapshot = useCallback(() => {
+    setPet((prev) => {
+      if (petDebugSnapshotRef.current) return prev;
+      const snap = {
+        totalExp:
+          prev.totalExp != null
+            ? prev.totalExp
+            : getMoePetTotalExpFromLegacyProgress(
+                prev.level,
+                prev.expIntoLevel ?? 0
+              ),
+        hp: prev.hp,
+        mp: prev.mp,
+      };
+      petDebugSnapshotRef.current = snap;
+      saveMoePetDebugSnapshot(prev.id, snap);
+      setHasPetDebugSnapshot(true);
+      return prev;
+    });
+  }, []);
+
+  const applyPetTrialLevel = useCallback((level) => {
     setPet((prev) => {
       if (!petDebugSnapshotRef.current) {
         const snap = {
@@ -1862,8 +3692,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         saveMoePetDebugSnapshot(prev.id, snap);
         setHasPetDebugSnapshot(true);
       }
-      const totalExp = getMoePetFreshTotalExpForLevel(100);
-      const level = 100;
+      const totalExp = getMoePetFreshTotalExpForLevel(level);
+      const frac = getMoePetFractionalLevelFromTotalExp(totalExp);
       const stats = calculatePetStats(prev.id, level);
       const hpMax = stats?.hpMax ?? prev.hpMax;
       const mpMax = stats?.mpMax ?? prev.mpMax;
@@ -1871,6 +3701,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return {
         ...prev,
         level,
+        levelDisplay: frac.displayLabel,
         totalExp,
         expIntoLevel: 0,
         hpMax,
@@ -1879,8 +3710,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         mp: precise ? roundPetStatInternal(mpMax) : mpMax,
       };
     });
-    setToast("🐛 デバッグ: Lv.100 に設定（閉じると元に戻ります）");
   }, []);
+
+  const applyPetDebugLevel100 = useCallback(() => {
+    applyPetTrialLevel(100);
+    setToast("🐛 デバッグ: Lv.100 に設定（閉じると元に戻ります）");
+  }, [applyPetTrialLevel]);
+
+  const applyJosephTrialPetLevel = useCallback(
+    (level) => {
+      applyPetTrialLevel(level);
+    },
+    [applyPetTrialLevel]
+  );
 
   const restorePetDebugSnapshot = useCallback(
     (options = {}) => {
@@ -1908,6 +3750,204 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return true;
     },
     [pet.id]
+  );
+
+  const handleJosephCatalogAction = useCallback(
+    (actionId) => {
+      if (actionId === "restore_trial") {
+        clearJosephCrystallizedPetIds();
+        setJosephCrystallizedPetIds([]);
+        const restored = restorePetDebugSnapshot();
+        setJosephView("catalog");
+        setJosephResultMessage(null);
+        setJosephSacrificePetId(null);
+        if (restored) {
+          setToast("結晶化お試しを解除し、元のLvに戻しました");
+        } else {
+          setToast("クリスタル化表示を解除しました");
+        }
+        return;
+      }
+      if (actionId !== "start_crystal") return;
+      setJosephView("pick_sacrifice");
+    },
+    [restorePetDebugSnapshot]
+  );
+
+  const josephSacrificeMenuActions = useMemo(() => {
+    const save = loadMoePetsSave();
+    return buildJosephSacrificePetMenuActions(
+      save.byId,
+      josephCrystallizedPetIds
+    );
+  }, [josephCrystallizedPetIds, josephOpen, josephView, pet.id, pet.totalExp]);
+
+  const handleJosephSacrificeSelect = useCallback(
+    (petId) => {
+      if (josephCrystallizedPetIds.includes(petId)) {
+        setToast("すでにクリスタルになっています");
+        return;
+      }
+      const save = loadMoePetsSave();
+      const totalExp = getJosephPetSlotTotalExp(petId, save.byId);
+      if (getMoePetLevelFromTotalExp(totalExp) < MOE_JOSEPH_SACRIFICE_MIN_LEVEL) {
+        setToast("Lv100.0未満のペットは渡せません");
+        return;
+      }
+      setJosephSacrificePetId(petId);
+      setJosephView("ritual_wait");
+    },
+    [josephCrystallizedPetIds]
+  );
+
+  const handleJosephRitualWaitNext = useCallback(() => {
+    setJosephView("ritual_process");
+  }, []);
+
+  const handleJosephRitualProcessNext = useCallback(() => {
+    if (!josephSacrificePetId) return;
+    const save = loadMoePetsSave();
+    const sacrificePet = petFromSaveSlot(
+      josephSacrificePetId,
+      save.byId[josephSacrificePetId]
+    );
+    const tier = rollJosephExpCrystalTrialTier({ useTimeTablet: josephUseTimeTablet });
+    const crystal = createJosephExpCrystalFromPet(tier, sacrificePet);
+    const petName = MOE_PET_DATA[josephSacrificePetId]?.name ?? "ペット";
+    setJosephResultMessage({
+      speaker: "master",
+      text: formatJosephCrystalResultMessage(tier, crystal, {
+        useTimeTablet: josephUseTimeTablet,
+        sacrificePetName: petName,
+      }),
+    });
+    setJosephView("result");
+    setToast(
+      `${tier.emoji} ${getJosephCrystalResultHeadline(tier)}（${petName} · Lv${crystal.sourceLevelLabel} · お試し）`
+    );
+  }, [josephSacrificePetId, josephUseTimeTablet]);
+
+  const handleJosephResultMenuSelect = useCallback(
+    (id) => {
+      if (id === "confirm_sacrifice") {
+        if (josephSacrificePetId) {
+          markJosephPetCrystallized(josephSacrificePetId);
+        }
+        setJosephSacrificePetId(null);
+        setJosephResultMessage(null);
+        setJosephView("catalog");
+        setToast("クリスタル化を決定（一覧から消えます · リロードで戻る）");
+        return;
+      }
+      if (id === "retry_crystal") {
+        setJosephSacrificePetId(null);
+        setJosephResultMessage(null);
+        setJosephView("catalog");
+      }
+    },
+    [josephSacrificePetId, markJosephPetCrystallized]
+  );
+
+  const josephSynthCrystalPreview = useMemo(() => {
+    if (!josephSynthLastCrystal) return null;
+    return getJosephCrystalUsePreview(pet, josephSynthLastCrystal);
+  }, [pet, josephSynthLastCrystal]);
+
+  const josephSynthTierMenuActions = useMemo(
+    () => buildJosephSynthTierMenuActions(josephSynthTrialPetLevel),
+    [josephSynthTrialPetLevel]
+  );
+
+  const handleJosephSynthCatalogAction = useCallback(
+    (actionId) => {
+      if (actionId === "restore_trial") {
+        if (restorePetDebugSnapshot()) {
+          setJosephSynthView("catalog");
+          setJosephSynthResultMessage(null);
+          setJosephSynthLastCrystal(null);
+          setToast("合成お試しを解除し、元のLvに戻しました");
+        } else {
+          setToast("戻すデータがありません");
+        }
+        return;
+      }
+      if (actionId !== "use_on_pet") return;
+      ensureJosephTrialSnapshot();
+      setJosephSynthView("pick_tier");
+    },
+    [ensureJosephTrialSnapshot, restorePetDebugSnapshot]
+  );
+
+  const handleJosephSynthTierSelect = useCallback(
+    (tierId) => {
+      const tier = getJosephExpCrystalTierById(tierId);
+      if (!tier) return;
+      const crystal = createJosephExpCrystal(tier, josephSynthTrialPetLevel);
+      setJosephSynthLastCrystal(crystal);
+      setJosephSynthView("use_confirm");
+    },
+    [josephSynthTrialPetLevel]
+  );
+
+  const handleJosephSynthUseCrystal = useCallback(() => {
+    if (!josephSynthLastCrystal) return;
+    const petNow = petStateRef.current;
+    const previewBefore = getJosephCrystalUsePreview(
+      petNow,
+      josephSynthLastCrystal
+    );
+    const r = applyMoePetExpGain(
+      petNow,
+      josephSynthLastCrystal.expAmount,
+      calculatePetStats
+    );
+    if (r.gained <= 0) {
+      setToast("これ以上レベルが上がりません");
+      return;
+    }
+    setPet((prev) => {
+      const next = { ...r.pet, x: prev.x, y: prev.y };
+      persistCurrentMoePet(next);
+      return next;
+    });
+    const previewAfter = getJosephCrystalUsePreview(r.pet, josephSynthLastCrystal);
+    const petName = MOE_PET_DATA[petNow.id]?.name ?? "ペット";
+    setJosephSynthResultMessage({
+      speaker: "master",
+      text: formatJosephCrystalUseAppliedMessage(
+        petName,
+        previewBefore,
+        previewAfter
+      ),
+    });
+    setJosephSynthView("use_done");
+    if (r.leveled || r.tenthLeveled) {
+      setToast(r.messages.filter(Boolean).join("　") || "レベルアップ！");
+      if (r.tenthLeveled) {
+        queueMicrotask(() => triggerPetTenthLevelUpCelebration(r.messages));
+      } else if (r.leveled) {
+        queueMicrotask(() => {
+          setPetLevelUpFlash(formatPetLevelUpFlashText(r.messages));
+          playSfx("levelUp");
+        });
+      }
+    } else {
+      setToast(`+${r.gained.toLocaleString()} EXP（お試し）`);
+    }
+  }, [josephSynthLastCrystal, triggerPetTenthLevelUpCelebration]);
+
+  const handleJosephSynthMenuSelect = useCallback(
+    (id) => {
+      if (id === "use_crystal") {
+        handleJosephSynthUseCrystal();
+        return;
+      }
+      if (id === "skip_use") {
+        setJosephSynthView("catalog");
+        setJosephSynthLastCrystal(null);
+      }
+    },
+    [handleJosephSynthUseCrystal]
   );
 
   const closePetMasterDialogue = useCallback(
@@ -1967,17 +4007,45 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const precisePet = petUsesPreciseWikiStats(pet.id);
   const petWikiStats = React.useMemo(
-    () => calculatePetStats(pet.id, pet.level),
-    [pet.id, pet.level]
+    () => calculatePetStats(pet.id, petCombatLevel),
+    [pet.id, petCombatLevel]
   );
   const wikiGrowthCaption = React.useMemo(
     () => getPetWikiGrowthCaptionLine(pet.id),
     [pet.id]
   );
   const currentPetData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+  const currentPetDisplay = useMemo(() => {
+    if (pet.id === "mystery_dragon" && pet.rebornPhoenix) {
+      const rebornName = getMysteryDragonDisplayName(
+        true,
+        pet.activeSkillSet === 1 ? 1 : 2
+      );
+      return rebornName
+        ? { ...currentPetData, name: rebornName }
+        : currentPetData;
+    }
+    return currentPetData;
+  }, [currentPetData, pet.id, pet.rebornPhoenix, pet.activeSkillSet]);
   const petMasterLines = React.useMemo(
-    () => buildPetMasterDialogue(currentPetData, pet.level),
-    [currentPetData, pet.level]
+    () => buildPetMasterDialogue(currentPetData, petCombatLevel),
+    [currentPetData, petCombatLevel]
+  );
+
+  const getPetSidePanelPos = useCallback(
+    () => ({
+      x: Math.max(8, window.innerWidth - 186),
+      y: 8,
+    }),
+    []
+  );
+  const {
+    pos: petSidePanelPos,
+    sizeRef: petSidePanelSizeRef,
+    onDragPointerDown: onPetSidePanelDrag,
+  } = useMoeDraggablePos(
+    "life-rpg-moe-pet-side-panel-pos",
+    getPetSidePanelPos
   );
 
   if (!world) {
@@ -2004,6 +4072,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         mini3H
       )
     : null;
+  const mini3Rhoda = is3d
+    ? (() => {
+        const spot = world.rhodaPos ?? moe3dRhodaPosition(mini3HalfW, mini3HalfD);
+        return moe3dWorldToMinimap(
+          spot.x,
+          spot.y,
+          mini3HalfW,
+          mini3HalfD,
+          mini3W,
+          mini3H
+        );
+      })()
+    : null;
   const mini3ViewLen = Math.min(mini3W, mini3H) * 0.14;
   const mini3Yaw = minimap3d.yaw;
   const mini3ViewTip = mini3Player
@@ -2029,6 +4110,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     targetEnemyId != null
       ? enemies.find((e) => e.id === targetEnemyId && e.hp > 0) ?? null
       : null;
+  const petDuelUi = duel
+    ? {
+        phase: duel.phase,
+        duelRef,
+        barKey: "petBar",
+      }
+    : null;
+  const targetDuelUi =
+    duel && targetEnemy && duel.enemyId === targetEnemy.id
+      ? {
+          phase: duel.phase,
+          duelRef,
+          barKey: "enemyBar",
+        }
+      : null;
 
   const trainerExpPct = Math.min(
     100,
@@ -2037,19 +4133,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     )
   );
 
-  const petNextNeed = getMoePetExpToNextLevel(pet.level);
-  const petNextRemaining = getMoePetExpRemainingToNextLevel(
-    pet.level,
-    pet.expIntoLevel
-  );
-  const petTotalExp =
-    pet.totalExp != null
-      ? pet.totalExp
-      : getMoePetTotalExpFromLegacyProgress(pet.level, pet.expIntoLevel);
-  const petExpPct =
-    petNextNeed == null
-      ? 100
-      : Math.min(100, Math.floor(((pet.expIntoLevel ?? 0) / petNextNeed) * 100));
+  const petNextRemaining = getMoePetExpRemainingToNextTenth(petTotalExp);
+  const petExpPct = getMoePetExpTenthBarPct(petTotalExp);
 
   const petMasterView = petMasterDialogue?.view ?? "menu";
 
@@ -2058,105 +4143,90 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       className="relative h-dvh w-full overflow-hidden bg-sky-900"
       onContextMenu={is3d ? (e) => e.preventDefault() : undefined}
     >
-      {targetEnemy && <MoeTargetWindow target={targetEnemy} />}
+      <MoeTargetWindow target={targetEnemy} duelUi={targetDuelUi} />
       <MoePetHpWindow
-        emoji={currentPetData.emoji}
-        name={currentPetData.name}
+        emoji={currentPetDisplay.emoji}
+        name={currentPetDisplay.name}
+        levelLabel={petLevelDisplay}
         hp={pet.hp}
         hpMax={pet.hpMax}
+        duelUi={petDuelUi}
       />
       {duel && (
-        <div className="pointer-events-none absolute bottom-6 left-1/2 z-[55] w-[min(92vw,22rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-xl border border-white/25 bg-black/82 px-3 py-2.5 text-white shadow-lg backdrop-blur-md sm:bottom-10">
-          <p className="text-center text-[10px] font-bold text-cyan-200">
-            交戦中
-            {duelEnemy ? ` ${duelEnemy.emoji} ${duelEnemy.name}` : ""}
-          </p>
-          {duelEnemy && (
-            <div className="mt-1.5">
-              <div className="mb-0.5 flex justify-between text-[9px] text-red-100/95">
-                <span>敵HP</span>
-                <span className="font-mono tabular-nums">
-                  {Math.ceil(duelEnemy.hp)}/{duelEnemy.hpMax}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
-                <div
-                  className="h-full rounded-full transition-all duration-150"
-                  style={{
-                    width: `${petResourceBarPct(duelEnemy.hp, duelEnemy.hpMax)}%`,
-                    backgroundColor: enemyHpBarColor(
-                      petResourceBarPct(duelEnemy.hp, duelEnemy.hpMax)
-                    ),
-                  }}
-                />
-              </div>
-            </div>
-          )}
-          {duel.phase === "approach" && (
-            <p className="mt-1 text-center text-[10px] text-white/85">
-              ペットが敵の正面へ移動中…
-            </p>
-          )}
-          {duel.phase === "simultaneous_charge" && (
-            <div className="mt-2 space-y-2">
-              <div>
-                <div className="mb-0.5 flex justify-between text-[9px] text-amber-100/95">
-                  <span>ペット（アタック）</span>
-                  <span className="font-mono opacity-80">{duel.petChargeSec}s</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-amber-400 to-yellow-400"
-                    style={{ width: `${Math.min(100, duel.petBar * 100)}%` }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="mb-0.5 flex justify-between text-[9px] text-rose-100/95">
-                  <span>敵の攻撃</span>
-                  <span className="font-mono opacity-80">{duel.enemyChargeSec}s</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-rose-500 to-red-500"
-                    style={{ width: `${Math.min(100, duel.enemyBar * 100)}%` }}
-                  />
-                </div>
-              </div>
-              {typeof performance !== "undefined" &&
-                duel.chargeFrozenUntil != null &&
-                performance.now() < duel.chargeFrozenUntil && (
-                  <p className="text-center text-[9px] font-bold text-amber-200/95">
-                    スタン — チャージバー停止中（あと約
-                    {Math.max(
-                      0,
-                      Math.ceil(
-                        (duel.chargeFrozenUntil - performance.now()) / 1000
-                      )
-                    )}
-                    秒）
-                  </p>
-                )}
-              <p className="text-center text-[8px] leading-snug text-white/50">
-                両バーは同時に溜まり、満タンになった側からすぐ攻撃（速い側は敵の1周の間に複数回可）。ペットEXPは各攻撃直後約
-                {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%（Wiki表）
-              </p>
-            </div>
-          )}
-        </div>
+        <MoeDuelTimeBarWindow
+          duelRef={duelRef}
+          phase={duel.phase}
+          petEmoji={currentPetData.emoji}
+          enemyEmoji={duelEnemy?.emoji ?? "👹"}
+          enemyName={duelEnemy?.name ?? ""}
+          petChargeSec={duel.petChargeSec}
+          enemyChargeSec={duel.enemyChargeSec}
+          battleSpeed2x={battleSpeed2x}
+        />
       )}
       {petLevelUpFlash && (
         <div
           role="status"
-          className="pointer-events-none absolute left-1/2 top-24 z-[60] max-w-[min(96vw,28rem)] -translate-x-1/2 rounded-2xl border-4 border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 px-6 py-4 text-center text-lg font-black leading-snug text-amber-950 shadow-[0_0_40px_rgba(251,191,36,0.85)]"
+          className="pointer-events-none absolute left-1/2 top-24 z-[60] max-w-[min(96vw,22rem)] -translate-x-1/2 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 px-4 py-3 text-center text-sm font-bold leading-snug text-amber-950 shadow-[0_0_40px_rgba(251,191,36,0.85)] whitespace-pre-wrap break-words"
         >
           🎉 {petLevelUpFlash}
+        </div>
+      )}
+      {expConsumableLevelUpFlow && (
+        <div
+          className="fixed inset-0 z-[62] flex cursor-pointer items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+          onClick={advanceExpConsumableLevelUp}
+          role="presentation"
+        >
+          <div
+            role="status"
+            className={`max-w-[min(96vw,22rem)] rounded-2xl border-2 px-5 py-4 text-center shadow-[0_0_40px_rgba(120,80,200,0.55)] ${
+              expConsumableLevelUpFlow.tone === "down"
+                ? "border-violet-200 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700"
+                : "border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 shadow-[0_0_40px_rgba(251,191,36,0.85)]"
+            }`}
+          >
+            <p
+              className={`text-sm font-bold leading-snug whitespace-pre-wrap break-words ${
+                expConsumableLevelUpFlow.tone === "down"
+                  ? "text-violet-50"
+                  : "text-amber-950"
+              }`}
+            >
+              {expConsumableLevelUpFlow.tone === "down" ? "💫" : "🎉"}{" "}
+              {expConsumableLevelUpFlow.pages[expConsumableLevelUpFlow.index]}
+            </p>
+            {expConsumableLevelUpFlow.pages.length > 1 ? (
+              <p
+                className={`mt-2 text-[10px] font-bold tabular-nums ${
+                  expConsumableLevelUpFlow.tone === "down"
+                    ? "text-violet-100/80"
+                    : "text-amber-900/75"
+                }`}
+              >
+                {expConsumableLevelUpFlow.index + 1} /{" "}
+                {expConsumableLevelUpFlow.pages.length}
+              </p>
+            ) : null}
+            <p
+              className={`mt-2 text-[10px] font-bold ${
+                expConsumableLevelUpFlow.tone === "down"
+                  ? "text-violet-100/85"
+                  : "text-amber-900/80"
+              }`}
+            >
+              {expConsumableLevelUpFlow.index <
+              expConsumableLevelUpFlow.pages.length - 1
+                ? "クリック / Enter で次へ"
+                : "クリック / Enter で閉じる"}
+            </p>
+          </div>
         </div>
       )}
       {skillToast && (
         <div
           className={`pointer-events-none absolute left-1/2 z-[51] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border-2 border-amber-300/90 bg-gradient-to-br from-amber-600 to-orange-700 px-5 py-2.5 text-center text-sm font-bold text-amber-50 shadow-xl whitespace-pre-wrap break-words ${
-            petLevelUpFlash ? "top-[11rem]" : "top-20"
+            petLevelUpFlash || expConsumableLevelUpFlow ? "top-[11rem]" : "top-20"
           }`}
         >
           {skillToast}
@@ -2165,7 +4235,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       {toast && (
         <div
           className={`absolute left-1/2 z-50 max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border-2 border-blue-300 bg-blue-600 px-6 py-3 text-center text-base font-bold text-white shadow-xl whitespace-pre-wrap break-words ${
-            petLevelUpFlash ? "top-[11rem]" : skillToast ? "top-32" : "top-20"
+            petLevelUpFlash || expConsumableLevelUpFlow
+              ? "top-[11rem]"
+              : skillToast
+                ? "top-32"
+                : "top-20"
           }`}
         >
           {toast}
@@ -2185,21 +4259,48 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             }}
           >
             <span className="moe-battle-popup-rise block text-center text-[18px] font-black tabular-nums tracking-tight text-yellow-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
-              +{pop.value}
+              {pop.value >= 0 ? "+" : ""}
+              {pop.value}
             </span>
           </div>
         ))}
 
-      {/* Pet Status UI + スキル（右列）— z は BGM(42) より上で下部が隠れないように */}
-      <div className="absolute right-2 top-2 z-[46] flex flex-row gap-1.5 items-start">
+      {/* Pet Status UI — ドラッグで移動 */}
+      {petSidePanelPos && (
+      <div
+        ref={(el) => {
+          if (el) {
+            petSidePanelSizeRef.current = {
+              w: el.offsetWidth,
+              h: el.offsetHeight,
+            };
+          }
+        }}
+        className="fixed z-[46]"
+        style={{ left: petSidePanelPos.x, top: petSidePanelPos.y }}
+      >
         <div
           className="max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-white/20 bg-black/75 p-2 text-white backdrop-blur-md [scrollbar-width:thin]"
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div
+            className="mb-1.5 flex cursor-grab items-center gap-1.5 touch-none active:cursor-grabbing"
+            onPointerDown={onPetSidePanelDrag}
+            title="ドラッグで移動"
+          >
             <span className="text-xl leading-none">{currentPetData.emoji}</span>
             <div className="min-w-0">
-              <p className="truncate text-[11px] font-bold leading-tight">{currentPetData.name}</p>
-              <p className="text-[9px] text-gray-400">Lv.{pet.level}</p>
+              <p className="truncate text-[11px] font-bold leading-tight">{currentPetDisplay.name}</p>
+              <p
+                key={`pet-panel-lv-${pet.totalExp ?? 0}-${petLevelDisplay}`}
+                className="text-[9px] tabular-nums text-gray-400"
+                title={
+                  petCombatLevel >= MOE_PET_MAX_LEVEL
+                    ? "最大レベル"
+                    : `次の0.1まで ${petNextRemaining ?? "—"} EXP`
+                }
+              >
+                Lv.{petLevelDisplay}
+              </p>
             </div>
           </div>
           <div className="space-y-0.5">
@@ -2231,13 +4332,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 style={{ width: `${petResourceBarPct(pet.mp, pet.mpMax)}%` }}
               />
             </div>
-            <button
-              type="button"
-              onClick={handleHeal}
-              className="mt-1.5 w-full rounded bg-pink-600 py-1 text-[9px] font-bold transition hover:bg-pink-500 active:scale-95"
-            >
-              ヒーリング (回復)
-            </button>
             <p className="mt-1.5 text-center text-[7px] font-bold text-cyan-200/90">
               ペット命令
             </p>
@@ -2305,8 +4399,128 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 >
                   ベロー
                 </button>
+                </div>
+                </div>
+                {pet.id === "mystery_dragon" && pet.rebornPhoenix ? (
+                  <div className="mt-1 grid grid-cols-2 gap-0.5 rounded-md border border-fuchsia-500/35 bg-zinc-950/60 p-1">
+                    <button
+                      type="button"
+                      onClick={() => applyMysterySkillSet(1)}
+                      className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                        pet.activeSkillSet !== 2
+                          ? "border-indigo-300/75 bg-indigo-900/90 text-indigo-50 ring-1 ring-indigo-200/40"
+                          : "border-indigo-700/50 bg-indigo-950/80 text-indigo-100 hover:bg-indigo-900/85"
+                      }`}
+                      title="技① — ミステリー ドラゴン系"
+                    >
+                      技①
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyMysterySkillSet(2)}
+                      className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
+                        pet.activeSkillSet === 2
+                          ? "border-fuchsia-300/75 bg-fuchsia-900/90 text-fuchsia-50 ring-1 ring-fuchsia-200/40"
+                          : "border-fuchsia-700/50 bg-fuchsia-950/80 text-fuchsia-100 hover:bg-fuchsia-900/85"
+                      }`}
+                      title="技② — 健康のフェニックス系"
+                    >
+                      技②
+                    </button>
+                  </div>
+                ) : null}
+            <div className="mt-1 flex items-stretch justify-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => handleHeal(HEAL_AMOUNT_LIGHT, "ライトヒール")}
+                className="flex h-6 min-w-0 flex-1 items-center justify-center rounded bg-pink-700/90 px-0.5 text-[6px] font-bold leading-tight transition hover:bg-pink-600 active:scale-95"
+                title={`+${HEAL_AMOUNT_LIGHT} HP`}
+              >
+                ライト
+              </button>
+              <button
+                type="button"
+                disabled={healCdSec.healing > 0}
+                onClick={() =>
+                  handleHeal(
+                    HEAL_AMOUNT_HEALING,
+                    "ヒーリング",
+                    "healing",
+                    HEAL_COOLDOWN_HEALING_SEC
+                  )
+                }
+                className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
+                  healCdSec.healing > 0
+                    ? "cursor-not-allowed bg-pink-600/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
+                    : "bg-pink-600 text-white hover:bg-pink-500"
+                }`}
+                title={
+                  healCdSec.healing > 0
+                    ? `待機中（あと${healCdSec.healing}秒）`
+                    : `+${HEAL_AMOUNT_HEALING} HP`
+                }
+              >
+                {healCdSec.healing > 0 ? (
+                  <span className="relative flex h-full w-full items-center justify-center">
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
+                      ヒール
+                  </span>
+                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
+                      {healCdSec.healing}
+                  </span>
+                  </span>
+                ) : (
+                  "ヒール"
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={healCdSec.healAll > 0}
+                onClick={() =>
+                  handleHeal(
+                    HEAL_AMOUNT_HEAL_ALL,
+                    "ヒーリングオール",
+                    "healAll",
+                    HEAL_COOLDOWN_HEAL_ALL_SEC
+                  )
+                }
+                className={`flex h-6 min-w-0 flex-[0.85] items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
+                  healCdSec.healAll > 0
+                    ? "cursor-not-allowed bg-pink-500/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
+                    : "bg-pink-500 text-white hover:bg-pink-400"
+                }`}
+                title={
+                  healCdSec.healAll > 0
+                    ? `待機中（あと${healCdSec.healAll}秒）`
+                    : `ヒーリングオール +${HEAL_AMOUNT_HEAL_ALL} HP`
+                }
+              >
+                {healCdSec.healAll > 0 ? (
+                  <span className="relative flex h-full w-full items-center justify-center">
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
+                      オール
+                </span>
+                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
+                      {healCdSec.healAll}
+                    </span>
+                  </span>
+                ) : (
+                  "オール"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenToggle}
+                className={`flex h-6 min-w-[2rem] shrink-0 flex-[0.72] items-center justify-center rounded border px-0.5 text-[6px] font-bold leading-none whitespace-nowrap transition active:scale-95 ${
+                  regenActive
+                    ? "border-teal-300/70 bg-teal-800/95 text-teal-50 ring-1 ring-teal-300/45"
+                    : "border-teal-600/45 bg-teal-950/85 text-teal-100 hover:bg-teal-900/90"
+                }`}
+                title={`2秒ごと HP+${PET_REGEN_HP} MP+${PET_REGEN_MP}（トグル）`}
+              >
+                リジェネ
+              </button>
               </div>
-            </div>
             <button
               type="button"
               onClick={() => setShowPetStatusOverlay((v) => !v)}
@@ -2318,29 +4532,50 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               <div className="mt-1 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-emerald-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(14rem,38vh)]">
                 <div className="box-border w-full max-w-full px-1 py-2 text-white">
                   <div className="space-y-1.5 text-[10px]">
-                    <div ref={petExpUiAnchorRef} className="relative">
-                      <div className="flex w-full items-center justify-between gap-1 text-amber-100">
-                        <span className="shrink-0 text-[9px]">ペットEXP</span>
-                        <span className="min-w-0 shrink text-right font-mono text-[8px] tabular-nums leading-none text-amber-200/90 whitespace-nowrap">
-                          Next{" "}
-                          {pet.level >= MOE_PET_MAX_LEVEL ? "MAX" : petNextRemaining ?? "—"} / Total{" "}
-                          {petTotalExp}
-                        </span>
-                      </div>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full border border-amber-800/40 bg-amber-950/80">
-                        <div
-                          className="h-full bg-gradient-to-r from-amber-400 to-yellow-500"
-                          style={{ width: `${petExpPct}%` }}
-                        />
-                      </div>
-                      <p className="mt-0.5 text-[7px] leading-snug text-amber-200/55">
-                        Wiki 累積表ベースでLv判定
+            <div
+              ref={petExpUiAnchorRef}
+                      className="relative"
+                      key={`pet-exp-ui-${petTotalExp}-${petLevelDisplay}`}
+                    >
+                      <p className="text-[9px] font-bold tabular-nums text-amber-100">
+                        Lv.{petLevelDisplay}
                       </p>
+                      <p className="mt-0.5 font-mono text-[9px] tabular-nums leading-snug text-white">
+                        {petCombatLevel >= MOE_PET_MAX_LEVEL ? (
+                          <>
+                            次回EXP MAX
+                            <br />
+                            合計EXP {petTotalExp.toLocaleString()}
+                          </>
+                        ) : (
+                          <>
+                            次回EXP {petNextRemaining ?? "—"}
+                            <br />
+                            合計EXP {petTotalExp.toLocaleString()}
+                          </>
+                        )}
+                      </p>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full border border-white/35 bg-white/10">
+                        <div
+                          className="h-full bg-gradient-to-r from-white to-white/75 transition-[width] duration-150"
+                  style={{ width: `${petExpPct}%` }}
+                />
+              </div>
+                      <p className="mt-0.5 text-[7px] leading-snug text-white/70">
+                        MOE同様 0.1刻み（Wiki累積表÷10）
+            </p>
+            <button
+              type="button"
+                        onClick={previewPetTenthLevelUpEffect}
+                        className="mt-1 w-full rounded border border-cyan-500/45 bg-cyan-950/70 py-0.5 text-[8px] font-bold text-cyan-100 transition hover:bg-cyan-900/80 active:scale-[0.98]"
+            >
+                        0.1 up 演出プレビュー
+            </button>
                       <p className="text-[8px] text-amber-200/70 leading-snug">
                         自分の攻撃・敵攻撃の直後それぞれ約
                         {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}％で取得。敵が強いほど多い
-                      </p>
-                    </div>
+            </p>
+          </div>
                     {precisePet && petWikiStats && (
                       <div className="space-y-0.5 border-t border-white/15 pt-1.5 text-[9px] leading-tight">
                         {[
@@ -2361,50 +4596,52 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                             <span className="min-w-0 shrink text-right text-emerald-100/90">
                               {rightLabel}{" "}
                               <span className="font-mono tabular-nums">{rightVal}</span>
-                            </span>
-                          </div>
+              </span>
+            </div>
                         ))}
                         {wikiGrowthCaption && (
                           <p className="pt-0.5 text-[7px] leading-none tracking-tight text-cyan-200/85 whitespace-nowrap">
                             {wikiGrowthCaption}
                           </p>
                         )}
-                      </div>
+          </div>
                     )}
                   </div>
                 </div>
               </div>
             )}
-            <div className="mt-1.5 border-t border-white/15 pt-1.5 pb-0.5">
-              <p className="mb-0.5 text-center text-[8px] font-bold text-cyan-200/90">ペット変更</p>
+          <div className="mt-1.5 border-t border-white/15 pt-1.5 pb-0.5">
+            <p className="mb-0.5 text-center text-[8px] font-bold text-cyan-200/90">ペット変更</p>
               <div className="flex gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => cyclePet(-1)}
+              <button
+                type="button"
+                onClick={() => cyclePet(-1)}
                   className="flex-1 rounded bg-cyan-900/90 py-0.5 text-[7px] font-bold leading-tight text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
-                >
-                  ◀ 前
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cyclePet(1)}
-                  className="flex-1 rounded bg-cyan-900/90 py-0.5 text-[7px] font-bold leading-tight text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
-                >
-                  次 ▶
-                </button>
-              </div>
-              <select
-                value={pet.id}
-                onChange={(e) => applyPetId(e.target.value)}
-                className="mt-1 w-full rounded border border-white/25 bg-zinc-900/95 py-0.5 pl-1 pr-5 text-[9px] text-white outline-none focus:ring-1 focus:ring-cyan-500"
               >
-                {MOE_PET_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {MOE_PET_DATA[id].emoji} {MOE_PET_DATA[id].name}
-                  </option>
-                ))}
-              </select>
+                ◀ 前
+              </button>
+              <button
+                type="button"
+                onClick={() => cyclePet(1)}
+                  className="flex-1 rounded bg-cyan-900/90 py-0.5 text-[7px] font-bold leading-tight text-cyan-100 ring-1 ring-cyan-600/50 transition hover:bg-cyan-800/90 active:scale-95"
+              >
+                次 ▶
+              </button>
             </div>
+            <select
+              value={pet.id}
+              onChange={(e) => applyPetId(e.target.value)}
+                className="mt-1 w-full rounded border border-white/25 bg-zinc-900/95 py-0.5 pl-1 pr-5 text-[9px] text-white outline-none focus:ring-1 focus:ring-cyan-500"
+            >
+                {MOE_PET_IDS.filter((id) => !josephCrystallizedPetIds.includes(id)).map(
+                  (id) => (
+                <option key={id} value={id}>
+                  {MOE_PET_DATA[id].emoji} {MOE_PET_DATA[id].name}
+                </option>
+                  )
+                )}
+            </select>
+          </div>
             <div className="mt-1.5 space-y-1 border-t border-white/15 pt-1.5">
               <button
                 type="button"
@@ -2422,7 +4659,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   <span className="min-w-0 shrink text-right font-mono text-[9px] tabular-nums">
                     {trainerStatus.exp}/{trainerStatus.nextExp}
                   </span>
-                </div>
+        </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full border border-pink-800/50 bg-pink-950/80">
                   <div
                     className="h-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500 transition-all duration-500"
@@ -2436,55 +4673,295 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             </div>
           </div>
         </div>
-
-        <div className="flex max-h-[min(72vh,480px)] w-[4.65rem] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-lg border border-amber-500/35 bg-black/70 p-1 pr-0.5 text-white backdrop-blur-md [scrollbar-width:thin]">
-          <p className="sticky top-0 z-10 bg-black/85 pb-0.5 text-center text-[8px] font-bold text-amber-200/95">
-            スキル
-          </p>
-          {SKILL_SLOT_LABELS.map((label, i) => {
-            const skill = combatSkillSlots[i];
-            const msg = skillToastMessage(pet.id, i, skill);
-            const duelSkillSeq =
-              duel?.phase === "simultaneous_charge" && duel.enemyId != null
-                ? resolveMoeDuelSkillSequence(pet.id, skill)
-                : null;
-            return (
-              <button
-                key={label}
-                type="button"
-                disabled={!skill}
-                title={skill?.name ?? ""}
-                onClick={() => {
-                  if (!skill || !msg) return;
-                  setSkillToast(msg);
-                  if (duelSkillSeq) {
-                    scheduleMoeDuelSkillHits(duel.enemyId, duelSkillSeq);
-                  }
-                }}
-                className="shrink-0 rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-700/90 to-orange-900/90 py-1 text-[8px] font-bold leading-tight text-amber-50 shadow-sm transition hover:from-amber-600/95 hover:to-orange-800/95 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:from-amber-700/90 disabled:hover:to-orange-900/90"
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
       </div>
+      )}
+
+      {/* スキル 1〜7 — 縦パネル（⚡×2 付き） */}
+      <MoeVerticalSkillPanel
+        storageKey="life-rpg-moe-skill-panel-pos"
+        title="ペット"
+        variant="amber"
+        topAction={{
+          label: battleSpeed2x ? "⚡×2 ON" : "⚡×2",
+          active: battleSpeed2x,
+          title: "交戦中：チャージ・スタン・攻撃アニメを2倍速",
+          onClick: () => setBattleSpeed2x((v) => !v),
+        }}
+        slots={skillPanelLabels.map((label, i) => {
+          const skill = combatSkillSlots[i];
+          const locked =
+            petSkillMode === MOE_PET_SKILL_MODE_LEARNED &&
+            skill &&
+            !isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode);
+          return {
+            label,
+            disabled: !skill || locked,
+            title: skill?.name ?? "",
+            onClick: () => activateCombatSkillSlot(i, skill),
+          };
+        })}
+      />
+
+      {is3d && (
+        <MoeVerticalSkillPanel
+          storageKey="life-rpg-moe-player-skill-panel-pos"
+          defaultPos={() => ({
+            x: Math.max(8, window.innerWidth - 166),
+            y: 8,
+          })}
+          title="プレイヤースキル"
+          variant="emerald"
+          reorderable
+          onSwapSlots={swapPlayerSkillSlots}
+          slots={playerVerticalSkillSlots}
+        />
+      )}
+
+      <MoeSkillIconBar
+        slots={skillIconSlots}
+        onActivate={activateCombatSkillSlot}
+        isSkillUsable={(skill) =>
+          isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode)
+        }
+      />
+
+      {is3d && (
+        <MoePlayerSkillIconBar
+          slots={playerIconBarSlots}
+          onSwapSlots={swapPlayerSkillSlots}
+        />
+      )}
+
+      <MoeItemBox onToast={setToast} onUse={handleItemBoxUse} />
+
+      <MoeNpcDialogue
+        open={dragonFormFlow}
+        mode="menu"
+        menuPrompt={
+          "ミステリー ドラゴンの姿を変えますか？\n（ペットをダブルクリック · 技①/技②も切り替わります）"
+        }
+        menuActions={[
+          { id: "form_1", label: "ミステリー ドラゴンⅠへ変化" },
+          {
+            id: "form_2",
+            label: "ミステリー ドラゴンⅡ（フェニックス）へ変化",
+          },
+          { id: "cancel_form", label: "やめる" },
+        ]}
+        onMenuSelect={(id) => {
+          if (id === "form_1") applyMysterySkillSet(1);
+          else if (id === "form_2") applyMysterySkillSet(2);
+          setDragonFormFlow(false);
+        }}
+        onClose={() => setDragonFormFlow(false)}
+        petData={currentPetDisplay}
+        npc={MOE_ITEM_USE_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={!!phoenixRebirthFlow}
+        mode="menu"
+        menuPrompt={
+          "フェニックスの羽根を使い\nミステリー ドラゴンを転生させますか？\n\nミステリー ドラゴンⅡ（フェニックスドラゴン）へ変化\n技①（従来）と技②（フェニックス）を常時切替できます"
+        }
+        menuActions={[
+          { id: "yes_rebirth", label: "転生する" },
+          { id: "no_rebirth", label: "やめる" },
+        ]}
+        onMenuSelect={(id) => {
+          if (id === "yes_rebirth") applyPhoenixRebirth();
+          else setPhoenixRebirthFlow(null);
+        }}
+        onClose={() => setPhoenixRebirthFlow(null)}
+        petData={currentPetDisplay}
+        npc={MOE_ITEM_USE_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={powderUseFlow?.view === "pick_pet"}
+        mode="menu"
+        menuPrompt="どのペットに使いますか？"
+        menuActions={powderPetMenuActions}
+        onMenuSelect={handlePowderPetPick}
+        onClose={closePowderUseFlow}
+        petData={currentPetData}
+        npc={MOE_ITEM_USE_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={powderUseFlow?.view === "confirm"}
+        mode="menu"
+        menuPrompt={powderConfirmPrompt}
+        menuActions={[
+          { id: "use_powder", label: "使う" },
+          { id: "back_pick", label: "やめる" },
+        ]}
+        onMenuSelect={handlePowderConfirmMenu}
+        onClose={closePowderUseFlow}
+        petData={currentPetData}
+        npc={MOE_ITEM_USE_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={gustavResetPromptOpen}
+        mode="menu"
+        menuPrompt={
+          "神速のスキルを消しますか？\n\nはい → スキル記録をリセット\n（ギュスターヴの宝＝キューブは再ドロップ可）"
+        }
+        menuActions={[
+          { id: "yes_reset", label: "はい" },
+          { id: "no_fight", label: "いいえ" },
+        ]}
+        onMenuSelect={handleGustavResetMenu}
+        onClose={closeGustavResetPrompt}
+        petData={currentPetData}
+        npc={MOE_GUSTAV_EVENT_NPC}
+      />
 
       <div className="absolute left-3 top-3 z-40 max-w-[min(90vw,22rem)]">
-        {!showFieldGuide ? (
+        {!showSettings ? (
           <button
             type="button"
-            onClick={() => setShowFieldGuide(true)}
-            className="rounded-lg border border-cyan-500/40 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-cyan-200 shadow-md backdrop-blur-sm transition hover:bg-black/75 active:scale-[0.98]"
+            onClick={() => setShowSettings(true)}
+            className="rounded-lg border border-zinc-400/50 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-zinc-100 shadow-md backdrop-blur-sm transition hover:bg-black/75 active:scale-[0.98]"
             aria-expanded={false}
-            aria-controls="moe-field-guide-panel"
+            aria-controls="moe-field-settings-panel"
           >
-            操作ガイド
+            設定
           </button>
         ) : (
           <div
+            id="moe-field-settings-panel"
+            className="rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-xs text-white/90 backdrop-blur-sm"
+          >
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <p className="font-bold text-zinc-200">設定</p>
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="shrink-0 rounded border border-white/20 px-1.5 py-0.5 text-[9px] text-white/70 hover:bg-white/10"
+                aria-label="設定を閉じる"
+              >
+                閉じる
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSettings(false);
+                  setShowFieldGuide(true);
+                }}
+                className="rounded border border-cyan-500/40 bg-cyan-950/50 px-2 py-1.5 text-left text-[11px] font-bold text-cyan-200 transition hover:bg-cyan-900/40 active:scale-[0.98]"
+              >
+                操作ガイド
+              </button>
+              <div className="rounded border border-violet-500/30 bg-violet-950/30 px-2 py-1.5">
+                <p className="text-[10px] font-bold text-violet-100/95">
+                  ペットスキル
+                </p>
+                <p className="mt-0.5 text-[9px] leading-snug text-violet-100/70">
+                  現在: {moePetSkillModeLabel(petSkillMode)}
+                </p>
+                <div className="mt-1.5 grid grid-cols-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPetSkillMode(MOE_PET_SKILL_MODE_ALL);
+                      saveMoePetSkillMode(MOE_PET_SKILL_MODE_ALL);
+                      setToast("ペットスキル: 全部使える");
+                    }}
+                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
+                      petSkillMode === MOE_PET_SKILL_MODE_ALL
+                        ? "border-violet-300/70 bg-violet-800/70 text-violet-50 ring-1 ring-violet-200/35"
+                        : "border-violet-600/35 bg-violet-950/40 text-violet-100 hover:bg-violet-900/35"
+                    }`}
+                  >
+                    全部使える（未習得も表示）
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPetSkillMode(MOE_PET_SKILL_MODE_LEARNED);
+                      saveMoePetSkillMode(MOE_PET_SKILL_MODE_LEARNED);
+                      setToast("ペットスキル: 習得済みのみ");
+                    }}
+                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
+                      petSkillMode === MOE_PET_SKILL_MODE_LEARNED
+                        ? "border-violet-300/70 bg-violet-800/70 text-violet-50 ring-1 ring-violet-200/35"
+                        : "border-violet-600/35 bg-violet-950/40 text-violet-100 hover:bg-violet-900/35"
+                    }`}
+                  >
+                    習得済みのみ（MOE風）
+                  </button>
+                </div>
+              </div>
+              <div className="rounded border border-amber-500/25 bg-amber-950/25 px-2 py-1.5">
+                <p className="text-[10px] font-bold text-amber-100/95">
+                  ペットEXP · 外部保存
+                </p>
+                <p className="mt-1 text-[9px] leading-snug text-amber-100/70">
+                  初回だけ保存フォルダを選びます。2回目以降も毎回新しいJSONファイルを追加保存（上書きしません）
+                </p>
+                {externalSaveFolderLabel ? (
+                  <p className="mt-1 text-[9px] text-amber-200/85">
+                    保存フォルダ: 📁 {externalSaveFolderLabel}
+                  </p>
+                ) : null}
+                {(() => {
+                  const hint = getMoeExternalSaveLocationHint();
+                  if (!hint.fileName) return null;
+                  return (
+                    <p className="mt-0.5 text-[9px] text-amber-200/65">
+                      直近の保存: {hint.fileName}
+                    </p>
+                  );
+                })()}
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={handleExternalSave}
+                    className="rounded border border-amber-500/45 bg-amber-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-amber-200 transition hover:bg-amber-900/35 active:scale-[0.98]"
+                  >
+                    {externalSaveFolderLabel ? "ペットEXPを新規保存" : "保存先を選んで新規保存…"}
+                  </button>
+                  {externalSaveFolderLabel ? (
+                    <button
+                      type="button"
+                      onClick={handleChangeExternalSaveFolder}
+                      className="rounded border border-amber-600/25 bg-transparent px-2 py-1 text-left text-[10px] font-bold text-amber-200/80 underline-offset-2 hover:text-amber-100 hover:underline active:scale-[0.98]"
+                    >
+                      保存フォルダを変更…
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleExternalSaveImportPick}
+                    className="rounded border border-emerald-600/40 bg-emerald-950/35 px-2 py-1.5 text-left text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-900/30 active:scale-[0.98]"
+                  >
+                    外部保存を読み込む…
+                  </button>
+                  <input
+                    ref={externalSaveImportInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleExternalSaveImport(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showFieldGuide && (
+          <div
             id="moe-field-guide-panel"
-            className="rounded-lg border border-white/20 bg-black/55 px-3 py-2 text-xs text-white/90 backdrop-blur-sm"
+            className="mt-2 rounded-lg border border-white/20 bg-black/55 px-3 py-2 text-xs text-white/90 backdrop-blur-sm"
           >
             <div className="mb-1 flex items-start justify-between gap-2">
               <p className="font-bold text-cyan-300">
@@ -2501,8 +4978,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             </div>
             {is3d ? (
               <>
-                <p>WASD＝移動 · Shift＝走る · 南（手前）スタート→北へ行くほど強敵</p>
-                <p>敵クリック＝ターゲット（上部ウィンドウ・ドラッグ可） · 右上で命令 · 左下ミニマップ · Space＝ジャンプ</p>
+                <p>WASD＝移動 · Shift＝走る · 🐉転生＝羽根をミステリードラゴンに使用 · 🔮ローダ＝{MOE_SOUL_MEMORY_RHODA_FIELD.directionHint}</p>
+                <p>★中ボス＝<strong className="text-amber-200">エルビン バイソン</strong>（スタート東の丘） · 🐊<strong className="text-emerald-300">ギュスターヴ Lv80</strong>＝スタートから北（ミニマップ上）へ体7つ分</p>
+                <p className="text-zinc-400">方角は全体マップに合わせてください（<strong className="text-zinc-200">南＝下 · 北＝上</strong> · Sキーで南へ）</p>
+                <p>敵クリック＝ターゲット · 設定→外部保存でペットEXPをバックアップ · Space＝ジャンプ</p>
                 {!map3dReady && (
                   <p className="text-amber-200/90">3Dマップ読み込み中…</p>
                 )}
@@ -2514,7 +4993,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               討伐で訓練士EXP +（敵Lv×5 目安）／ペットは攻撃・敵攻撃の直後それぞれ約
               {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%でEXP（Wiki表）
             </p>
-            <p className="text-pink-200/90">右上で回復・ペット変更・スキル</p>
+            <p className="text-pink-200/90">ペット／スキル／スキルアイコンバー／プレイヤースキルはそれぞれドラッグで移動できます</p>
             {is3d && onBack && (
               <button
                 type="button"
@@ -2540,7 +5019,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         lines={petMasterLines}
         lineIndex={petMasterDialogue?.lineIndex ?? 0}
         message={petMasterDialogue?.message}
-        menuPrompt={`${currentPetData.emoji} ${currentPetData.name}（Lv.${pet.level}）をどうする？`}
+        menuPrompt={`${currentPetData.emoji} ${currentPetDisplay.name}（Lv.${petLevelDisplay}）をどうする？`}
         menuActions={[
           { id: "talk", label: "💬 話を聞く" },
           { id: "lv100", label: "✨ Lv.100 創造儀式（テスト）" },
@@ -2563,50 +5042,471 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         npc={MOE_PET_MASTER_NPC}
       />
 
-      {is3d && nearPetHouse && !petMasterDialogue && (
-        <button
-          type="button"
-          onClick={handlePetMasterTalk}
-          className="absolute bottom-28 left-1/2 z-[54] -translate-x-1/2 rounded-xl border-2 border-amber-500/50 bg-zinc-950/92 px-4 py-2.5 text-sm font-bold text-amber-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
-        >
-          {MOE_PET_MASTER_NPC.emoji} ペットマスターと話す
-        </button>
+      <MoeNpcDialogue
+        open={expVendorOpen && expVendorView === "lines"}
+        mode="lines"
+        lines={MOE_PET_EXP_VENDOR_SECRET_LINES}
+        lineIndex={expVendorLineIndex}
+        onNext={() =>
+          setExpVendorLineIndex((i) =>
+            Math.min(i + 1, MOE_PET_EXP_VENDOR_SECRET_LINES.length - 1)
+          )
+        }
+        onComplete={() => setExpVendorView("catalog")}
+        completeLabel="カタログを見る"
+        onClose={closeExpVendor}
+        petData={currentPetData}
+        npc={MOE_PET_EXP_VENDOR_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={expVendorOpen && expVendorView === "catalog"}
+        mode="catalog"
+        catalogTitle={`${MOE_PET_EXP_VENDOR_NPC.shopLabel}（カタログ）`}
+        catalogNote="効果の実装・購入はこれから。Wiki EXP表ベースの参考リストです。"
+        catalogItems={MOE_PET_EXP_SHOP_CATALOG}
+        catalogSkills={MOE_PET_EXP_SHOP_SKILLS}
+        onClose={closeExpVendor}
+        petData={currentPetData}
+        npc={MOE_PET_EXP_VENDOR_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={rhodaOpen && rhodaView === "lines"}
+        mode="lines"
+        lines={MOE_SOUL_MEMORY_RHODA_LINES}
+        lineIndex={rhodaLineIndex}
+        onNext={() =>
+          setRhodaLineIndex((i) =>
+            Math.min(i + 1, MOE_SOUL_MEMORY_RHODA_LINES.length - 1)
+          )
+        }
+        onComplete={() => setRhodaView("catalog")}
+        completeLabel="アイテムをもらう"
+        onClose={closeRhoda}
+        petData={currentPetData}
+        npc={MOE_SOUL_MEMORY_RHODA_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={rhodaOpen && rhodaView === "catalog"}
+        mode="catalog"
+        catalogTitle={`${MOE_SOUL_MEMORY_RHODA_NPC.shopLabel}`}
+        catalogNote={`${MOE_SOUL_MEMORY_RHODA_NPC.title} · 魂の記憶者ローダ\n経験値の上下を調整する粉とキューブを配布します（無料 · ボックスに空きが必要）`}
+        catalogActions={MOE_SOUL_MEMORY_RHODA_GIVE_ACTIONS}
+        onCatalogAction={handleRhodaCatalogAction}
+        onClose={closeRhoda}
+        petData={currentPetData}
+        npc={MOE_SOUL_MEMORY_RHODA_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "lines"}
+        mode="lines"
+        lines={MOE_JOSEPH_EXP_CRYSTAL_LINES}
+        lineIndex={josephLineIndex}
+        onNext={() =>
+          setJosephLineIndex((i) =>
+            Math.min(i + 1, MOE_JOSEPH_EXP_CRYSTAL_LINES.length - 1)
+          )
+        }
+        onComplete={() => setJosephView("catalog")}
+        completeLabel="答える"
+        onClose={closeJoseph}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "catalog"}
+        mode="catalog"
+        catalogTitle={`${MOE_JOSEPH_NPC.shopLabel}（${MOE_JOSEPH_NPC.villageNote}）`}
+        catalogNote={`時の釜 · Lv100以上のペットを選んで結晶化 · 決定するまで一覧に残る${hasPetDebugSnapshot || josephCrystallizedPetIds.length ? " · お試し中" : ""}\n${formatJosephFullTierProbabilityNote()}`}
+        catalogCheckboxes={[
+          {
+            id: MOE_JOSEPH_TIME_TABLET_OPTION.id,
+            label: MOE_JOSEPH_TIME_TABLET_OPTION.label,
+            detail: MOE_JOSEPH_TIME_TABLET_OPTION.detail,
+            subDetail: MOE_JOSEPH_TIME_TABLET_OPTION.probabilityNote,
+            checked: josephUseTimeTablet,
+          },
+        ]}
+        onCatalogCheckboxChange={(id, checked) => {
+          if (id === MOE_JOSEPH_TIME_TABLET_OPTION.id) setJosephUseTimeTablet(checked);
+        }}
+        catalogActions={[
+          MOE_JOSEPH_CATALOG_ACTIONS[0],
+          {
+            ...MOE_JOSEPH_CATALOG_ACTIONS[1],
+            disabled: !hasPetDebugSnapshot && josephCrystallizedPetIds.length === 0,
+          },
+        ]}
+        onCatalogAction={handleJosephCatalogAction}
+        catalogItems={MOE_JOSEPH_EXP_CRYSTAL_STEPS}
+        catalogSkills={MOE_JOSEPH_EXP_CRYSTAL_TIERS}
+        onClose={closeJoseph}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "pick_sacrifice"}
+        mode="menu"
+        menuPrompt={formatJosephSacrificePickPrompt()}
+        menuActions={josephSacrificeMenuActions}
+        onMenuSelect={handleJosephSacrificeSelect}
+        onClose={() => setJosephView("catalog")}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "ritual_wait"}
+        mode="message"
+        message={MOE_JOSEPH_RITUAL_WAIT_MESSAGE}
+        onComplete={handleJosephRitualWaitNext}
+        completeLabel="次へ"
+        closeLabel="やめる"
+        onClose={cancelJosephRitual}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "ritual_process"}
+        mode="message"
+        message={MOE_JOSEPH_RITUAL_PROCESS_MESSAGE}
+        onComplete={handleJosephRitualProcessNext}
+        completeLabel="次へ"
+        closeLabel="やめる"
+        onClose={cancelJosephRitual}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephOpen && josephView === "result" && !!josephResultMessage}
+        mode="menu"
+        menuPrompt={
+          josephResultMessage
+            ? `${josephResultMessage.text}\n\n……どうする？`
+            : ""
+        }
+        menuActions={[
+          { id: "confirm_sacrifice", label: "決定する（ペットをクリスタル化）" },
+          { id: "retry_crystal", label: "もう一度作る（お試し続行）" },
+        ]}
+        onMenuSelect={handleJosephResultMenuSelect}
+        onClose={() => {
+          setJosephView("catalog");
+          setJosephResultMessage(null);
+          setJosephSacrificePetId(null);
+        }}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephSynthOpen && josephSynthView === "lines"}
+        mode="lines"
+        lines={MOE_JOSEPH_SYNTH_LINES}
+        lineIndex={josephSynthLineIndex}
+        onNext={() =>
+          setJosephSynthLineIndex((i) =>
+            Math.min(i + 1, MOE_JOSEPH_SYNTH_LINES.length - 1)
+          )
+        }
+        onComplete={() => setJosephSynthView("catalog")}
+        completeLabel="答える"
+        onClose={closeJosephSynth}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_SYNTH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephSynthOpen && josephSynthView === "catalog"}
+        mode="catalog"
+        catalogTitle={`${MOE_JOSEPH_SYNTH_NPC.shopLabel} · ${currentPetDisplay.name}`}
+        catalogNote={`連れ歩き Lv.${petLevelDisplay} · 累積 ${petTotalExp.toLocaleString()} EXP${hasPetDebugSnapshot ? " · お試し中" : ""}\nクリスタル量は Lv100〜150想定 · 段階（失敗/成功/大成功/ミラクル）を選んで合成`}
+        catalogLevelOptions={MOE_JOSEPH_TRIAL_PET_LEVELS}
+        catalogSelectedLevel={josephSynthTrialPetLevel}
+        onCatalogLevelChange={setJosephSynthTrialPetLevel}
+        catalogActions={[
+          MOE_JOSEPH_SYNTH_CATALOG_ACTIONS[0],
+          {
+            ...MOE_JOSEPH_SYNTH_CATALOG_ACTIONS[1],
+            disabled: !hasPetDebugSnapshot,
+          },
+        ]}
+        onCatalogAction={handleJosephSynthCatalogAction}
+        onClose={closeJosephSynth}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_SYNTH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={josephSynthOpen && josephSynthView === "pick_tier"}
+        mode="menu"
+        menuPrompt={formatJosephSynthTierPickPrompt(josephSynthTrialPetLevel)}
+        menuActions={josephSynthTierMenuActions}
+        onMenuSelect={handleJosephSynthTierSelect}
+        onClose={() => setJosephSynthView("catalog")}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_SYNTH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={
+          josephSynthOpen &&
+          josephSynthView === "use_confirm" &&
+          !!josephSynthCrystalPreview
+        }
+        mode="menu"
+        menuPrompt={
+          josephSynthCrystalPreview && josephSynthLastCrystal
+            ? `${josephSynthLastCrystal.tierEmoji} ${josephSynthLastCrystal.tierLabel}のクリスタル\n\n${formatJosephCrystalUseConfirmPrompt(
+                currentPetDisplay.name,
+                josephSynthCrystalPreview
+              )}`
+            : ""
+        }
+        menuActions={[
+          { id: "use_crystal", label: "使う（レベルアップを見る）" },
+          { id: "skip_use", label: "使わない" },
+        ]}
+        onMenuSelect={handleJosephSynthMenuSelect}
+        onClose={() => {
+          setJosephSynthView("catalog");
+          setJosephSynthLastCrystal(null);
+        }}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_SYNTH_NPC}
+      />
+
+      <MoeNpcDialogue
+        open={
+          josephSynthOpen &&
+          josephSynthView === "use_done" &&
+          !!josephSynthResultMessage
+        }
+        mode="message"
+        message={josephSynthResultMessage}
+        onComplete={() => {
+          setJosephSynthView("catalog");
+          setJosephSynthResultMessage(null);
+          setJosephSynthLastCrystal(null);
+        }}
+        completeLabel="もう一度試す"
+        closeLabel="終わる"
+        onClose={closeJosephSynth}
+        petData={currentPetData}
+        npc={MOE_JOSEPH_SYNTH_NPC}
+      />
+
+      {is3d && nearPetHouse && !petMasterDialogue && !expVendorOpen && !josephOpen && !josephSynthOpen && (
+        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+          <button
+            type="button"
+            onClick={handlePetMasterTalk}
+            className="rounded-xl border-2 border-amber-500/50 bg-zinc-950/92 px-4 py-2 text-sm font-bold text-amber-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            {MOE_PET_MASTER_NPC.emoji} ペットマスターと話す
+          </button>
+          <button
+            type="button"
+            onClick={handleExpVendorTalk}
+            className="rounded-xl border-2 border-cyan-500/45 bg-zinc-950/92 px-4 py-2 text-sm font-bold text-cyan-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            {MOE_PET_EXP_VENDOR_NPC.emoji} 育成用品店を見る
+          </button>
+          <button
+            type="button"
+            onClick={handleJosephTalk}
+            className="rounded-xl border-2 border-violet-500/45 bg-zinc-950/92 px-4 py-2 text-xs font-bold leading-snug text-violet-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            {MOE_JOSEPH_EXP_CRYSTAL_BUTTON.emoji}{" "}
+            {MOE_JOSEPH_EXP_CRYSTAL_BUTTON.label}
+          </button>
+          <button
+            type="button"
+            onClick={handleJosephSynthTalk}
+            className="rounded-xl border-2 border-fuchsia-500/45 bg-zinc-950/92 px-4 py-2 text-sm font-bold text-fuchsia-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            {MOE_JOSEPH_SYNTH_BUTTON.emoji} {MOE_JOSEPH_SYNTH_BUTTON.label}
+          </button>
+        </div>
+      )}
+
+      {is3d && nearRhoda && !rhodaOpen && (
+        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+          <button
+            type="button"
+            onClick={handleRhodaTalk}
+            className="rounded-xl border-2 border-indigo-400/50 bg-zinc-950/92 px-4 py-2 text-xs font-bold leading-snug text-indigo-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            {MOE_SOUL_MEMORY_RHODA_BUTTON.emoji}{" "}
+            {MOE_SOUL_MEMORY_RHODA_BUTTON.label}
+          </button>
+        </div>
       )}
 
       {is3d ? (
         <>
+        <div className="absolute inset-0 z-0">
         <MoeField3DCanvas
           enemies={enemies}
-          battlePopups={battlePopups.filter((p) => p.space === "world")}
+          treasures={fieldTreasures}
+          battlePopups={battlePopups.filter(
+            (p) => p.space === "world" && p.type === "tenthBanner"
+          )}
+          overlayProjectRef={overlayProjectRef}
           onEnemyClick={(id) => handleEnemySelect(id)}
+          onTreasureClick={handleTreasureClick}
           onPetClick={() => handlePetSelect()}
+          onPetDoubleClick={() => handlePetDoubleClick()}
+          onRhodaClick={handleRhodaShrineClick}
           targetEnemyId={targetEnemyId}
           petFocused={petFocused}
           petLabel={{
-            name: currentPetData.name,
-            level: pet.level,
+            emoji: currentPetDisplay.emoji,
+            name: currentPetDisplay.name,
+            level: petCombatLevel,
             hp: pet.hp,
             hpMax: pet.hpMax,
           }}
+          petId={pet.id}
+          petDragonVisualForm={
+            pet.id === "mystery_dragon" && pet.rebornPhoenix
+              ? pet.activeSkillSet === 2
+                ? 2
+                : 1
+              : 0
+          }
           onMapReady={(bounds) => {
+            if (!bounds?.halfW || !bounds?.halfD) {
+              const { playerAt, petAt } = snapPet3dNearPlayer(
+                MOE_3D_HALF_W,
+                MOE_3D_HALF_D
+              );
+              playerPosRef.current = playerAt;
+              setPlayer(playerAt);
+              setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
+              map3dReadyRef.current = true;
+              setMap3dReady(true);
+              return;
+            }
+            const start = moe3dPlayerStartPosition(bounds.halfW, bounds.halfD);
+            const playerAt = moe3dClampToPlayBounds(
+              start.x,
+              start.y,
+              bounds,
+              1.5
+            );
+            playerPosRef.current = playerAt;
+            setPlayer(playerAt);
+            setMinimap3d({
+              x: playerAt.x,
+              y: playerAt.y,
+              yaw: cameraYawRef.current,
+            });
+            const { petAt } = snapPet3dNearPlayer(
+              bounds.halfW,
+              bounds.halfD,
+              playerAt
+            );
+            setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
+            map3dReadyRef.current = true;
             setMap3dReady(true);
-            if (!bounds?.halfW || !bounds?.halfD) return;
             setWorld((w) =>
               w?.mode3d
                 ? {
                     ...w,
                     halfW: bounds.halfW,
                     halfD: bounds.halfD,
+                    minX: bounds.minX,
+                    maxX: bounds.maxX,
+                    minZ: bounds.minZ,
+                    maxZ: bounds.maxZ,
                     mw: bounds.halfW * 2,
                     mh: bounds.halfD * 2,
                     midBossPos: bounds.midBossPos ?? w.midBossPos,
                     superBossPos: bounds.superBossPos ?? w.superBossPos,
+                    mountainBisonPos:
+                      bounds.mountainBisonPos ?? w.mountainBisonPos,
+                    roughBisonPos: bounds.roughBisonPos ?? w.roughBisonPos,
+                    gustavJuniorPos:
+                      bounds.gustavJuniorPos ?? w.gustavJuniorPos,
+                    rhodaPos: bounds.rhodaPos ?? w.rhodaPos,
                   }
                 : w
             );
             setEnemies((prev) => {
               const zoneCount = MOE_3D_ENEMY_ZONES.length;
               return prev.map((en) => {
+                if (en.fieldGustav) {
+                  const base =
+                    MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
+                  const pos =
+                    bounds.gustavJuniorPos ??
+                    moe3dGustavJuniorSpawnPosition(
+                      bounds.halfW,
+                      bounds.halfD
+                    );
+                  const scaled = moe3dEnemyStatsForZoneLevel(
+                    base,
+                    base.level
+                  );
+                  const statScale =
+                    base.level > 0 ? scaled.level / base.level : 1;
+                  return {
+                    ...en,
+                    x: pos.x,
+                    y: pos.y,
+                    level: scaled.level,
+                    hpMax: scaled.hpMax,
+                    petDamage: scaled.petDamage,
+                    petDamageStrong: base.petDamageStrong
+                      ? Math.max(
+                          1,
+                          Math.round(base.petDamageStrong * statScale)
+                        )
+                      : en.petDamageStrong,
+                    wiki: scaled.wiki,
+                    zoneLevel: base.level,
+                    hp: en.hp <= 0 ? en.hp : Math.min(en.hp, scaled.hpMax),
+                  };
+                }
+                if (en.fieldBison) {
+                  const base =
+                    MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
+                  const pos =
+                    en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
+                      ? bounds.mountainBisonPos ??
+                        moe3dMountainBisonSpawnPosition(
+                          bounds.halfW,
+                          bounds.halfD
+                        )
+                      : bounds.roughBisonPos ??
+                        moe3dRoughBisonSpawnPosition(
+                          bounds.halfW,
+                          bounds.halfD
+                        );
+                  const scaled = moe3dEnemyStatsForZoneLevel(
+                    base,
+                    base.level
+                  );
+                  return {
+                    ...en,
+                    x: pos.x,
+                    y: pos.y,
+                    level: scaled.level,
+                    hpMax: scaled.hpMax,
+                    petDamage: scaled.petDamage,
+                    wiki: scaled.wiki,
+                    zoneLevel: base.level,
+                    hp: en.hp <= 0 ? en.hp : Math.min(en.hp, scaled.hpMax),
+                  };
+                }
                 if (en.midBoss || en.superBoss) {
                   const base =
                     MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
@@ -2685,6 +5585,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerSprintRef={playerSprintRef}
           petRunAnimRef={petRunAnimRef}
           petPosRef={petPosRef}
+          petSpawnEpochRef={petSpawnEpochRef}
           petCommandRef={petCommandRef}
           petHoldYawRef={petHoldYawRef}
           duelRef={duelRef}
@@ -2692,7 +5593,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           petAttackMsRef={petAttackMsRef}
           enemyStrikeUntilRef={enemyStrikeUntilRef}
           enemyAttackMsRef={enemyAttackMsRef}
+          battleSpeedMultRef={battleSpeedMultRef}
+          enemyStrikeVariantRef={enemyStrikeVariantRef}
+          moe3dCombatExtentsRef={moe3dCombatExtentsRef}
         />
+        <MoeField3DBattleOverlay
+          battlePopups={battlePopups.filter((p) => p.space === "world")}
+          worldHealPopupsRef={worldHealPopupsRef}
+          overlayProjectRef={overlayProjectRef}
+          enemies={enemies}
+        />
+        <MoeField3DTreasureOverlay
+          treasures={fieldTreasures}
+          overlayProjectRef={overlayProjectRef}
+          onTreasureLootClick={handleTreasureLootClick}
+          onTreasureClose={handleTreasureClose}
+        />
+        </div>
 
         {world.mode3d && mini3Player && (
           <div className="absolute bottom-6 left-3 z-[45] w-[9.75rem] rounded-lg border border-white/25 bg-black/78 p-1.5 text-white shadow-lg backdrop-blur-md">
@@ -2733,17 +5650,83 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     mini3W,
                     mini3H
                   );
+                  const isMid = en.midBoss;
+                  const isSuper = en.superBoss;
+                  const isGustav = en.fieldGustav;
+                  const r = isSuper
+                    ? Math.max(8, mini3W * 0.032)
+                    : isMid
+                      ? Math.max(7, mini3W * 0.028)
+                      : isGustav
+                        ? Math.max(6, mini3W * 0.024)
+                        : Math.max(4, mini3W * 0.018);
+                  const fill = isSuper
+                    ? "#a78bfa"
+                    : isMid
+                      ? "#fbbf24"
+                      : isGustav
+                        ? "#22c55e"
+                        : "#ef4444";
                   return (
-                    <circle
-                      key={`mini3-en-${en.id}`}
-                      cx={p.x}
-                      cy={p.y}
-                      r={Math.max(4, mini3W * 0.018)}
-                      fill="#ef4444"
-                      opacity={0.9}
-                    />
+                    <g key={`mini3-en-${en.id}`}>
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={r}
+                        fill={fill}
+                        opacity={0.95}
+                        stroke={isMid || isSuper ? "#fff" : "none"}
+                        strokeWidth={isMid || isSuper ? 1.5 : 0}
+                      />
+                      {isMid && (
+                        <text
+                          x={p.x}
+                          y={p.y - r - 2}
+                          textAnchor="middle"
+                          fill="#fde68a"
+                          fontSize={Math.max(7, mini3W * 0.07)}
+                          fontWeight="bold"
+                        >
+                          ★
+                        </text>
+                      )}
+                      {isGustav && (
+                        <text
+                          x={p.x}
+                          y={p.y - r - 2}
+                          textAnchor="middle"
+                          fill="#bbf7d0"
+                          fontSize={Math.max(7, mini3W * 0.07)}
+                          fontWeight="bold"
+                        >
+                          🐊
+                        </text>
+                      )}
+                    </g>
                   );
                 })}
+              {mini3Rhoda && (
+                <g aria-label={MOE_SOUL_MEMORY_RHODA_FIELD.spotLabel}>
+                  <circle
+                    cx={mini3Rhoda.x}
+                    cy={mini3Rhoda.y}
+                    r={Math.max(4, mini3W * 0.016)}
+                    fill="#6366f1"
+                    opacity={0.9}
+                    stroke="#c4b5fd"
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={mini3Rhoda.x}
+                    y={mini3Rhoda.y + 1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={Math.max(6, mini3W * 0.055)}
+                  >
+                    🔮
+                  </text>
+                </g>
+              )}
               {mini3ViewTip && mini3ViewLeft && mini3ViewRight && (
                 <polygon
                   points={`${mini3ViewTip.x},${mini3ViewTip.y} ${mini3ViewLeft.x},${mini3ViewLeft.y} ${mini3ViewRight.x},${mini3ViewRight.y}`}
@@ -2771,7 +5754,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               />
             </svg>
             <p className="mt-1 text-center text-[7px] text-white/55">
-              黄＝視界 · 紫＝自分 · 赤＝敵 · 南↓北↑
+              黄＝視界 · 紫＝自分 · 🔮＝ローダ（南） · 赤＝敵 · 南↓北↑ · S＝南
             </p>
           </div>
         )}
@@ -2919,6 +5902,136 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     </span>
                   )}
                 </button>
+                <button
+                  type="button"
+                  onClick={handleExpVendorTalk}
+                  className={`absolute z-[8] flex flex-col items-center rounded-lg transition active:scale-95 ${
+                    nearHouse
+                      ? "ring-2 ring-cyan-400/70 ring-offset-1 ring-offset-sky-900"
+                      : ""
+                  }`}
+                  style={{
+                    left: house.npcX + 34,
+                    top: house.npcY - 26,
+                    width: 44,
+                  }}
+                  title={MOE_PET_EXP_VENDOR_NPC.name}
+                >
+                  <span className="text-2xl drop-shadow-lg">
+                    {MOE_PET_EXP_VENDOR_NPC.emoji}
+                  </span>
+                  {nearHouse && (
+                    <span className="mt-0.5 rounded bg-cyan-950/90 px-1 py-0.5 text-[7px] font-bold text-cyan-100">
+                      店
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleJosephTalk}
+                  className={`absolute z-[8] flex flex-col items-center rounded-lg transition active:scale-95 ${
+                    nearHouse
+                      ? "ring-2 ring-violet-400/70 ring-offset-1 ring-offset-sky-900"
+                      : ""
+                  }`}
+                  style={{
+                    left: house.npcX - 34,
+                    top: house.npcY - 26,
+                    width: 44,
+                  }}
+                  title={MOE_JOSEPH_EXP_CRYSTAL_BUTTON.label}
+                >
+                  <span className="text-2xl drop-shadow-lg">
+                    {MOE_JOSEPH_EXP_CRYSTAL_BUTTON.emoji}
+                  </span>
+                  {nearHouse && (
+                    <span className="mt-0.5 rounded bg-violet-950/90 px-1 py-0.5 text-[7px] font-bold text-violet-100">
+                      結晶
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleJosephSynthTalk}
+                  className={`absolute z-[8] flex flex-col items-center rounded-lg transition active:scale-95 ${
+                    nearHouse
+                      ? "ring-2 ring-fuchsia-400/70 ring-offset-1 ring-offset-sky-900"
+                      : ""
+                  }`}
+                  style={{
+                    left: house.npcX - 34,
+                    top: house.npcY + 18,
+                    width: 44,
+                  }}
+                  title={MOE_JOSEPH_SYNTH_NPC.shopLabel}
+                >
+                  <span className="text-2xl drop-shadow-lg">
+                    {MOE_JOSEPH_SYNTH_BUTTON.emoji}
+                  </span>
+                  {nearHouse && (
+                    <span className="mt-0.5 rounded bg-fuchsia-950/90 px-1 py-0.5 text-[7px] font-bold text-fuchsia-100">
+                      合成
+                    </span>
+                  )}
+                </button>
+              </>
+            );
+          })()}
+
+        {world.rowLayout?.length > 0 &&
+          (() => {
+            const rhodaSpot = moe2dRhodaLayout(world.rowLayout, world.mw);
+            const nearRhodaSpot = moe2dIsNearRhoda(
+              player.x,
+              player.y,
+              world.rowLayout,
+              world.mw
+            );
+            return (
+              <>
+                <div
+                  className="pointer-events-none absolute z-[6] rounded-xl border-2 border-indigo-500/45 bg-gradient-to-b from-indigo-300/40 to-indigo-950/35 shadow-md"
+                  style={{
+                    left: rhodaSpot.x,
+                    top: rhodaSpot.y,
+                    width: rhodaSpot.width,
+                    height: rhodaSpot.height,
+                  }}
+                />
+                <div
+                  className="pointer-events-none absolute z-[7] -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-[9px] font-bold text-indigo-100"
+                  style={{
+                    left: rhodaSpot.x + rhodaSpot.width / 2,
+                    top: rhodaSpot.y - 12,
+                  }}
+                >
+                  {MOE_SOUL_MEMORY_RHODA_FIELD.spotEmoji}{" "}
+                  {MOE_SOUL_MEMORY_RHODA_FIELD.spotLabel}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRhodaTalk}
+                  className={`absolute z-[8] flex flex-col items-center rounded-lg transition active:scale-95 ${
+                    nearRhodaSpot
+                      ? "ring-2 ring-indigo-400/75 ring-offset-1 ring-offset-sky-900"
+                      : ""
+                  }`}
+                  style={{
+                    left: rhodaSpot.npcX - 22,
+                    top: rhodaSpot.npcY - 28,
+                    width: 44,
+                  }}
+                  title={MOE_SOUL_MEMORY_RHODA_NPC.name}
+                >
+                  <span className="text-3xl drop-shadow-lg">
+                    {MOE_SOUL_MEMORY_RHODA_NPC.emoji}
+                  </span>
+                  {nearRhodaSpot && (
+                    <span className="mt-0.5 rounded bg-indigo-950/90 px-1.5 py-0.5 text-[8px] font-bold text-indigo-100">
+                      ローダ
+                    </span>
+                  )}
+                </button>
               </>
             );
           })()}
@@ -3014,7 +6127,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                       className="pointer-events-none absolute z-[13] -translate-x-1/2"
                       style={{
                         left: en.x,
-                        top: en.y - pad - 18,
+                        top: en.y - nameTop - 14,
                       }}
                     >
                       <MoeCrystalMarker size={8} className="mx-auto" />
@@ -3036,15 +6149,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                           }}
                         />
                       </div>
-                      <p className="ml-3 mt-0.5 text-[7px] font-bold tabular-nums text-red-100/90 drop-shadow">
-                        {Math.ceil(en.hp)}/{en.hpMax}
-                      </p>
                     </div>
                   </>
                 )}
-                <button
-                  type="button"
-                  title={enemyWikiStatsTitle(en)}
+          <button
+            type="button"
+            title={enemyWikiStatsTitle(en)}
                   onPointerDown={(e) => handleEnemySelect(en.id, e)}
                   className={`absolute flex flex-col items-center justify-center rounded-xl border-2 p-1 shadow-lg transition hover:scale-110 active:scale-95 ${en.color} ${
                     isTarget ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-sky-900" : ""
@@ -3070,7 +6180,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   <span className="text-[9px] font-bold text-white leading-tight">
                     Lv.{formatEnemyLevelUi(en.level)}
                   </span>
-                </button>
+          </button>
               </React.Fragment>
             );
           })}
@@ -3079,21 +6189,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         <button
           type="button"
           onPointerDown={handlePetSelect}
+          onDoubleClick={handlePetDoubleClick}
           className={`absolute z-[24] flex flex-col items-center ${
             petCommandMode === "wait" || petCommandMode === "sit"
               ? ""
               : "transition-all duration-100"
           } ${
             petFocused ? "ring-2 ring-emerald-400 ring-offset-1 ring-offset-sky-900 rounded-lg" : ""
-          }`}
+          } ${petTenthCelebrationActive ? "moe-pet-celebrate-bounce" : ""}`}
           style={{ left: pet.x - 30, top: pet.y - 30, width: 60, padding: 8 }}
-          title={`${currentPetData.name} Lv.${pet.level}`}
+          title={`${currentPetDisplay.name} Lv.${petLevelDisplay}`}
         >
           {(petFocused ||
             petCommandMode === "wait" ||
             petCommandMode === "sit") && (
             <div
-              className="pointer-events-none absolute left-1/2 bottom-full mb-1 w-[4.5rem] -translate-x-1/2"
+              className="pointer-events-none absolute bottom-full left-1/2 mb-1 w-[4.5rem] -translate-x-[calc(50%-0.55em)]"
             >
               {petFocused && (
                 <>
@@ -3101,10 +6212,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     <MoeCrystalMarker size={8} />
                   </div>
                   <p className="truncate text-center text-[8px] font-bold text-emerald-100 drop-shadow">
-                    {currentPetData.name}
-                  </p>
-                  <p className="text-center text-[7px] font-bold text-emerald-200/90">
-                    Lv.{pet.level}
+                    {currentPetDisplay.name}
                   </p>
                 </>
               )}
@@ -3127,47 +6235,90 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   }}
                 />
               </div>
-              <p className="mt-0.5 text-center text-[7px] font-bold tabular-nums text-white/85">
-                {precisePet
-                  ? `${formatPetStatUi(pet.hp)}/${formatPetStatUi(pet.hpMax)}`
-                  : `${Math.floor(pet.hp)}/${pet.hpMax}`}
-              </p>
             </div>
           )}
           <span className="text-3xl drop-shadow-lg">{currentPetData.emoji}</span>
           {!petFocused &&
             petCommandMode !== "wait" &&
             petCommandMode !== "sit" && (
-            <div className="w-full bg-black/50 h-1 mt-0.5 rounded-full overflow-hidden">
-              <div
-                className="bg-green-400 h-full"
-                style={{ width: `${petResourceBarPct(pet.hp, pet.hpMax)}%` }}
-              />
-            </div>
+          <div className="w-full bg-black/50 h-1 mt-0.5 rounded-full overflow-hidden">
+            <div
+              className="bg-green-400 h-full"
+              style={{ width: `${petResourceBarPct(pet.hp, pet.hpMax)}%` }}
+            />
+          </div>
           )}
         </button>
 
         {battlePopups
           .filter((p) => p.space === "world")
-          .map((pop) => (
+          .map((pop) =>
+            pop.type === "tenthBanner" ? (
+            <div
+              key={pop.id}
+                role="status"
+                className="pointer-events-none absolute z-[26] moe-tenth-banner-rise"
+              style={{
+                left: pop.x,
+                top: pop.y,
+                }}
+              >
+                <span className="block text-center text-[15px] font-black uppercase tracking-[0.12em] text-yellow-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]">
+                  {pop.value}
+                </span>
+              </div>
+            ) : pop.type === "heal" ? (
             <div
               key={pop.id}
               className="pointer-events-none absolute z-[25]"
               style={{
                 left: pop.x,
-                top: pop.y,
+                top: pop.y - 36,
                 transform: "translate(-50%, 0)",
               }}
             >
+              <span className="moe-heal-popup-rise block text-center text-[17px] font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+                +{pop.value}
+              </span>
+            </div>
+            ) : (
+            <div
+              key={pop.id}
+              className="pointer-events-none absolute z-[25]"
+              style={{
+                left: pop.x,
+                top:
+                  pop.y -
+                  MOE_DAMAGE_POPUP_2D_TOP_OFFSET_PX +
+                  (pop.stackIndex != null ? 10 : 0),
+                transform: `translate(-50%, ${
+                  pop.stackIndex != null
+                    ? -pop.stackIndex * MOE_COMBO_DAMAGE_STACK_PX
+                    : 0
+                }px)`,
+              }}
+            >
               <span
-                className={`moe-battle-popup-rise block text-center text-[18px] font-black tabular-nums tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] ${
-                  pop.fromEnemy ? "text-blue-400" : "text-red-500"
+                className={`${
+                  pop.stackIndex != null
+                    ? "moe-battle-popup-combo-firework"
+                    : "moe-battle-popup-rise"
+                } block text-center text-[18px] font-black tabular-nums tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] ${
+                    pop.type === "tenth"
+                      ? "text-amber-200"
+                      : pop.fromEnemy
+                        ? "text-red-700"
+                        : "text-amber-300"
                 }`}
+                style={
+                  pop.stackIndex != null ? moeComboPopupCssVars(pop) : undefined
+                }
               >
                 {pop.value}
               </span>
             </div>
-          ))}
+            )
+          )}
 
         {/* Player */}
         <div

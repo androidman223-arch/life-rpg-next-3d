@@ -195,6 +195,18 @@ export function resolveMoeDuelSkillSequence(petId, skill) {
     if (skill.name === "ミニ アルティメット フレア") {
       return magHit(skill.combatMagicRatio ?? 1.1, true);
     }
+    if (skill.id === "phoenix_deep_sleep") {
+      return null;
+    }
+    if (skill.id === "phoenix_ultimate_sleep") {
+      return magHit(skill.combatMagicRatio ?? 0.95, false);
+    }
+    if (skill.id === "phoenix_life_burst") {
+      return magHit(skill.combatMagicRatio ?? 1.35, true);
+    }
+    if (skill.id === "phoenix_purify_rebirth") {
+      return magHit(skill.combatMagicRatio ?? 1.65, true);
+    }
   }
 
   if (petId === "elemental_atrum") {

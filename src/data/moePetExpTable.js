@@ -90,6 +90,18 @@ export function getMoePetTotalExpFromLegacyProgress(level, expIntoLevel) {
   return MOE_PET_EXP_TABLE[L - 1].cumulativeExp + into;
 }
 
+/** UI・戦闘共通：ペット state から累計EXP（totalExp 優先、なければ legacy 推定） */
+export function resolvePetTotalExp(pet) {
+  const legacy = getMoePetTotalExpFromLegacyProgress(
+    pet?.level ?? 1,
+    pet?.expIntoLevel ?? 0
+  );
+  if (pet?.totalExp == null || !Number.isFinite(Number(pet.totalExp))) {
+    return legacy;
+  }
+  return Math.max(0, Math.floor(Number(pet.totalExp)));
+}
+
 /** 指定Lv・EXPバー0 に相当する累計EXP */
 export function getMoePetFreshTotalExpForLevel(level) {
   return getMoePetTotalExpFromLegacyProgress(level, 0);
@@ -101,46 +113,209 @@ export function getMoePetExpToNextLevel(level) {
   return getMoePetExpRow(level + 1)?.expFromPrev ?? null;
 }
 
-/** 次Lvまでの残りEXP（0 でレベルアップ） */
+/** 次Lvまでの残りEXP（0 でレベルアップ）— 整数Lv用・互換 */
 export function getMoePetExpRemainingToNextLevel(level, expIntoLevel) {
   const need = getMoePetExpToNextLevel(level);
   if (need == null) return null;
   return Math.max(0, need - Math.max(0, Math.floor(Number(expIntoLevel) || 0)));
 }
 
+/** 整数Lv帯内の 0.1 刻み1段に必要なEXP（Wiki expFromPrev ÷ 10、最低1） */
+export function getMoePetExpPerTenth(level) {
+  const need = getMoePetExpToNextLevel(level);
+  if (need == null) return null;
+  return Math.max(1, Math.floor(need / 10));
+}
+
+/** Lv1 未到達（累計 &lt; cum(Lv1)）か */
+function isMoePetPreFirstLevelTotalExp(totalExp) {
+  const T = Math.max(0, Math.floor(Number(totalExp) || 0));
+  return T < MOE_PET_EXP_TABLE[0].cumulativeExp;
+}
+
+/** 現在の累計EXP が属する整数Lv帯の開始累計 */
+function getMoePetExpBandStart(totalExp) {
+  const T = Math.max(0, Math.floor(Number(totalExp) || 0));
+  if (isMoePetPreFirstLevelTotalExp(T)) return 0;
+  const integerLevel = getMoePetLevelFromTotalExp(T);
+  return MOE_PET_EXP_TABLE[integerLevel - 1].cumulativeExp;
+}
+
+/** 累計EXP に応じた 0.1 段階の必要EXP */
+function getMoePetExpPerTenthForTotal(totalExp) {
+  const T = Math.max(0, Math.floor(Number(totalExp) || 0));
+  if (T >= MOE_PET_EXP_TABLE[MOE_PET_MAX_LEVEL - 1].cumulativeExp) {
+    return null;
+  }
+  if (isMoePetPreFirstLevelTotalExp(T)) {
+    const cum1 = MOE_PET_EXP_TABLE[0].cumulativeExp;
+    return Math.max(1, Math.floor(cum1 / 10));
+  }
+  return getMoePetExpPerTenth(getMoePetLevelFromTotalExp(T));
+}
+
+/**
+ * 累計EXP から MOE 表示用 0.1 刻みレベル（Lv59.3 等）
+ * @returns {{
+ *   integerLevel: number,
+ *   tenth: number,
+ *   displayLabel: string,
+ *   expIntoTenth: number,
+ *   expPerTenth: number | null,
+ * }}
+ */
+export function getMoePetFractionalLevelFromTotalExp(totalExp) {
+  const T = Math.max(0, Math.floor(Number(totalExp) || 0));
+  if (T >= MOE_PET_EXP_TABLE[MOE_PET_MAX_LEVEL - 1].cumulativeExp) {
+    return {
+      integerLevel: MOE_PET_MAX_LEVEL,
+      tenth: 0,
+      displayLabel: `${MOE_PET_MAX_LEVEL}.0`,
+      expIntoTenth: 0,
+      expPerTenth: null,
+    };
+  }
+
+  const expPerTenth = getMoePetExpPerTenthForTotal(T);
+  const bandStart = getMoePetExpBandStart(T);
+  const intoBand = T - bandStart;
+  const tenth = Math.min(9, Math.floor(intoBand / expPerTenth));
+  const expIntoTenth = intoBand - tenth * expPerTenth;
+
+  if (isMoePetPreFirstLevelTotalExp(T)) {
+    return {
+      integerLevel: 0,
+      tenth,
+      displayLabel: `0.${tenth}`,
+      expIntoTenth,
+      expPerTenth,
+    };
+  }
+
+  const integerLevel = getMoePetLevelFromTotalExp(T);
+  return {
+    integerLevel,
+    tenth,
+    displayLabel: `${integerLevel}.${tenth}`,
+    expIntoTenth,
+    expPerTenth,
+  };
+}
+
+/** UI 用: 次の 0.1 までの残りEXP */
+export function getMoePetExpRemainingToNextTenth(totalExp) {
+  const frac = getMoePetFractionalLevelFromTotalExp(totalExp);
+  if (frac.expPerTenth == null) return null;
+  return Math.max(0, frac.expPerTenth - frac.expIntoTenth);
+}
+
+/** UI 用: 0.1 段階バー進捗 0〜100 */
+export function getMoePetExpTenthBarPct(totalExp) {
+  const frac = getMoePetFractionalLevelFromTotalExp(totalExp);
+  if (frac.expPerTenth == null || frac.expPerTenth <= 0) return 100;
+  return Math.min(
+    100,
+    Math.floor((frac.expIntoTenth / frac.expPerTenth) * 100)
+  );
+}
+
 /**
  * floor(ペットLv) − floor(敵Lv) を -7〜+5 にクランプし、テーブル参照
+ * 小数Lvは一の位切り捨て（Wiki）
  */
 export function getMoePetExpBaseOnHitSuccess(petLevel, enemyLevel) {
-  const diff = Math.floor(Number(petLevel)) - Math.floor(Number(enemyLevel));
+  const petInt = Math.floor(Number(petLevel));
+  const enemyInt = Math.floor(Number(enemyLevel));
+  const diff = petInt - enemyInt;
   const idx = Math.max(0, Math.min(12, diff + 7));
   return MOE_PET_EXP_GAIN_BY_DIFF[idx];
 }
 
 /**
- * ペットにEXP加算・レベルアップ処理（累計EXP = Wiki 累積表に準拠）
- * @returns {{ pet: object, gained: number, leveled: boolean, messages: string[] }}
+ * Next（次0.1まで）が 0 になった回数＝0.1 レベルアップ回数
+ * 獲得EXP が残り Next 未満なら 0（演出なし）
+ */
+export function countMoePetTenthLevelUps(totalBefore, totalAfter) {
+  let before = Math.max(0, Math.floor(Number(totalBefore) || 0));
+  const after = Math.max(0, Math.floor(Number(totalAfter) || 0));
+  if (after <= before) return 0;
+
+  let count = 0;
+  while (before < after) {
+    const rem = getMoePetExpRemainingToNextTenth(before);
+    if (rem == null || rem <= 0) break;
+    const gainLeft = after - before;
+    if (gainLeft < rem) break;
+    count += 1;
+    before += rem;
+  }
+  return count;
+}
+
+/** 0.1 刻みレベルアップのポップ表示文言 */
+export const MOE_PET_TENTH_LEVEL_UP_LABEL = "LEVEL 0.1UP";
+
+/** @param {number} count */
+export function formatMoePetTenthLevelBanner(count = 1) {
+  if (count <= 1) return MOE_PET_TENTH_LEVEL_UP_LABEL;
+  return `${MOE_PET_TENTH_LEVEL_UP_LABEL} ×${count}`;
+}
+
+/** @param {string} msg */
+export function isMoePetTenthLevelUpMessage(msg) {
+  return (
+    msg === MOE_PET_TENTH_LEVEL_UP_LABEL ||
+    msg.startsWith(`${MOE_PET_TENTH_LEVEL_UP_LABEL} ×`)
+  );
+}
+
+/**
+ * 0.1 刻みレベルアップメッセージ
+ * @returns {string[]}
+ */
+function buildMoePetTenthLevelMessages(totalBefore, totalAfter) {
+  const n = countMoePetTenthLevelUps(totalBefore, totalAfter);
+  return Array.from({ length: n }, () => MOE_PET_TENTH_LEVEL_UP_LABEL);
+}
+
+/**
+ * ペットにEXP加算・レベルアップ処理（累計EXP = Wiki 累積表・0.1 刻み表示）
+ * @returns {{ pet: object, gained: number, leveled: boolean, tenthLeveled: boolean, messages: string[] }}
  */
 export function applyMoePetExpGain(pet, amount, calculateStats) {
   const messages = [];
   if (amount <= 0) {
-    return { pet, gained: 0, leveled: false, messages };
+    return {
+      pet,
+      gained: 0,
+      leveled: false,
+      tenthLeveled: false,
+      messages,
+    };
   }
 
-  const totalBefore =
-    pet.totalExp != null
-      ? Math.max(0, Math.floor(Number(pet.totalExp) || 0))
-      : getMoePetTotalExpFromLegacyProgress(pet.level, pet.expIntoLevel);
+  const totalBefore = resolvePetTotalExp(pet);
 
   const levelBefore = getMoePetLevelFromTotalExp(totalBefore);
   if (levelBefore >= MOE_PET_MAX_LEVEL) {
-    return { pet, gained: 0, leveled: false, messages };
+    return {
+      pet,
+      gained: 0,
+      leveled: false,
+      tenthLeveled: false,
+      messages,
+    };
   }
 
   const total = totalBefore + amount;
   const levelAfter = getMoePetLevelFromTotalExp(total);
   const leveled = levelAfter > levelBefore;
+  const tenthMessages = buildMoePetTenthLevelMessages(totalBefore, total);
+  const tenthLeveled = tenthMessages.length > 0;
 
+  if (tenthLeveled) {
+    messages.push(...tenthMessages);
+  }
   if (leveled) {
     for (let L = levelBefore + 1; L <= levelAfter; L++) {
       messages.push(`ペット Lv.${L} に上がった！`);
@@ -164,6 +339,7 @@ export function applyMoePetExpGain(pet, amount, calculateStats) {
     ...pet,
     totalExp: total,
     level: levelAfter,
+    levelDisplay: getMoePetFractionalLevelFromTotalExp(total).displayLabel,
     expIntoLevel,
     hpMax: stats?.hpMax ?? pet.hpMax,
     mpMax: stats?.mpMax ?? pet.mpMax,
@@ -171,5 +347,128 @@ export function applyMoePetExpGain(pet, amount, calculateStats) {
     mp: nextMp,
   };
 
-  return { pet: nextPet, gained: amount, leveled, messages };
+  return {
+    pet: nextPet,
+    gained: amount,
+    leveled,
+    tenthLeveled,
+    messages,
+  };
+}
+
+/** 0.1 刻みレベルダウンのポップ表示文言 */
+export const MOE_PET_TENTH_LEVEL_DOWN_LABEL = "LEVEL 0.1DOWN";
+
+/** @param {number} count */
+export function formatMoePetTenthLevelDownBanner(count = 1) {
+  if (count <= 1) return MOE_PET_TENTH_LEVEL_DOWN_LABEL;
+  return `${MOE_PET_TENTH_LEVEL_DOWN_LABEL} ×${count}`;
+}
+
+/** @param {string} msg */
+export function isMoePetTenthLevelDownMessage(msg) {
+  return (
+    msg === MOE_PET_TENTH_LEVEL_DOWN_LABEL ||
+    msg.startsWith(`${MOE_PET_TENTH_LEVEL_DOWN_LABEL} ×`)
+  );
+}
+
+/**
+ * @param {number} totalBefore
+ * @param {number} totalAfter
+ */
+function buildMoePetTenthLevelDownMessages(totalBefore, totalAfter) {
+  const n = countMoePetTenthLevelUps(totalAfter, totalBefore);
+  return Array.from({ length: n }, () => MOE_PET_TENTH_LEVEL_DOWN_LABEL);
+}
+
+/**
+ * ペットからEXP減算・レベルダウン（累計EXP下限 = Lv10.0 相当）
+ * @returns {{ pet: object, lost: number, leveledDown: boolean, tenthLeveledDown: boolean, messages: string[] }}
+ */
+export function applyMoePetExpLoss(pet, amount, calculateStats, minLevel = 10) {
+  const messages = [];
+  if (amount <= 0) {
+    return {
+      pet,
+      lost: 0,
+      leveledDown: false,
+      tenthLeveledDown: false,
+      messages,
+    };
+  }
+
+  const totalBefore = resolvePetTotalExp(pet);
+  const minTotal = getMoePetFreshTotalExpForLevel(minLevel);
+  if (totalBefore <= minTotal) {
+    return {
+      pet,
+      lost: 0,
+      leveledDown: false,
+      tenthLeveledDown: false,
+      messages,
+    };
+  }
+
+  const total = Math.max(minTotal, totalBefore - amount);
+  const lost = totalBefore - total;
+  if (lost <= 0) {
+    return {
+      pet,
+      lost: 0,
+      leveledDown: false,
+      tenthLeveledDown: false,
+      messages,
+    };
+  }
+
+  const levelBefore = getMoePetLevelFromTotalExp(totalBefore);
+  const levelAfter = getMoePetLevelFromTotalExp(total);
+  const leveledDown = levelAfter < levelBefore;
+  const tenthMessages = buildMoePetTenthLevelDownMessages(totalBefore, total);
+  const tenthLeveledDown = tenthMessages.length > 0;
+
+  if (tenthLeveledDown) {
+    messages.push(...tenthMessages);
+  }
+  if (leveledDown) {
+    for (let L = levelBefore; L > levelAfter; L--) {
+      messages.push(`ペット Lv.${L} から下がった……`);
+    }
+  }
+
+  const expIntoLevel = getMoePetExpIntoLevelFromTotal(total, levelAfter);
+  const stats = calculateStats(pet.id, levelAfter);
+  const prec = petUsesPreciseWikiStats(pet.id);
+  let nextHp =
+    leveledDown || tenthLeveledDown
+      ? Math.min(pet.hp, stats?.hpMax ?? pet.hpMax)
+      : pet.hp;
+  let nextMp =
+    leveledDown || tenthLeveledDown
+      ? Math.min(pet.mp, stats?.mpMax ?? pet.mpMax)
+      : pet.mp;
+  if (prec) {
+    nextHp = roundPetStatInternal(nextHp);
+    nextMp = roundPetStatInternal(nextMp);
+  }
+  const nextPet = {
+    ...pet,
+    totalExp: total,
+    level: levelAfter,
+    levelDisplay: getMoePetFractionalLevelFromTotalExp(total).displayLabel,
+    expIntoLevel,
+    hpMax: stats?.hpMax ?? pet.hpMax,
+    mpMax: stats?.mpMax ?? pet.mpMax,
+    hp: nextHp,
+    mp: nextMp,
+  };
+
+  return {
+    pet: nextPet,
+    lost,
+    leveledDown,
+    tenthLeveledDown,
+    messages,
+  };
 }

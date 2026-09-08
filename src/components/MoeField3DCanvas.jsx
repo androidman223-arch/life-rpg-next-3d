@@ -6,30 +6,86 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   applyModelTint,
+  applyMysteryDragonVisualForm,
+  applyEarthWormStripeMaterial,
+  updateEarthWormStripeUniforms,
+  enemyUsesStripeMaterial,
   createBisonAnimController,
+  createOrcAnimController,
+  createGustavAnimController,
   createSnakeAnimController,
   fitModelToGround,
   MOE_3D_TILES_X,
   MOE_3D_TILES_Z,
-  MOE_BISON_MODEL_HEIGHT,
-  MOE_BISON_MODEL_URL,
+  MOE_ALL_MONSTER_MODEL_URLS,
+  MOE_HILLTOP_LION_MODEL_LAYOUT_REV,
+  bisonModelHeightForKey,
+  enemyFitHeightForKey,
+  enemyUsesBakedModelColors,
+  isBisonModelUrl,
+  isOrcModelUrl,
+  isIxionModelUrl,
+  isLionModelUrl,
+  isGustavModelUrl,
+  moe3dApplyIxionDisplayScale,
+  moe3dApplyLionDisplayScale,
+  moe3dApplyGustavDisplayScale,
+  moe3dMountainBisonSpawnPosition,
+  moe3dRoughBisonSpawnPosition,
+  moe3dGustavJuniorSpawnPosition,
+  moe3dGustavFacePlayerStartYaw,
+  moe3dEnemyModelYawOffset,
+  moe3dYawFaceTarget,
+  MOE_GUSTAV_JUNIOR_LAYOUT_REV,
   MOE_ENEMY_TINT_BY_KEY,
   MOE_MONSTER_MODEL_YAW_OFFSET,
   MOE_PET_MODEL_YAW_OFFSET,
   MOE_SNAKE_ATTACK_TIME_SCALE,
+  MOE_PLAYER_RUN_BOB_CYCLE_SEC,
+  MOE_PLAYER_WALK_BOB_CYCLE_SEC,
+  MOE_SNAKE_RUN_CLIP_DURATION_SEC,
+  MOE_SNAKE_WALK_CLIP_DURATION_SEC,
   MOE_SNAKE_RUN_SPRINT_TIME_SCALE,
+  MOE_TENTH_BANNER_DURATION_SEC_3D,
   MOE_MONSTER_MODEL_HEIGHT,
+  MOE_PLAYER_MODEL_HEIGHT,
+  MOE_PLAYER_MODEL_URL,
   MOE_PET_MODEL_HEIGHT,
   MOE_PET_TINT_DEFAULT,
   MONSTER_MODEL_URL,
-  PET_MODEL_URL,
   monsterModelUrlForKey,
+  petFloatLiftForId,
+  petModelHeightForId,
+  petModelUrlForId,
+  petTintForId,
   pickSnakeAttackClip,
-  moe3dYawFaceTarget,
   moe3dEnemyDisplayScale,
+  moe3dApplyOrcDisplayScale,
+  moe3dApplyBisonBossDisplayScale,
+  MOE_ORC_MODEL_LAYOUT_REV,
+  MOE_BISON_BOSS_LAYOUT_REV,
+  MOE_MID_BOSS_DISPLAY_SCALE,
+  MOE_SUPER_BOSS_DISPLAY_SCALE,
+  MOE_EARTH_WORM_MATERIAL_REV,
+  MOE_IXION_MODEL_LAYOUT_REV,
   moe3dBossAreaLayout,
   moe3dPetHousePosition,
+  moe3dRhodaPosition,
+  moe3dMeasureModelFrontExtent,
+  moe3dEnemyUiWorldYs,
+  MOE_3D_ENEMY_UI_NAME_TARGET_EXTRA,
+  MOE_3D_ENEMY_UI_MARKER_TARGET_EXTRA,
+  MOE_3D_ENEMY_UI_HP_WORLD_OFFSET_X,
+  MOE_3D_ENEMY_UI_HP_CANVAS_SHIFT_X,
 } from "@/lib/moeField3DModels";
+import { createMoePhoenixTailFireEffect } from "@/lib/moePhoenixTailFireEffect";
+import {
+  MOE_MEERIM_MOUNTAIN_BISON_KEY,
+  MOE_MEERIM_ROUGH_BISON_KEY,
+  MOE_MEERIM_GUSTAV_JUNIOR_KEY,
+  formatEnemyLevelUi,
+} from "@/data/moeMeerimEnemies";
+import { MOE_PET_TENTH_LEVEL_UP_LABEL } from "@/data/moePetExpTable";
 
 const MAP_URL = "/assets/map/3D_MoeMapField02.glb";
 const TERRAIN_EDGE_MARGIN = 5;
@@ -129,23 +185,47 @@ function resolveBossAreaOnTerrain(raycaster, terrainGroup, halfW, halfD) {
   return {
     midBossPos,
     superBossPos,
+    mountainBisonPos: snapBoss(
+      moe3dMountainBisonSpawnPosition(halfW, halfD),
+      28
+    ),
+    roughBisonPos: snapBoss(moe3dRoughBisonSpawnPosition(halfW, halfD), 28),
+    gustavJuniorPos: snapBoss(
+      moe3dGustavJuniorSpawnPosition(halfW, halfD),
+      64
+    ),
     bossArea: layout,
   };
+}
+
+function meshBoundsExcludingPick(root) {
+  const box = new THREE.Box3();
+  let hasMesh = false;
+  root.traverse((obj) => {
+    if (obj.userData?.pickProxy || !obj.isMesh || !obj.geometry) return;
+    box.expandByObject(obj);
+    hasMesh = true;
+  });
+  if (!hasMesh) {
+    box.setFromObject(root);
+  }
+  return box;
 }
 
 function attachEnemyPickTarget(root, enemyId, isBigBoss, isSuperBoss = false) {
   root.userData.enemyId = enemyId;
   root.traverse((obj) => {
-    if (obj.isMesh) obj.userData.enemyId = enemyId;
+    if (obj.isMesh && !obj.userData.pickProxy) obj.userData.enemyId = enemyId;
   });
-  // 中・超ボスはスケールが大きく透明当たりが隣の敵を吸うため、モデル mesh のみ
-  if (isBigBoss || isSuperBoss) return;
-
   root.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(root);
+  const box = meshBoundsExcludingPick(root);
   const size = box.getSize(new THREE.Vector3());
-  const h = Math.max(size.y, 0.85);
-  const r = Math.max(size.x, size.z, 0.45) * 0.52;
+  const h = Math.max(
+    size.y * 0.92,
+    isSuperBoss ? 5 : isBigBoss ? 2.8 : 0.85
+  );
+  const r =
+    Math.max(size.x, size.z) * (isBigBoss || isSuperBoss ? 0.42 : 0.52);
   const pick = new THREE.Mesh(
     new THREE.CylinderGeometry(r, r * 0.92, h, 12),
     new THREE.MeshBasicMaterial({
@@ -154,9 +234,10 @@ function attachEnemyPickTarget(root, enemyId, isBigBoss, isSuperBoss = false) {
       depthWrite: false,
     })
   );
-  pick.position.y = h * 0.48;
+  pick.position.y = box.min.y + h * 0.5;
   pick.userData.enemyId = enemyId;
   pick.userData.pickProxy = true;
+  if (isBigBoss || isSuperBoss) pick.userData.bossPick = true;
   root.add(pick);
 }
 
@@ -184,27 +265,154 @@ function attachPetPickTarget(root) {
   root.add(pick);
 }
 
+function createTreasureChestGroup(treasureId) {
+  const root = new THREE.Group();
+  root.userData.treasureId = treasureId;
+  root.scale.setScalar(1.32);
+
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x6b4423,
+    roughness: 0.82,
+    metalness: 0.05,
+  });
+  const woodDarkMat = new THREE.MeshStandardMaterial({
+    color: 0x4a2f18,
+    roughness: 0.88,
+    metalness: 0.04,
+  });
+  const goldTrimMat = new THREE.MeshStandardMaterial({
+    color: 0xdabc76,
+    roughness: 0.42,
+    metalness: 0.48,
+  });
+  const ironMat = new THREE.MeshStandardMaterial({
+    color: 0x3a3a3a,
+    roughness: 0.55,
+    metalness: 0.35,
+  });
+  const rubyMat = new THREE.MeshStandardMaterial({
+    color: 0xe0115f,
+    emissive: 0x9b111e,
+    emissiveIntensity: 0.42,
+    roughness: 0.12,
+    metalness: 0.22,
+  });
+  const rubyDarkMat = new THREE.MeshStandardMaterial({
+    color: 0x8b0a1a,
+    emissive: 0x4a0510,
+    emissiveIntensity: 0.28,
+    roughness: 0.2,
+    metalness: 0.18,
+  });
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.46, 0.68), woodMat);
+  base.position.y = 0.23;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  root.add(base);
+
+  const baseTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(0.96, 0.06, 0.72),
+    goldTrimMat
+  );
+  baseTrim.position.y = 0.44;
+  root.add(baseTrim);
+
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.18, 0.72), woodDarkMat);
+  lid.name = "treasureLid";
+  lid.position.set(0, 0.56, -0.04);
+  lid.castShadow = true;
+  root.add(lid);
+
+  const lidTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 0.05, 0.74),
+    goldTrimMat
+  );
+  lidTrim.position.set(0, 0.66, -0.04);
+  root.add(lidTrim);
+
+  const hasp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.05), ironMat);
+  hasp.position.set(0, 0.48, 0.36);
+  root.add(hasp);
+
+  const lockPlate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.1, 0.03),
+    goldTrimMat
+  );
+  lockPlate.position.set(0, 0.47, 0.38);
+  root.add(lockPlate);
+
+  /** 正面中央のルビーマーク（MOE 風） */
+  const rubySetting = new THREE.Mesh(
+    new THREE.BoxGeometry(0.15, 0.15, 0.025),
+    goldTrimMat
+  );
+  rubySetting.position.set(0, 0.3, 0.345);
+  root.add(rubySetting);
+
+  const rubyGem = new THREE.Mesh(new THREE.OctahedronGeometry(0.062, 0), rubyMat);
+  rubyGem.position.set(0, 0.3, 0.362);
+  rubyGem.rotation.y = Math.PI / 4;
+  rubyGem.rotation.x = 0.12;
+  rubyGem.scale.set(1, 1.22, 0.62);
+  rubyGem.castShadow = true;
+  root.add(rubyGem);
+
+  const rubyFacet = new THREE.Mesh(new THREE.OctahedronGeometry(0.038, 0), rubyDarkMat);
+  rubyFacet.position.set(0.018, 0.312, 0.368);
+  rubyFacet.rotation.y = Math.PI / 4;
+  rubyFacet.rotation.z = 0.35;
+  rubyFacet.scale.set(0.55, 0.85, 0.35);
+  root.add(rubyFacet);
+
+  const pick = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.78, 0.78, 1.0, 12),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    })
+  );
+  pick.position.y = 0.48;
+  pick.userData.treasureId = treasureId;
+  pick.userData.pickProxy = true;
+  root.add(pick);
+
+  return { root, spawnTime: performance.now() };
+}
+
 const PICK_SCREEN_MAX_PX = 44;
 const PICK_PROXY_PENALTY_PX = 14;
+const PICK_BOSS_SCREEN_MAX_PX = 72;
 
 /** レイキャスト全ヒットから、クリック位置に最も近い交点の敵／ペットを選ぶ */
-function resolvePickFromHits(hits, pointer, camera, rect) {
+function resolvePickFromHits(hits, pointer, camera, rect, treasures = []) {
+  const closedTreasureIds = new Set(
+    treasures.filter((t) => t.state === "closed").map((t) => t.id)
+  );
   const cx = ((pointer.x + 1) / 2) * rect.width;
   const cy = ((-pointer.y + 1) / 2) * rect.height;
   const projected = new THREE.Vector3();
 
   let bestEnemyId = null;
   let bestEnemyScore = Infinity;
+  let bestTreasureId = null;
+  let bestTreasureScore = Infinity;
   let bestPet = false;
   let bestPetScore = Infinity;
 
   for (const hit of hits) {
     let obj = hit.object;
     let enemyId = null;
+    let treasureId = null;
     let isPet = false;
     while (obj) {
       if (obj.userData.enemyId != null) {
         enemyId = obj.userData.enemyId;
+        break;
+      }
+      if (obj.userData.treasureId != null) {
+        treasureId = obj.userData.treasureId;
         break;
       }
       if (obj.userData.isPet) {
@@ -213,20 +421,32 @@ function resolvePickFromHits(hits, pointer, camera, rect) {
       }
       obj = obj.parent;
     }
-    if (enemyId == null && !isPet) continue;
+    if (enemyId == null && treasureId == null && !isPet) continue;
+    if (treasureId != null && !closedTreasureIds.has(treasureId)) continue;
 
     projected.copy(hit.point).project(camera);
     if (projected.z > 1) continue;
     const sx = (projected.x * 0.5 + 0.5) * rect.width;
     const sy = (-projected.y * 0.5 + 0.5) * rect.height;
     const screenDist = Math.hypot(sx - cx, sy - cy);
-    const proxyPenalty = hit.object.userData.pickProxy ? PICK_PROXY_PENALTY_PX : 0;
+    const proxyPenalty = hit.object.userData.bossPick
+      ? 0
+      : hit.object.userData.pickProxy
+        ? PICK_PROXY_PENALTY_PX
+        : 0;
+    const maxPx = hit.object.userData.bossPick
+      ? PICK_BOSS_SCREEN_MAX_PX
+      : PICK_SCREEN_MAX_PX;
     const score = screenDist + proxyPenalty;
-    if (score > PICK_SCREEN_MAX_PX) continue;
+    if (score > maxPx) continue;
 
     if (enemyId != null && score < bestEnemyScore) {
       bestEnemyScore = score;
       bestEnemyId = enemyId;
+    }
+    if (treasureId != null && score < bestTreasureScore) {
+      bestTreasureScore = score;
+      bestTreasureId = treasureId;
     }
     if (isPet && score < bestPetScore) {
       bestPetScore = score;
@@ -234,26 +454,59 @@ function resolvePickFromHits(hits, pointer, camera, rect) {
     }
   }
 
-  if (bestPet && bestPetScore <= bestEnemyScore) {
-    return { type: "pet" };
-  }
+  /** 画面距離が最も近い対象を優先 */
+  const candidates = [];
   if (bestEnemyId != null) {
-    return { type: "enemy", id: bestEnemyId };
+    candidates.push({ type: "enemy", id: bestEnemyId, score: bestEnemyScore });
   }
-  return null;
+  if (bestTreasureId != null) {
+    candidates.push({ type: "treasure", id: bestTreasureId, score: bestTreasureScore });
+  }
+  if (bestPet) {
+    candidates.push({ type: "pet", score: bestPetScore });
+  }
+  candidates.sort((a, b) => a.score - b.score);
+  const best = candidates[0];
+  if (!best) return null;
+  if (best.type === "enemy") return { type: "enemy", id: best.id };
+  if (best.type === "treasure") return { type: "treasure", id: best.id };
+  return { type: "pet" };
 }
 
-/** 中・超ボス：同期済みアンカー＋表示スケールから画面楕円ヒット判定 */
+/** 中・超ボス：同期済みアンカー＋モデル bbox から画面楕円ヒット判定 */
 function bossScreenHitScore(cx, cy, camera, rect, en, entry) {
   if (!entry?.pickAnchor) return null;
-  const scale = moe3dEnemyDisplayScale(en);
-  const modelH =
-    (en.key === "elvin_bison" || en.key === "auzun_bura"
-      ? MOE_BISON_MODEL_HEIGHT
-      : MOE_MONSTER_MODEL_HEIGHT) * scale;
   const { x, groundY, z } = entry.pickAnchor;
-  const foot = new THREE.Vector3(x, groundY, z);
-  const body = foot.clone().add(new THREE.Vector3(0, modelH * 0.45, 0));
+  let footY = groundY;
+  let bodyY = groundY;
+  let heightWorld = 4;
+  let widthWorld = 3;
+
+  if (entry.root && !entry.placeholder) {
+    entry.root.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    entry.root.traverse((obj) => {
+      if (obj.userData?.pickProxy || !obj.isMesh || !obj.geometry) return;
+      box.expandByObject(obj);
+    });
+    if (!box.isEmpty()) {
+      const size = box.getSize(new THREE.Vector3());
+      footY = box.min.y;
+      bodyY = (box.min.y + box.max.y) * 0.5;
+      heightWorld = Math.max(size.y, 2);
+      widthWorld = Math.max(size.x, size.z, 2);
+    }
+  } else {
+    const scale = moe3dEnemyDisplayScale(en);
+    const modelH = bisonModelHeightForKey(en.key) * scale;
+    footY = groundY;
+    bodyY = groundY + modelH * 0.45;
+    heightWorld = modelH;
+    widthWorld = modelH * (en.superBoss ? 0.95 : 0.82);
+  }
+
+  const foot = new THREE.Vector3(x, footY, z);
+  const body = new THREE.Vector3(x, bodyY, z);
   foot.project(camera);
   body.project(camera);
   if (foot.z > 1 && body.z > 1) return null;
@@ -262,11 +515,11 @@ function bossScreenHitScore(cx, cy, camera, rect, en, entry) {
   const fy = (-foot.y * 0.5 + 0.5) * rect.height;
   const bx = (body.x * 0.5 + 0.5) * rect.width;
   const by = (-body.y * 0.5 + 0.5) * rect.height;
-  const heightPx = Math.max(28, Math.abs(by - fy));
-  const widthPx = heightPx * (en.superBoss ? 0.95 : 0.82);
+  const heightPx = Math.max(36, Math.abs(by - fy));
+  const widthPx = Math.max(heightPx * 0.82, (widthWorld / heightWorld) * heightPx * 0.55);
   const mx = (fx + bx) * 0.5;
   const my = (fy + by) * 0.5;
-  const pad = en.superBoss ? 18 : 12;
+  const pad = en.superBoss ? 32 : 22;
   const rx = widthPx * 0.5 + pad;
   const ry = heightPx * 0.5 + pad;
   const dx = (cx - mx) / rx;
@@ -297,7 +550,15 @@ function pickBossAtScreenPoint(cx, cy, camera, rect, enList, enemyMeshes) {
 }
 
 /** レイキャスト完全外れ時のみ：クリック位置に最も近い敵／ペット（画面 px） */
-function pickEntityNearPointer(pointer, camera, rect, enList, petPos, thresholdPx = 32) {
+function pickEntityNearPointer(
+  pointer,
+  camera,
+  rect,
+  enList,
+  petPos,
+  enemyMeshes,
+  thresholdPx = 32
+) {
   const cx = ((pointer.x + 1) / 2) * rect.width;
   const cy = ((-pointer.y + 1) / 2) * rect.height;
   const projected = new THREE.Vector3();
@@ -306,13 +567,36 @@ function pickEntityNearPointer(pointer, camera, rect, enList, petPos, thresholdP
 
   for (const en of enList) {
     if (en.hp <= 0) continue;
-    projected.set(en.x, 0.6, en.y);
+    const entry = enemyMeshes?.get(en.id);
+    let py = 0.6;
+    let thresh = thresholdPx;
+    if (en.midBoss || en.superBoss) {
+      thresh = en.superBoss ? 58 : 46;
+      if (entry?.root && !entry.placeholder) {
+        entry.root.updateMatrixWorld(true);
+        const box = new THREE.Box3();
+        entry.root.traverse((obj) => {
+          if (obj.userData?.pickProxy || !obj.isMesh || !obj.geometry) return;
+          box.expandByObject(obj);
+        });
+        if (!box.isEmpty()) {
+          py = (box.min.y + box.max.y) * 0.5;
+        } else if (entry.pickAnchor) {
+          py = entry.pickAnchor.groundY + (en.superBoss ? 8 : 3);
+        }
+      } else if (entry?.pickAnchor) {
+        py = entry.pickAnchor.groundY + (en.superBoss ? 8 : 3);
+      } else {
+        py = en.superBoss ? 8 : 3;
+      }
+    }
+    projected.set(en.x, py, en.y);
     projected.project(camera);
     if (projected.z > 1) continue;
     const sx = (projected.x * 0.5 + 0.5) * rect.width;
     const sy = (-projected.y * 0.5 + 0.5) * rect.height;
     const d = Math.hypot(sx - cx, sy - cy);
-    if (d < bestDist) {
+    if (d < thresh && d < bestDist) {
       bestDist = d;
       best = { type: "enemy", id: en.id };
     }
@@ -356,12 +640,18 @@ function terrainPlayBoundsFromGroup(terrainGroup) {
  */
 export default function MoeField3DCanvas({
   enemies,
+  treasures = [],
   battlePopups,
   onEnemyClick,
+  onTreasureClick,
   onPetClick,
+  onPetDoubleClick = () => {},
+  onRhodaClick,
   targetEnemyId,
   petFocused,
   petLabel,
+  petId = "sun_spirit",
+  petDragonVisualForm = 0,
   onMapReady,
   cameraYawRef,
   playerFacingRef,
@@ -370,6 +660,7 @@ export default function MoeField3DCanvas({
   playerSprintRef,
   petRunAnimRef,
   petPosRef,
+  petSpawnEpochRef,
   petCommandRef,
   petHoldYawRef,
   duelRef,
@@ -377,11 +668,20 @@ export default function MoeField3DCanvas({
   petAttackMsRef,
   enemyStrikeUntilRef,
   enemyAttackMsRef,
+  battleSpeedMultRef,
+  overlayProjectRef,
+  enemyStrikeVariantRef,
+  moe3dCombatExtentsRef,
 }) {
   const mountRef = useRef(null);
-  const stateRef = useRef({ enemies, battlePopups, targetEnemyId, petFocused, petLabel });
+  const stateRef = useRef({ enemies, treasures, battlePopups, targetEnemyId, petFocused, petLabel });
   const onEnemyClickRef = useRef(onEnemyClick);
+  const onTreasureClickRef = useRef(onTreasureClick);
   const onPetClickRef = useRef(onPetClick);
+  const onPetDoubleClickRef = useRef(onPetDoubleClick);
+  /** @deprecated 旧名 — ホットリロード互換 */
+  const onPetRightClickRef = onPetDoubleClickRef;
+  const onRhodaClickRef = useRef(onRhodaClick);
   const onMapReadyRef = useRef(onMapReady);
   const cameraYawRefStable = useRef(cameraYawRef);
   const playerFacingRefStable = useRef(playerFacingRef);
@@ -390,6 +690,7 @@ export default function MoeField3DCanvas({
   const playerSprintRefStable = useRef(playerSprintRef);
   const petRunAnimRefStable = useRef(petRunAnimRef);
   const petPosRefStable = useRef(petPosRef);
+  const petSpawnEpochRefStable = useRef(petSpawnEpochRef);
   const petCommandRefStable = useRef(petCommandRef);
   const petHoldYawRefStable = useRef(petHoldYawRef);
   const duelRefStable = useRef(duelRef);
@@ -397,10 +698,18 @@ export default function MoeField3DCanvas({
   const petAttackMsRefStable = useRef(petAttackMsRef);
   const enemyStrikeUntilRefStable = useRef(enemyStrikeUntilRef);
   const enemyAttackMsRefStable = useRef(enemyAttackMsRef);
+  const battleSpeedMultRefStable = useRef(battleSpeedMultRef);
+  const overlayProjectRefStable = useRef(overlayProjectRef);
+  const enemyStrikeVariantRefStable = useRef(enemyStrikeVariantRef);
+  const moe3dCombatExtentsRefStable = useRef(moe3dCombatExtentsRef);
 
-  stateRef.current = { enemies, battlePopups, targetEnemyId, petFocused, petLabel };
+  stateRef.current = { enemies, treasures, battlePopups, targetEnemyId, petFocused, petLabel };
   onEnemyClickRef.current = onEnemyClick;
+  onTreasureClickRef.current = onTreasureClick;
   onPetClickRef.current = onPetClick;
+  onPetDoubleClickRef.current = onPetDoubleClick;
+  onPetRightClickRef.current = onPetDoubleClick;
+  onRhodaClickRef.current = onRhodaClick;
   onMapReadyRef.current = onMapReady;
   cameraYawRefStable.current = cameraYawRef;
   playerFacingRefStable.current = playerFacingRef;
@@ -409,6 +718,7 @@ export default function MoeField3DCanvas({
   playerSprintRefStable.current = playerSprintRef;
   petRunAnimRefStable.current = petRunAnimRef;
   petPosRefStable.current = petPosRef;
+  petSpawnEpochRefStable.current = petSpawnEpochRef;
   petCommandRefStable.current = petCommandRef;
   petHoldYawRefStable.current = petHoldYawRef;
   duelRefStable.current = duelRef;
@@ -416,6 +726,27 @@ export default function MoeField3DCanvas({
   petAttackMsRefStable.current = petAttackMsRef;
   enemyStrikeUntilRefStable.current = enemyStrikeUntilRef;
   enemyAttackMsRefStable.current = enemyAttackMsRef;
+  battleSpeedMultRefStable.current = battleSpeedMultRef;
+  overlayProjectRefStable.current = overlayProjectRef;
+  enemyStrikeVariantRefStable.current = enemyStrikeVariantRef;
+  moe3dCombatExtentsRefStable.current = moe3dCombatExtentsRef;
+
+  const petIdStable = useRef(petId);
+  petIdStable.current = petId;
+  const petDragonVisualFormStable = useRef(petDragonVisualForm);
+  petDragonVisualFormStable.current = petDragonVisualForm;
+  /** 3D: ペット id 変更時に glb を差し替え */
+  const petSwapRef = useRef(null);
+  /** 3D: 転生など見た目だけ変えるときに glb を再マウント */
+  const petRemountRef = useRef(null);
+
+  useEffect(() => {
+    petSwapRef.current?.(petId);
+  }, [petId]);
+
+  useEffect(() => {
+    petRemountRef.current?.();
+  }, [petDragonVisualForm]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -450,13 +781,23 @@ export default function MoeField3DCanvas({
     const terrainGroup = new THREE.Group();
     scene.add(terrainGroup);
 
-    /** プレイヤー □ */
-    const playerMesh = new THREE.Mesh(
+    /** プレイヤー（glb 読込前は紫ボックス） */
+    const playerRoot = new THREE.Group();
+    scene.add(playerRoot);
+    const playerPlaceholder = new THREE.Mesh(
       new THREE.BoxGeometry(0.7, 1.4, 0.7),
       new THREE.MeshStandardMaterial({ color: 0x6366f1 })
     );
-    playerMesh.castShadow = true;
-    scene.add(playerMesh);
+    playerPlaceholder.castShadow = true;
+    playerRoot.add(playerPlaceholder);
+    let playerModel = null;
+    let playerGroundLift = 0;
+    let playerMixer = null;
+    let playerAnimCtrl = null;
+    let lastPlayerX =
+      playerPosRefStable.current?.current?.x ?? 0;
+    let lastPlayerY =
+      playerPosRefStable.current?.current?.y ?? 0;
 
     /** ペット ○（glb 読込前のプレースホルダ） */
     const petMesh = new THREE.Mesh(
@@ -468,16 +809,39 @@ export default function MoeField3DCanvas({
     scene.add(petMesh);
 
     let petRoot = null;
+    let petGroundLift = 0;
+    let petFloatLift = 0;
+    let petFrontExtent = petModelHeightForId(petIdStable.current) * 0.5;
     let petMixer = null;
     let petAnimCtrl = null;
-    let lastPetX = 0;
-    let lastPetY = 0;
+    let lastPetX =
+      petPosRefStable.current?.current?.x ??
+      playerPosRefStable.current?.current?.x ??
+      0;
+    let lastPetY =
+      petPosRefStable.current?.current?.y ??
+      playerPosRefStable.current?.current?.y ??
+      0;
+    let lastPetSpawnEpoch = petSpawnEpochRefStable.current?.current ?? 0;
     let lastPetStrikeUntil = 0;
     let lastEnemyStrikeUntil = 0;
     const enemyAnimModes = new Map();
+    /** 両者チャージ中の向き固定（毎フレーム snap によるブレ防止） */
+    let duelChargeFaceLock = null;
+    /** チャージ中ペットの地面Y固定 */
+    let petCombatGroundY = null;
+    /** チャージ中ペットの XYZ 固定 */
+    let petCombatPosLock = null;
+    /** 戦闘終了後の_pose 固定（スナップによるブレ防止） */
+    let petPostCombatUntil = 0;
+    let petPostCombatPos = null;
+    let petPostCombatYaw = null;
+    const POST_COMBAT_SETTLE_MS = 480;
+    let lastDuelBusy = false;
 
     let monsterAssets = new Map();
     const animationMixers = [];
+    const overlayProjVec = new THREE.Vector3();
 
     camera.position.set(0, 14, 18);
     camera.lookAt(0, 0, 0);
@@ -486,9 +850,14 @@ export default function MoeField3DCanvas({
     const enemyGroup = new THREE.Group();
     scene.add(enemyGroup);
 
+    const treasureGroup = new THREE.Group();
+    scene.add(treasureGroup);
+    const treasureMeshes = new Map();
+
     const popupSprites = new Map();
     const popupGroup = new THREE.Group();
     scene.add(popupGroup);
+    const phoenixTailFire = createMoePhoenixTailFireEffect(scene);
 
     let targetMarker = null;
     let targetHpSprite = null;
@@ -496,16 +865,33 @@ export default function MoeField3DCanvas({
     let petFocusMarker = null;
     const enemyNameSprites = new Map();
 
-    function syncEnemyNameLabels(enList) {
+    function uiYsForEnemy(en, entry) {
+      const gy = entry?.pickAnchor?.groundY ?? heightAt(en.x, en.y);
+      return moe3dEnemyUiWorldYs(entry, en.key, gy);
+    }
+
+    function enemyWorldPos(en, entry) {
+      return {
+        x: entry?.pickAnchor?.x ?? en.x,
+        z: entry?.pickAnchor?.z ?? en.y,
+      };
+    }
+
+    function syncEnemyNameLabels(enList, targetId) {
       const seen = new Set();
       for (const en of enList) {
         if (en.hp <= 0) continue;
         seen.add(en.id);
-        const line1 = `${en.superBoss ? "◆ " : en.midBoss ? "★ " : ""}${String(en.name ?? "")}`;
+        const prefix = en.superBoss ? "◆ " : en.midBoss ? "★ " : "";
+        const showLv = targetId != null && en.id === targetId;
+        const displayName = en.mapLabel ?? en.name ?? "";
+        const line1 = `${prefix}${String(displayName)}${
+          showLv ? ` Lv.${formatEnemyLevelUi(en.level)}` : ""
+        }`;
         let sprite = enemyNameSprites.get(en.id);
         if (!sprite) {
           const canvas2d = document.createElement("canvas");
-          canvas2d.width = 256;
+          canvas2d.width = 320;
           canvas2d.height = 32;
           const tex = new THREE.CanvasTexture(canvas2d);
           const mat = new THREE.SpriteMaterial({
@@ -514,24 +900,29 @@ export default function MoeField3DCanvas({
             depthTest: false,
           });
           sprite = new THREE.Sprite(mat);
-          sprite.scale.set(3.2, 0.42, 1);
+          sprite.scale.set(showLv ? 3.8 : 3.2, 0.42, 1);
           sprite.renderOrder = 997;
           enemyNameSprites.set(en.id, sprite);
           popupGroup.add(sprite);
         }
+        sprite.scale.set(showLv ? 3.8 : 3.2, 0.42, 1);
         const canvas2d = sprite.material.map.image;
         const ctx = canvas2d.getContext("2d");
-        ctx.clearRect(0, 0, 256, 32);
+        ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
         ctx.textAlign = "center";
-        ctx.font = "bold 16px sans-serif";
+        ctx.font = showLv ? "bold 14px sans-serif" : "bold 16px sans-serif";
         ctx.strokeStyle = "#000000";
         ctx.lineWidth = 3;
-        ctx.strokeText(line1, 128, 20);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(line1, 128, 20);
+        const textX = canvas2d.width / 2;
+        ctx.strokeText(line1, textX, 20);
+        ctx.fillStyle = showLv ? "#bfdbfe" : "#ffffff";
+        ctx.fillText(line1, textX, 20);
         sprite.material.map.needsUpdate = true;
-        const gy = heightAt(en.x, en.y);
-        sprite.position.set(en.x, gy + 1.78, en.y);
+        const entry = enemyMeshes.get(en.id);
+        const { nameY } = uiYsForEnemy(en, entry);
+        const nameLift = showLv ? MOE_3D_ENEMY_UI_NAME_TARGET_EXTRA : 0;
+        const { x, z } = enemyWorldPos(en, entry);
+        sprite.position.set(x, nameY + nameLift, z);
         sprite.visible = true;
       }
       for (const [id, sprite] of enemyNameSprites) {
@@ -551,11 +942,10 @@ export default function MoeField3DCanvas({
       }
       const hpPct = en.hpMax > 0 ? Math.max(0, Math.min(1, en.hp / en.hpMax)) : 0;
       const hpPctUi = Math.round(hpPct * 100);
-      const hpLine = `${Math.ceil(en.hp)}/${en.hpMax}`;
       if (!targetHpSprite) {
         const canvas2d = document.createElement("canvas");
-        canvas2d.width = 256;
-        canvas2d.height = 48;
+        canvas2d.width = 320;
+        canvas2d.height = 24;
         const tex = new THREE.CanvasTexture(canvas2d);
         const mat = new THREE.SpriteMaterial({
           map: tex,
@@ -563,16 +953,16 @@ export default function MoeField3DCanvas({
           depthTest: false,
         });
         targetHpSprite = new THREE.Sprite(mat);
-        targetHpSprite.scale.set(3.0, 0.58, 1);
+        targetHpSprite.scale.set(3.2, 0.38, 1);
         targetHpSprite.renderOrder = 998;
         popupGroup.add(targetHpSprite);
       }
       const canvas2d = targetHpSprite.material.map.image;
       const ctx = canvas2d.getContext("2d");
-      ctx.clearRect(0, 0, 256, 48);
+      ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
       const barW = 132;
       const barH = 10;
-      const barX = 96;
+      const barX = 96 + MOE_3D_ENEMY_UI_HP_CANVAS_SHIFT_X;
       const barY = 6;
       ctx.fillStyle = "rgba(0,0,0,0.62)";
       ctx.fillRect(barX, barY, barW, barH);
@@ -582,16 +972,15 @@ export default function MoeField3DCanvas({
       ctx.strokeStyle = "rgba(255,255,255,0.35)";
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barW, barH);
-      ctx.font = "bold 11px sans-serif";
-      ctx.textAlign = "left";
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 2;
-      ctx.strokeText(hpLine, barX + 4, barY + barH + 14);
-      ctx.fillStyle = "#fecaca";
-      ctx.fillText(hpLine, barX + 4, barY + barH + 14);
       targetHpSprite.material.map.needsUpdate = true;
-      const gy = heightAt(en.x, en.y);
-      targetHpSprite.position.set(en.x, gy + 1.48, en.y);
+      const entry = enemyMeshes.get(en.id);
+      const { hpY } = uiYsForEnemy(en, entry);
+      const { x, z } = enemyWorldPos(en, entry);
+      targetHpSprite.position.set(
+        x + MOE_3D_ENEMY_UI_HP_WORLD_OFFSET_X,
+        hpY,
+        z
+      );
       targetHpSprite.visible = true;
     }
 
@@ -682,9 +1071,15 @@ export default function MoeField3DCanvas({
         popupGroup.add(targetMarker);
       }
       targetMarker.visible = true;
-      const gy = heightAt(en.x, en.y);
+      const entry = enemyMeshes.get(en.id);
+      const { markerY } = uiYsForEnemy(en, entry);
+      const { x, z } = enemyWorldPos(en, entry);
       const bob = Math.sin(performance.now() * 0.006) * 0.06;
-      targetMarker.position.set(en.x, gy + 1.95 + bob, en.y);
+      targetMarker.position.set(
+        x,
+        markerY + MOE_3D_ENEMY_UI_MARKER_TARGET_EXTRA + bob,
+        z
+      );
     }
 
     function createPetFocusMarker() {
@@ -708,7 +1103,7 @@ export default function MoeField3DCanvas({
           depthTest: false,
         });
         petLabelSprite = new THREE.Sprite(mat);
-        petLabelSprite.scale.set(3.5, 1.28, 1);
+        petLabelSprite.scale.set(3.5, 0.88, 1);
         petLabelSprite.renderOrder = 997;
         popupGroup.add(petLabelSprite);
       }
@@ -720,8 +1115,6 @@ export default function MoeField3DCanvas({
         label.hpMax > 0 ? Math.max(0, Math.min(1, label.hp / label.hpMax)) : 0;
       const hpPctUi = Math.round(hpPct * 100);
       const line1 = String(label.name ?? "ペット");
-      const line2 = `Lv.${label.level ?? 1}`;
-      const hpLine = `HP ${Math.ceil(label.hp)}/${label.hpMax}`;
       const canvas2d = petLabelSprite.material.map.image;
       const ctx = canvas2d.getContext("2d");
       ctx.clearRect(0, 0, 256, 92);
@@ -729,16 +1122,13 @@ export default function MoeField3DCanvas({
       ctx.font = "bold 15px sans-serif";
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = 3;
-      ctx.strokeText(line1, 128, 20);
+      ctx.strokeText(line1, 128, 22);
       ctx.fillStyle = "#ecfdf5";
-      ctx.fillText(line1, 128, 20);
-      ctx.font = "bold 16px sans-serif";
-      ctx.strokeText(line2, 128, 40);
-      ctx.fillStyle = "#6ee7b7";
-      ctx.fillText(line2, 128, 40);
-      const barX = 44;
-      const barY = 48;
-      const barW = 168;
+      ctx.fillText(line1, 128, 22);
+      const barShiftX = 16;
+      const barX = 44 + barShiftX;
+      const barY = 34;
+      const barW = 152;
       const barH = 10;
       ctx.fillStyle = "rgba(0,0,0,0.62)";
       ctx.fillRect(barX, barY, barW, barH);
@@ -748,12 +1138,6 @@ export default function MoeField3DCanvas({
       ctx.strokeStyle = "rgba(167,243,208,0.45)";
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barW, barH);
-      ctx.font = "bold 12px sans-serif";
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 2;
-      ctx.strokeText(hpLine, 128, 74);
-      ctx.fillStyle = "#bbf7d0";
-      ctx.fillText(hpLine, 128, 74);
       petLabelSprite.material.map.needsUpdate = true;
       const gy = heightAt(pt.x, pt.y);
       petLabelSprite.position.set(pt.x, gy + 1.48, pt.y);
@@ -776,6 +1160,10 @@ export default function MoeField3DCanvas({
     let mapReady = false;
     let midBossTerrainPos = null;
     let superBossTerrainPos = null;
+    let mountainBisonTerrainPos = null;
+    let roughBisonTerrainPos = null;
+    let gustavJuniorTerrainPos = null;
+    let rhodaPickGroup = null;
 
     const canvas = renderer.domElement;
     canvas.style.touchAction = "none";
@@ -785,6 +1173,12 @@ export default function MoeField3DCanvas({
       e.preventDefault();
       e.stopPropagation();
     };
+
+    const PET_DOUBLE_CLICK_MS = 400;
+    const PET_DOUBLE_CLICK_PX = 28;
+    let lastPetPointerClickAt = 0;
+    let lastPetPointerClickX = 0;
+    let lastPetPointerClickY = 0;
 
     const onPointerDown = (e) => {
       if (e.button === 2) {
@@ -801,18 +1195,49 @@ export default function MoeField3DCanvas({
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
-      const pickRoots = [...enemyGroup.children];
+      const pickRoots = [...enemyGroup.children, ...treasureGroup.children];
       if (petRoot) pickRoots.push(petRoot);
       else pickRoots.push(petMesh);
       const hits = raycaster.intersectObjects(pickRoots, true);
-      const picked = resolvePickFromHits(hits, pointer, camera, rect);
+      const picked = resolvePickFromHits(
+        hits,
+        pointer,
+        camera,
+        rect,
+        stateRef.current.treasures
+      );
       if (picked?.type === "enemy") {
         onEnemyClickRef.current?.(picked.id);
         return;
       }
+      if (picked?.type === "treasure") {
+        onTreasureClickRef.current?.(picked.id);
+        return;
+      }
       if (picked?.type === "pet") {
+        const now = performance.now();
+        const dx = e.clientX - lastPetPointerClickX;
+        const dy = e.clientY - lastPetPointerClickY;
+        if (
+          now - lastPetPointerClickAt < PET_DOUBLE_CLICK_MS &&
+          dx * dx + dy * dy < PET_DOUBLE_CLICK_PX * PET_DOUBLE_CLICK_PX
+        ) {
+          lastPetPointerClickAt = 0;
+          onPetDoubleClickRef.current?.();
+          return;
+        }
+        lastPetPointerClickAt = now;
+        lastPetPointerClickX = e.clientX;
+        lastPetPointerClickY = e.clientY;
         onPetClickRef.current?.();
         return;
+      }
+      if (rhodaPickGroup) {
+        const rhodaHits = raycaster.intersectObject(rhodaPickGroup, true);
+        if (rhodaHits.length > 0) {
+          onRhodaClickRef.current?.();
+          return;
+        }
       }
 
       const cx = ((pointer.x + 1) / 2) * rect.width;
@@ -836,7 +1261,8 @@ export default function MoeField3DCanvas({
         camera,
         rect,
         stateRef.current.enemies,
-        petPosNow
+        petPosNow,
+        enemyMeshes
       );
       if (fallback?.type === "enemy") {
         onEnemyClickRef.current?.(fallback.id);
@@ -934,6 +1360,9 @@ export default function MoeField3DCanvas({
         );
         midBossTerrainPos = hills.midBossPos;
         superBossTerrainPos = hills.superBossPos;
+        mountainBisonTerrainPos = hills.mountainBisonPos;
+        roughBisonTerrainPos = hills.roughBisonPos;
+        gustavJuniorTerrainPos = hills.gustavJuniorPos;
         mapReady = true;
 
         const houseIntent = moe3dPetHousePosition(
@@ -973,10 +1402,65 @@ export default function MoeField3DCanvas({
         houseGroup.add(door);
         scene.add(houseGroup);
 
+        const rhodaIntent = moe3dRhodaPosition(
+          playBounds.halfW,
+          playBounds.halfD
+        );
+        const rhodaSnap = snapToNearestTerrain(
+          raycaster,
+          terrainGroup,
+          rhodaIntent.x,
+          rhodaIntent.y,
+          14
+        );
+        const rhodaGy = groundY(
+          raycaster,
+          terrainGroup,
+          rhodaSnap.x,
+          rhodaSnap.z
+        );
+        const rhodaGroup = new THREE.Group();
+        rhodaGroup.position.set(rhodaSnap.x, rhodaGy, rhodaSnap.z);
+        const shrineMat = new THREE.MeshStandardMaterial({ color: 0x6b7280 });
+        const crystalMat = new THREE.MeshStandardMaterial({
+          color: 0x8b5cf6,
+          emissive: 0x4c1d95,
+          emissiveIntensity: 0.35,
+        });
+        const shrineBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.35, 1.65, 0.55, 8),
+          shrineMat
+        );
+        shrineBase.position.y = 0.28;
+        shrineBase.castShadow = true;
+        shrineBase.receiveShadow = true;
+        rhodaGroup.add(shrineBase);
+        const shrinePillar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.42, 0.52, 1.05, 6),
+          shrineMat
+        );
+        shrinePillar.position.y = 1.05;
+        shrinePillar.castShadow = true;
+        rhodaGroup.add(shrinePillar);
+        const crystal = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.62, 0),
+          crystalMat
+        );
+        crystal.position.y = 1.95;
+        crystal.rotation.y = Math.PI / 4;
+        crystal.castShadow = true;
+        rhodaGroup.add(crystal);
+        scene.add(rhodaGroup);
+        rhodaPickGroup = rhodaGroup;
+
         onMapReadyRef.current?.({
           ...playBounds,
           midBossPos: midBossTerrainPos,
           superBossPos: superBossTerrainPos,
+          mountainBisonPos: mountainBisonTerrainPos,
+          roughBisonPos: roughBisonTerrainPos,
+          gustavJuniorPos: gustavJuniorTerrainPos,
+          rhodaPos: { x: rhodaSnap.x, y: rhodaSnap.z },
         });
       },
       undefined,
@@ -987,32 +1471,136 @@ export default function MoeField3DCanvas({
       }
     );
 
+    const activePetId = petIdStable.current;
+    const petModelUrl = petModelUrlForId(activePetId);
+    const petTargetHeight = petModelHeightForId(activePetId);
+    petFloatLift = petFloatLiftForId(activePetId);
+
+    let loadedPetId = activePetId;
+    let petLoadGen = 0;
+
+    function disposePetModel() {
+      if (petRoot) {
+        scene.remove(petRoot);
+        disposeObject3D(petRoot);
+        petRoot = null;
+      }
+      if (petMixer) {
+        const idx = animationMixers.indexOf(petMixer);
+        if (idx >= 0) animationMixers.splice(idx, 1);
+        petMixer.stopAllAction();
+        petMixer = null;
+      }
+      petAnimCtrl = null;
+      petMesh.visible = true;
+    }
+
+    function mountPetModel(gltf, nextPetId) {
+      petRoot = SkeletonUtils.clone(gltf.scene);
+      const dragonForm =
+        nextPetId === "mystery_dragon" ? petDragonVisualFormStable.current : 0;
+      if (dragonForm === 1 || dragonForm === 2) {
+        applyMysteryDragonVisualForm(petRoot, dragonForm);
+      } else {
+        const petTint = petTintForId(nextPetId);
+        if (petTint != null) applyModelTint(petRoot, petTint);
+      }
+      ({ groundLift: petGroundLift } = fitModelToGround(
+        petRoot,
+        petModelHeightForId(nextPetId)
+      ));
+      petFloatLift = petFloatLiftForId(nextPetId);
+      petFrontExtent = moe3dMeasureModelFrontExtent(petRoot);
+      enableShadows(petRoot);
+      attachPetPickTarget(petRoot);
+      scene.add(petRoot);
+      petMesh.visible = false;
+
+      const ptLoad = petPosRefStable.current?.current;
+      if (ptLoad) {
+        petRoot.position.set(ptLoad.x, 0, ptLoad.y);
+        lastPetX = ptLoad.x;
+        lastPetY = ptLoad.y;
+      }
+
+      petMixer = new THREE.AnimationMixer(petRoot);
+      petAnimCtrl = createSnakeAnimController(petMixer, gltf.animations, {
+        attackLoop: false,
+      });
+      const attackMsRef = petAttackMsRefStable.current;
+      if (attackMsRef) {
+        attackMsRef.current = petAnimCtrl.attackDurationMs;
+      }
+      animationMixers.push(petMixer);
+      loadedPetId = nextPetId;
+    }
+
+    function loadPetModel(nextPetId) {
+      if (disposed || nextPetId === loadedPetId) return;
+      const gen = ++petLoadGen;
+      const modelUrl = petModelUrlForId(nextPetId);
+      petMesh.visible = true;
+      loader.load(
+        modelUrl,
+        (gltf) => {
+          if (disposed || gen !== petLoadGen) return;
+          if (nextPetId !== petIdStable.current) {
+            loadPetModel(petIdStable.current);
+            return;
+          }
+          disposePetModel();
+          mountPetModel(gltf, nextPetId);
+        },
+        undefined,
+        (err) => console.error("3D pet model load failed:", modelUrl, err)
+      );
+    }
+
     loader.load(
-      PET_MODEL_URL,
+      petModelUrl,
       (gltf) => {
         if (disposed) return;
-        petRoot = SkeletonUtils.clone(gltf.scene);
-        applyModelTint(petRoot, MOE_PET_TINT_DEFAULT);
-        fitModelToGround(petRoot, MOE_PET_MODEL_HEIGHT);
-        enableShadows(petRoot);
-        attachPetPickTarget(petRoot);
-        scene.add(petRoot);
-        petMesh.visible = false;
-        petMixer = new THREE.AnimationMixer(petRoot);
-        petAnimCtrl = createSnakeAnimController(petMixer, gltf.animations, {
-          attackLoop: false,
-        });
-        const attackMsRef = petAttackMsRefStable.current;
-        if (attackMsRef) {
-          attackMsRef.current = petAnimCtrl.attackDurationMs;
-        }
-        animationMixers.push(petMixer);
+        mountPetModel(gltf, activePetId);
       },
       undefined,
-      (err) => console.error("3D pet model load failed:", err)
+      (err) => console.error("3D pet model load failed:", petModelUrl, err)
     );
 
-    for (const modelUrl of [MONSTER_MODEL_URL, MOE_BISON_MODEL_URL]) {
+    petSwapRef.current = (nextPetId) => {
+      if (!nextPetId || nextPetId === loadedPetId) return;
+      loadPetModel(nextPetId);
+    };
+
+    petRemountRef.current = () => {
+      const id = petIdStable.current;
+      if (!id || !loadedPetId) return;
+      loadedPetId = null;
+      loadPetModel(id);
+    };
+
+    loader.load(
+      MOE_PLAYER_MODEL_URL,
+      (gltf) => {
+        if (disposed) return;
+        playerModel = SkeletonUtils.clone(gltf.scene);
+        ({ groundLift: playerGroundLift } = fitModelToGround(
+          playerModel,
+          MOE_PLAYER_MODEL_HEIGHT
+        ));
+        enableShadows(playerModel);
+        playerRoot.add(playerModel);
+        playerPlaceholder.visible = false;
+        playerMixer = new THREE.AnimationMixer(playerModel);
+        playerAnimCtrl = createSnakeAnimController(playerMixer, gltf.animations, {
+          attackLoop: false,
+        });
+        animationMixers.push(playerMixer);
+      },
+      undefined,
+      (err) => console.error("3D player model load failed:", MOE_PLAYER_MODEL_URL, err)
+    );
+
+    for (const modelUrl of MOE_ALL_MONSTER_MODEL_URLS) {
       loader.load(
         modelUrl,
         (gltf) => {
@@ -1055,8 +1643,9 @@ export default function MoeField3DCanvas({
         new THREE.MeshStandardMaterial({ color: tintHex })
       );
       mesh.castShadow = true;
+      const frontExtent = moe3dMeasureModelFrontExtent(mesh);
       attachEnemyPickTarget(mesh, enId, isBig, superBoss);
-      return { root: mesh, mixer: null, animCtrl: null, placeholder: true };
+      return { root: mesh, mixer: null, animCtrl: null, placeholder: true, frontExtent };
     }
 
     function createEnemyModel(en) {
@@ -1064,17 +1653,42 @@ export default function MoeField3DCanvas({
       const asset = monsterAssets.get(modelUrl);
       if (!asset) return null;
       const tint = MOE_ENEMY_TINT_BY_KEY[en.key] ?? 0xef4444;
-      const isBison = modelUrl === MOE_BISON_MODEL_URL;
+      const isBison = isBisonModelUrl(modelUrl);
+      const isOrc = isOrcModelUrl(modelUrl);
+      const isIxion = isIxionModelUrl(modelUrl);
+      const isLion = isLionModelUrl(modelUrl);
+      const isGustav = isGustavModelUrl(modelUrl);
       const root = SkeletonUtils.clone(asset.scene);
-      if (en.key === "auzun_bura") {
-        applyModelTint(root, tint);
-      } else if (!isBison) {
+      const isBossBison = isBison && (en.midBoss || en.superBoss);
+      let fitScale = 1;
+      let groundLift = 0;
+      if (isBossBison) {
+        const ds = en.superBoss
+          ? MOE_SUPER_BOSS_DISPLAY_SCALE
+          : MOE_MID_BOSS_DISPLAY_SCALE;
+        ({ scale: fitScale, groundLift } = moe3dApplyBisonBossDisplayScale(root, ds));
+      } else if (isOrc) {
+        ({ scale: fitScale, groundLift } = moe3dApplyOrcDisplayScale(root));
+      } else if (isIxion) {
+        ({ scale: fitScale, groundLift } = moe3dApplyIxionDisplayScale(root));
+      } else if (isLion) {
+        ({ scale: fitScale, groundLift } = moe3dApplyLionDisplayScale(root));
+      } else if (isGustav) {
+        ({ scale: fitScale, groundLift } = moe3dApplyGustavDisplayScale(root));
+      } else {
+        ({ scale: fitScale, groundLift } = fitModelToGround(
+          root,
+          enemyFitHeightForKey(en.key)
+        ));
+      }
+      let stripeMaterial = false;
+      if (enemyUsesStripeMaterial(en.key)) {
+        applyEarthWormStripeMaterial(root);
+        stripeMaterial = true;
+      } else if (en.key !== "elvin_bison" && !enemyUsesBakedModelColors(en.key)) {
         applyModelTint(root, tint);
       }
-      fitModelToGround(
-        root,
-        isBison ? MOE_BISON_MODEL_HEIGHT : MOE_MONSTER_MODEL_HEIGHT
-      );
+      const frontExtent = moe3dMeasureModelFrontExtent(root);
       enableShadows(root);
       attachEnemyPickTarget(
         root,
@@ -1088,9 +1702,15 @@ export default function MoeField3DCanvas({
         mixer = new THREE.AnimationMixer(root);
         animCtrl = isBison
           ? createBisonAnimController(mixer, asset.clips, { attackLoop: false })
-          : createSnakeAnimController(mixer, asset.clips, {
-              attackLoop: false,
-            });
+          : isOrc
+            ? createOrcAnimController(mixer, asset.clips, { attackLoop: false })
+            : isGustav
+              ? createGustavAnimController(mixer, asset.clips, {
+                  attackLoop: false,
+                })
+              : createSnakeAnimController(mixer, asset.clips, {
+                  attackLoop: false,
+                });
         animationMixers.push(mixer);
       }
       return {
@@ -1100,7 +1720,41 @@ export default function MoeField3DCanvas({
         placeholder: false,
         modelUrl,
         strikeCount: 0,
+        lastAttackVariant: null,
         isBison,
+        isOrc,
+        isGustav,
+        scaleLocked:
+          isBossBison ||
+          isOrc ||
+          isIxion ||
+          isLion ||
+          isGustav ||
+          stripeMaterial ||
+          en.key === "brown_serpent" ||
+          en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY,
+        layoutRev: isBossBison
+          ? MOE_BISON_BOSS_LAYOUT_REV
+          : isOrc
+          ? MOE_ORC_MODEL_LAYOUT_REV
+          : en.key === "earth_worm"
+            ? MOE_EARTH_WORM_MATERIAL_REV
+            : en.key === "stray_ixion"
+              ? MOE_IXION_MODEL_LAYOUT_REV
+              : en.key === "hilltop_lion"
+                ? MOE_HILLTOP_LION_MODEL_LAYOUT_REV
+                : en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY
+                  ? MOE_GUSTAV_JUNIOR_LAYOUT_REV
+                  : 0,
+        combatPosLock: null,
+        combatYawLock: null,
+        postCombatUntil: 0,
+        postCombatPose: null,
+        postCombatYaw: null,
+        lastDisplayScale: fitScale,
+        groundLift,
+        stripeMaterial,
+        frontExtent,
       };
     }
 
@@ -1122,6 +1776,9 @@ export default function MoeField3DCanvas({
 
     function syncEnemyMeshes(enList) {
       const seen = new Set();
+      const duel = duelRefStable.current?.current;
+      const duelCharge = duel?.phase === "simultaneous_charge";
+      const duelEnemyId = duel?.enemyId ?? null;
       for (const en of enList) {
         seen.add(en.id);
         const modelUrl = monsterModelUrlForKey(en.key);
@@ -1141,7 +1798,20 @@ export default function MoeField3DCanvas({
           enemyGroup.add(entry.root);
         } else if (
           assetReady &&
-          (entry.placeholder || entry.modelUrl !== modelUrl)
+          (entry.placeholder ||
+            entry.modelUrl !== modelUrl ||
+            (en.key === "orc_infantry" &&
+              entry.layoutRev !== MOE_ORC_MODEL_LAYOUT_REV) ||
+            (en.key === "earth_worm" &&
+              entry.layoutRev !== MOE_EARTH_WORM_MATERIAL_REV) ||
+            (en.key === "stray_ixion" &&
+              entry.layoutRev !== MOE_IXION_MODEL_LAYOUT_REV) ||
+            (en.key === "hilltop_lion" &&
+              entry.layoutRev !== MOE_HILLTOP_LION_MODEL_LAYOUT_REV) ||
+            (en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY &&
+              entry.layoutRev !== MOE_GUSTAV_JUNIOR_LAYOUT_REV) ||
+            ((en.midBoss || en.superBoss) &&
+              entry.layoutRev !== MOE_BISON_BOSS_LAYOUT_REV))
         ) {
           removeEnemyEntry(en.id, entry);
           entry =
@@ -1158,6 +1828,24 @@ export default function MoeField3DCanvas({
         } else if (en.midBoss && midBossTerrainPos) {
           px = midBossTerrainPos.x;
           pz = midBossTerrainPos.y;
+        } else if (
+          en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY &&
+          mountainBisonTerrainPos
+        ) {
+          px = mountainBisonTerrainPos.x;
+          pz = mountainBisonTerrainPos.y;
+        } else if (
+          en.key === MOE_MEERIM_ROUGH_BISON_KEY &&
+          roughBisonTerrainPos
+        ) {
+          px = roughBisonTerrainPos.x;
+          pz = roughBisonTerrainPos.y;
+        } else if (
+          en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY &&
+          gustavJuniorTerrainPos
+        ) {
+          px = gustavJuniorTerrainPos.x;
+          pz = gustavJuniorTerrainPos.y;
         } else if (mapReady && !isOverTerrain(raycaster, terrainGroup, px, pz)) {
           const snapped = snapToNearestTerrain(raycaster, terrainGroup, px, pz);
           px = snapped.x;
@@ -1165,16 +1853,96 @@ export default function MoeField3DCanvas({
         }
         const gy = heightAt(px, pz);
         const yOff = entry.placeholder ? 0.6 : 0;
-        entry.root.position.set(px, gy + yOff, pz);
-        entry.root.scale.setScalar(moe3dEnemyDisplayScale(en));
+        const groundLift = entry.groundLift ?? 0;
+        const baseY = gy + yOff + groundLift;
+        const lockCombat = duelCharge && duelEnemyId === en.id;
+        const nowMs = performance.now();
+        const postCombatSettling =
+          entry.postCombatUntil > 0 && nowMs < entry.postCombatUntil;
+        if (lockCombat) {
+          entry.postCombatUntil = 0;
+          entry.postCombatPose = null;
+          entry.postCombatYaw = null;
+          if (!entry.combatPosLock) {
+            entry.combatPosLock = new THREE.Vector3(px, baseY, pz);
+            const ptNow = petPosRefStable.current?.current;
+            entry.combatYawLock =
+              ptNow != null
+                ? moe3dYawFaceTarget(px, pz, ptNow.x, ptNow.y) +
+                  moe3dEnemyModelYawOffset(en.key)
+                : entry.root.rotation.y;
+          }
+          entry.root.position.copy(entry.combatPosLock);
+          if (entry.combatYawLock != null) {
+            entry.root.rotation.y = entry.combatYawLock;
+          }
+        } else {
+          if (entry.combatPosLock) {
+            entry.postCombatPose = entry.combatPosLock.clone();
+            entry.postCombatYaw = entry.combatYawLock ?? entry.root.rotation.y;
+            entry.postCombatUntil = nowMs + POST_COMBAT_SETTLE_MS;
+            entry.combatPosLock = null;
+            entry.combatYawLock = null;
+          }
+          if (postCombatSettling && entry.postCombatPose) {
+            entry.root.position.copy(entry.postCombatPose);
+            if (entry.postCombatYaw != null) {
+              entry.root.rotation.y = entry.postCombatYaw;
+            }
+          } else {
+            entry.postCombatUntil = 0;
+            entry.postCombatPose = null;
+            entry.postCombatYaw = null;
+            entry.root.position.set(px, baseY, pz);
+          }
+        }
+        const sc = moe3dEnemyDisplayScale(en);
+        if (
+          !entry.scaleLocked &&
+          entry.lastDisplayScale !== sc
+        ) {
+          entry.root.scale.setScalar(sc);
+          entry.lastDisplayScale = sc;
+        }
+        entry.frontExtent = moe3dMeasureModelFrontExtent(entry.root);
+        entry.root.traverse((obj) => {
+          if (obj.userData?.pickProxy) {
+            obj.visible =
+              en.hp > 0 && !lockCombat && !postCombatSettling;
+          }
+        });
         entry.root.visible = en.hp > 0;
-        entry.pickAnchor = { x: px, groundY: gy + yOff, z: pz };
+        entry.pickAnchor = { x: px, groundY: baseY, z: pz };
+        const gustavIdle =
+          en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY &&
+          !lockCombat &&
+          !postCombatSettling &&
+          !(
+            duel?.enemyId === en.id &&
+            (duel?.phase === "approach" ||
+              duel?.phase === "simultaneous_charge")
+          );
+        if (gustavIdle) {
+          entry.root.rotation.y = moe3dGustavFacePlayerStartYaw(px, pz);
+        }
+        if (en.key === "earth_worm" && entry.stripeMaterial) {
+          updateEarthWormStripeUniforms(entry.root);
+        }
       }
       for (const [id, entry] of enemyMeshes) {
         if (!seen.has(id)) {
           removeEnemyEntry(id, entry);
           enemyMeshes.delete(id);
         }
+      }
+      const extRef = moe3dCombatExtentsRefStable.current;
+      if (extRef?.current) {
+        const byEnemy = {};
+        for (const [id, entry] of enemyMeshes) {
+          if (entry.frontExtent != null) byEnemy[id] = entry.frontExtent;
+        }
+        extRef.current.pet = petFrontExtent;
+        extRef.current.enemies = byEnemy;
       }
     }
 
@@ -1183,10 +1951,15 @@ export default function MoeField3DCanvas({
       const duel = duelRefStable.current?.current;
       const strikeUntil = petStrikeUntilRefStable.current?.current ?? 0;
       const now = performance.now();
-      const striking = now < strikeUntil;
 
-      const petSpeed =
-        Math.hypot(pt.x - lastPetX, pt.y - lastPetY) / Math.max(dt, 0.001);
+      const inCombatCharge = duel?.phase === "simultaneous_charge";
+      if (inCombatCharge) {
+        lastPetX = pt.x;
+        lastPetY = pt.y;
+      }
+      const petSpeed = inCombatCharge
+        ? 0
+        : Math.hypot(pt.x - lastPetX, pt.y - lastPetY) / Math.max(dt, 0.001);
       const petMoving = petSpeed > 0.2;
       const petRunForced = petRunAnimRefStable.current?.current ?? false;
       const playerSprinting = playerSprintRefStable.current?.current ?? false;
@@ -1194,12 +1967,13 @@ export default function MoeField3DCanvas({
       const holdStill = petCmd === "wait" || petCmd === "sit";
 
       let baseMode = "idle";
-      if (duel?.phase === "approach") {
+      if (duel?.phase === "simultaneous_charge") {
+        baseMode = "idle";
+      } else if (duel?.phase === "approach") {
         baseMode = "run";
       } else if (
         !holdStill &&
         (petMoving || petRunForced) &&
-        duel?.phase !== "simultaneous_charge" &&
         duel?.phase !== "approach"
       ) {
         baseMode = "run";
@@ -1214,12 +1988,19 @@ export default function MoeField3DCanvas({
       }
 
       if (strikeUntil > lastPetStrikeUntil) {
-        petAnimCtrl.setMode("attack", {
-          restart: true,
-          afterAttack: baseMode,
-        });
         lastPetStrikeUntil = strikeUntil;
-      } else if (!striking && petAnimCtrl.getMode() !== baseMode) {
+        const isSunSpirit = petIdStable.current === "sun_spirit";
+        const inAttack = petAnimCtrl.getMode() === "attack";
+        if (isSunSpirit || !inAttack) {
+          petAnimCtrl.setMode("attack", {
+            restart: true,
+            afterAttack: baseMode,
+          });
+        }
+      } else if (
+        petAnimCtrl.getMode() !== "attack" &&
+        petAnimCtrl.getMode() !== baseMode
+      ) {
         petAnimCtrl.setMode(baseMode);
       }
 
@@ -1230,8 +2011,6 @@ export default function MoeField3DCanvas({
     function syncEnemyAnimations() {
       const duel = duelRefStable.current?.current;
       const strikeUntil = enemyStrikeUntilRefStable.current?.current ?? 0;
-      const now = performance.now();
-      const striking = now < strikeUntil;
 
       for (const [id, entry] of enemyMeshes) {
         if (!entry.animCtrl) continue;
@@ -1247,22 +2026,30 @@ export default function MoeField3DCanvas({
         }
 
         if (isDuelEnemy && strikeUntil > lastEnemyStrikeUntil) {
-          const useStrong = entry.isBison && (entry.strikeCount ?? 0) % 2 === 1;
-          entry.strikeCount = (entry.strikeCount ?? 0) + 1;
+          lastEnemyStrikeUntil = strikeUntil;
+          const strikePick = enemyStrikeVariantRefStable.current?.current;
+          const variant =
+            strikePick?.enemyId === id ? strikePick.variant : "weak";
+          const inAttack = entry.animCtrl.getMode() === "attack";
+          if (inAttack) {
+            enemyAnimModes.set(id, "attack");
+            continue;
+          }
           entry.animCtrl.setMode("attack", {
             restart: true,
             afterAttack: "idle",
-            variant: useStrong ? "strong" : "weak",
+            variant,
           });
-          if (entry.isBison && entry.animCtrl?.attackDurationMs) {
+          entry.lastAttackVariant = variant;
+          if ((entry.isBison || entry.isOrc || entry.isGustav) && entry.animCtrl?.attackDurationMs) {
             const msRef = enemyAttackMsRefStable.current;
             if (msRef) msRef.current = entry.animCtrl.attackDurationMs;
           }
-          lastEnemyStrikeUntil = strikeUntil;
           enemyAnimModes.set(id, "attack");
-        } else if (isDuelEnemy && !striking && enemyAnimModes.get(id) !== "idle") {
-          entry.animCtrl.setMode("idle");
-          enemyAnimModes.set(id, "idle");
+        } else if (isDuelEnemy && entry.animCtrl.getMode() === "attack") {
+          enemyAnimModes.set(id, "attack");
+        } else if (isDuelEnemy) {
+          enemyAnimModes.set(id, entry.animCtrl.getMode());
         }
       }
     }
@@ -1283,36 +2070,66 @@ export default function MoeField3DCanvas({
 
       const inDuelFace =
         duel?.phase === "simultaneous_charge" || duel?.phase === "approach";
+      const petSettling =
+        petPostCombatUntil > 0 && performance.now() < petPostCombatUntil;
 
-      if (!inDuelFace) {
-        if (petRoot) petRoot.rotation.y = playerMesh.rotation.y;
-        else petMesh.rotation.y = playerMesh.rotation.y;
+      if (!inDuelFace && !petSettling) {
+        duelChargeFaceLock = null;
+        if (petRoot) petRoot.rotation.y = playerRoot.rotation.y;
+        else petMesh.rotation.y = playerRoot.rotation.y;
+        return;
+      }
+
+      if (petSettling) {
+        if (petPostCombatYaw != null) {
+          if (petRoot) petRoot.rotation.y = petPostCombatYaw;
+          else petMesh.rotation.y = petPostCombatYaw;
+        }
         return;
       }
 
       const enemy = ens.find((e) => e.id === duel.enemyId);
-      if (!enemy || enemy.hp <= 0) return;
+      if (!enemy || enemy.hp <= 0) {
+        duelChargeFaceLock = null;
+        return;
+      }
 
       const petYaw =
         moe3dYawFaceTarget(pt.x, pt.y, enemy.x, enemy.y) +
         MOE_PET_MODEL_YAW_OFFSET;
       const enemyYaw =
         moe3dYawFaceTarget(enemy.x, enemy.y, pt.x, pt.y) +
-        MOE_MONSTER_MODEL_YAW_OFFSET;
+        moe3dEnemyModelYawOffset(enemy.key);
+
+      if (duel?.phase === "simultaneous_charge") {
+        if (
+          !duelChargeFaceLock ||
+          duelChargeFaceLock.enemyId !== duel.enemyId
+        ) {
+          duelChargeFaceLock = {
+            enemyId: duel.enemyId,
+            petYaw,
+            enemyYaw,
+          };
+        }
+        const lock = duelChargeFaceLock;
+        if (petRoot) petRoot.rotation.y = lock.petYaw;
+        else petMesh.rotation.y = lock.petYaw;
+        const entry = enemyMeshes.get(enemy.id);
+        if (entry?.root) {
+          entry.root.rotation.y = lock.enemyYaw;
+          entry.combatYawLock = lock.enemyYaw;
+        }
+        return;
+      }
+
+      duelChargeFaceLock = null;
       const t = 1 - Math.exp(-22 * dt);
 
       if (petRoot) {
-        petRoot.rotation.y = THREE.MathUtils.lerp(
-          petRoot.rotation.y,
-          petYaw,
-          t
-        );
+        petRoot.rotation.y = THREE.MathUtils.lerp(petRoot.rotation.y, petYaw, t);
       } else {
-        petMesh.rotation.y = THREE.MathUtils.lerp(
-          petMesh.rotation.y,
-          petYaw,
-          t
-        );
+        petMesh.rotation.y = THREE.MathUtils.lerp(petMesh.rotation.y, petYaw, t);
       }
 
       const entry = enemyMeshes.get(enemy.id);
@@ -1325,33 +2142,95 @@ export default function MoeField3DCanvas({
       }
     }
 
+    function drawTenthBannerCanvas(ctx, w, h, text) {
+      ctx.clearRect(0, 0, w, h);
+      const label = String(text ?? MOE_PET_TENTH_LEVEL_UP_LABEL);
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.88)";
+      ctx.lineWidth = 5;
+      ctx.strokeText(label, w / 2, h / 2);
+      ctx.fillStyle = "#fde047";
+      ctx.fillText(label, w / 2, h / 2);
+    }
+
+    function getPetBodyAnchor() {
+      if (petRoot) {
+        return {
+          x: petRoot.position.x,
+          groundY: petRoot.position.y,
+          z: petRoot.position.z,
+        };
+      }
+      if (petMesh) {
+        return {
+          x: petMesh.position.x,
+          groundY: petMesh.position.y - 0.55,
+          z: petMesh.position.z,
+        };
+      }
+      const pt = petPosRefStable.current?.current ?? { x: 0, y: 0 };
+      const gy = heightAt(pt.x, pt.y);
+      return { x: pt.x, groundY: gy, z: pt.y };
+    }
+
     function syncPopups(pops) {
       const seen = new Set();
+      const now = performance.now();
+
       for (const pop of pops) {
+        if (pop.type !== "tenthBanner") continue;
         seen.add(pop.id);
         let sprite = popupSprites.get(pop.id);
+
         if (!sprite) {
           const canvas2d = document.createElement("canvas");
-          canvas2d.width = 128;
-          canvas2d.height = 64;
+          canvas2d.width = 256;
+          canvas2d.height = 40;
           const tex = new THREE.CanvasTexture(canvas2d);
-          const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+          const mat = new THREE.SpriteMaterial({
+            map: tex,
+            transparent: true,
+            depthTest: false,
+          });
           sprite = new THREE.Sprite(mat);
-          sprite.scale.set(2.5, 1.25, 1);
           sprite.userData.popId = pop.id;
+          sprite.userData.kind = "tenthBanner";
+          sprite.userData.spawnTime = performance.now();
+          drawTenthBannerCanvas(
+            canvas2d.getContext("2d"),
+            canvas2d.width,
+            canvas2d.height,
+            String(pop.value ?? MOE_PET_TENTH_LEVEL_UP_LABEL)
+          );
+          tex.needsUpdate = true;
           popupSprites.set(pop.id, sprite);
           popupGroup.add(sprite);
         }
-        const canvas2d = sprite.material.map.image;
-        const ctx = canvas2d.getContext("2d");
-        ctx.clearRect(0, 0, 128, 64);
-        ctx.font = "bold 36px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillStyle = pop.fromEnemy ? "#60a5fa" : "#ef4444";
-        ctx.fillText(String(pop.value), 64, 42);
-        sprite.material.map.needsUpdate = true;
-        const gy = heightAt(pop.x, pop.y);
-        sprite.position.set(pop.x, gy + 2.2, pop.y);
+        const spawnTime = sprite.userData.spawnTime ?? now;
+        const elapsed = Math.max(0, (now - spawnTime) / 1000);
+        const dur = MOE_TENTH_BANNER_DURATION_SEC_3D;
+        const fadeInEnd = dur * 0.1;
+        const fadeOutStart = dur * 0.68;
+        const fadeOutDur = dur - fadeOutStart;
+        const ptNow = petPosRefStable.current?.current ?? {
+          x: pop.x,
+          y: pop.y,
+        };
+        const gy = heightAt(ptNow.x, ptNow.y);
+        const t = Math.min(1, elapsed / dur);
+        const ease = 1 - (1 - t) * (1 - t);
+        const rise = ease * 2.6;
+        const fade =
+          elapsed > fadeOutStart
+            ? Math.max(0, 1 - (elapsed - fadeOutStart) / fadeOutDur)
+            : Math.min(1, elapsed / fadeInEnd);
+        const scaleMul = 0.86 + ease * 0.14;
+        sprite.scale.set(3.1 * scaleMul, 0.48 * scaleMul, 1);
+        sprite.material.opacity = fade;
+        sprite.position.set(ptNow.x, gy + 0.72 + rise, ptNow.y);
       }
       for (const [id, sprite] of popupSprites) {
         if (!seen.has(id)) {
@@ -1363,51 +2242,256 @@ export default function MoeField3DCanvas({
       }
     }
 
+    function syncTreasureMeshes(trList) {
+      const seen = new Set();
+      for (const tr of trList) {
+        if (tr.state === "looted") continue;
+        seen.add(tr.id);
+        let entry = treasureMeshes.get(tr.id);
+        if (!entry) {
+          entry = createTreasureChestGroup(tr.id);
+          treasureMeshes.set(tr.id, entry);
+          treasureGroup.add(entry.root);
+        }
+        let px = tr.x;
+        let pz = tr.y;
+        if (mapReady && !isOverTerrain(raycaster, terrainGroup, px, pz)) {
+          const snapped = snapToNearestTerrain(raycaster, terrainGroup, px, pz);
+          px = snapped.x;
+          pz = snapped.z;
+        }
+        const gy = heightAt(px, pz);
+        entry.root.position.set(px, gy, pz);
+
+        const spawnAge = (performance.now() - entry.spawnTime) / 1000;
+        const bounce =
+          spawnAge < 0.55
+            ? 1 + Math.sin(spawnAge * Math.PI * 3.5) * 0.1 * Math.max(0, 1 - spawnAge * 1.8)
+            : 1;
+        entry.root.scale.setScalar(bounce);
+
+        const lid = entry.root.getObjectByName("treasureLid");
+        if (lid) {
+          lid.rotation.x = tr.state === "open" ? -Math.PI * 0.62 : 0;
+        }
+        entry.root.traverse((obj) => {
+          if (obj.userData?.pickProxy && obj.userData?.treasureId != null) {
+            obj.visible = tr.state === "closed";
+          }
+        });
+      }
+      for (const [id, entry] of treasureMeshes) {
+        if (!seen.has(id)) {
+          treasureGroup.remove(entry.root);
+          disposeObject3D(entry.root);
+          treasureMeshes.delete(id);
+        }
+      }
+    }
+
     const tick = () => {
       if (disposed) return;
       animId = requestAnimationFrame(tick);
       const dt = Math.min(clock.getDelta(), 0.05);
 
-      const { enemies: ens, battlePopups: pops, targetEnemyId: targetId, petFocused: petFocus, petLabel: petLbl } =
-        stateRef.current;
+      const {
+        enemies: ens,
+        treasures: trs,
+        battlePopups: pops,
+        targetEnemyId: targetId,
+        petFocused: petFocus,
+        petLabel: petLbl,
+      } = stateRef.current;
       const pl = playerPosRefStable.current?.current ?? { x: 0, y: 0 };
-      const pt = petPosRefStable.current?.current ?? { x: 0, y: 0 };
+      const pt = petPosRefStable.current?.current ?? pl;
+      const spawnEpoch = petSpawnEpochRefStable.current?.current ?? 0;
+      if (spawnEpoch !== lastPetSpawnEpoch) {
+        lastPetSpawnEpoch = spawnEpoch;
+        lastPetX = pt.x;
+        lastPetY = pt.y;
+      }
 
       syncEnemyMeshes(ens);
-      syncEnemyNameLabels(ens);
+      syncTreasureMeshes(trs ?? []);
+      syncEnemyNameLabels(ens, targetId);
       syncTargetHpBar(ens, targetId);
       syncPetLabel(pt, petLbl, petFocus);
-      syncPopups(pops || []);
       syncTargetMarker(ens, targetId);
       syncPetAnimation(pt, dt);
       syncEnemyAnimations();
       syncDuelFacing(ens, pt, dt);
 
+      const duelPhase = duelRefStable.current?.current?.phase;
+      const battleMult = battleSpeedMultRefStable.current?.current ?? 1;
+      const mixerTimeScale =
+        battleMult > 1 &&
+        (duelPhase === "approach" || duelPhase === "simultaneous_charge")
+          ? battleMult
+          : 1;
       for (const mixer of animationMixers) {
+        mixer.timeScale = mixerTimeScale;
         mixer.update(dt);
       }
 
+      const duelNow = duelRefStable.current?.current;
+      const duelBusy =
+        duelNow?.phase === "approach" ||
+        duelNow?.phase === "simultaneous_charge";
+      if (!duelBusy && lastDuelBusy) {
+        lastEnemyStrikeUntil = 0;
+        lastPetStrikeUntil = 0;
+      }
+      lastDuelBusy = duelBusy;
+
       const pgY = heightAt(pl.x, pl.y);
       const jumpY = playerJumpRefStable.current?.current?.offset ?? 0;
-      playerMesh.position.set(pl.x, pgY + PLAYER_HEIGHT + jumpY, pl.y);
+      const playerYOffset = playerModel ? playerGroundLift : PLAYER_HEIGHT;
+      playerRoot.position.set(pl.x, pgY + playerYOffset + jumpY, pl.y);
 
       const facingRef = playerFacingRefStable.current;
       if (facingRef) {
-        playerMesh.rotation.y = THREE.MathUtils.lerp(
-          playerMesh.rotation.y,
+        playerRoot.rotation.y = THREE.MathUtils.lerp(
+          playerRoot.rotation.y,
           facingRef.current,
           1 - Math.exp(-14 * dt)
         );
       }
 
-      const petGY = heightAt(pt.x, pt.y);
-      if (petRoot) {
-        petRoot.position.set(pt.x, petGY, pt.y);
-      } else {
-        petMesh.position.set(pt.x, petGY + 0.55, pt.y);
+      if (playerAnimCtrl) {
+        const sprinting = playerSprintRefStable.current?.current ?? false;
+        const playerSpeed =
+          Math.hypot(pl.x - lastPlayerX, pl.y - lastPlayerY) / Math.max(dt, 0.001);
+        const moving = playerSpeed > 0.35;
+        let mode = "idle";
+        if (moving && sprinting) {
+          mode = "run";
+          if (playerAnimCtrl.setRunTimeScale) {
+            playerAnimCtrl.setRunTimeScale(
+              MOE_SNAKE_RUN_CLIP_DURATION_SEC / MOE_PLAYER_RUN_BOB_CYCLE_SEC
+            );
+          }
+        } else if (moving) {
+          mode = "walk";
+          if (playerAnimCtrl.setWalkTimeScale) {
+            playerAnimCtrl.setWalkTimeScale(
+              MOE_SNAKE_WALK_CLIP_DURATION_SEC / MOE_PLAYER_WALK_BOB_CYCLE_SEC
+            );
+          }
+        }
+        if (playerAnimCtrl.getMode() !== mode) {
+          playerAnimCtrl.setMode(mode);
+        }
+        lastPlayerX = pl.x;
+        lastPlayerY = pl.y;
       }
 
-      const focus = playerMesh.position.clone();
+      const petGY = heightAt(pt.x, pt.y);
+      let petGroundY = petGY + petGroundLift + petFloatLift;
+      const inCombatCharge = duelNow?.phase === "simultaneous_charge";
+      const nowMs = performance.now();
+      const petSettling =
+        petPostCombatUntil > 0 && nowMs < petPostCombatUntil;
+      if (inCombatCharge) {
+        petPostCombatUntil = 0;
+        petPostCombatPos = null;
+        petPostCombatYaw = null;
+        if (petCombatGroundY == null) petCombatGroundY = petGY + petGroundLift;
+        petGroundY = petCombatGroundY;
+        if (petCombatPosLock == null) {
+          petCombatPosLock = new THREE.Vector3(pt.x, petGroundY, pt.y);
+        }
+      } else {
+        if (petCombatPosLock) {
+          petPostCombatPos = petCombatPosLock.clone();
+          petPostCombatYaw = petRoot?.rotation.y ?? petMesh.rotation.y;
+          petPostCombatUntil = nowMs + POST_COMBAT_SETTLE_MS;
+          petCombatPosLock = null;
+        }
+        petCombatGroundY = null;
+      }
+      if (petRoot) {
+        if (inCombatCharge && petCombatPosLock) {
+          petRoot.position.copy(petCombatPosLock);
+        } else if (petSettling && petPostCombatPos) {
+          petRoot.position.copy(petPostCombatPos);
+        } else {
+          petRoot.position.set(pt.x, petGroundY, pt.y);
+        }
+        petRoot.traverse((obj) => {
+          if (obj.userData?.pickProxy) {
+            obj.visible = !inCombatCharge && !petSettling;
+          }
+        });
+      } else if (petSettling && petPostCombatPos) {
+        petMesh.position.set(
+          petPostCombatPos.x,
+          petPostCombatPos.y + 0.55,
+          petPostCombatPos.z
+        );
+      } else {
+        petMesh.position.set(pt.x, petGroundY + 0.55, pt.y);
+      }
+
+      const showPhoenixTailFire =
+        petIdStable.current === "mystery_dragon" &&
+        petDragonVisualFormStable.current === 2 &&
+        !!petRoot;
+      phoenixTailFire.setEnabled(showPhoenixTailFire);
+      if (showPhoenixTailFire) {
+        phoenixTailFire.update(dt, petRoot);
+      }
+
+      syncPopups(pops || []);
+
+      const overlayOut = overlayProjectRefStable.current;
+      if (overlayOut) {
+        const el = renderer.domElement;
+        const ow = el.clientWidth;
+        const oh = el.clientHeight;
+        const petBodyLift =
+          petModelHeightForId(petIdStable.current) * 0.62 + petFloatLift;
+        overlayOut.current = {
+          ready: ow > 0 && oh > 0,
+          width: ow,
+          height: oh,
+          petBodyLift,
+          getPetAnchor: getPetBodyAnchor,
+          getEnemyUiYs(enemyId) {
+            const entry = enemyMeshes.get(enemyId);
+            const en = ens.find((e) => e.id === enemyId);
+            if (!en) return null;
+            const gy = entry?.pickAnchor?.groundY ?? heightAt(en.x, en.y);
+            const ys = moe3dEnemyUiWorldYs(entry, en.key, gy);
+            const pos = entry?.pickAnchor
+              ? { x: entry.pickAnchor.x, z: entry.pickAnchor.z }
+              : { x: en.x, z: en.y };
+            return { ...pos, ...ys };
+          },
+          project(worldX, worldZ, yOffset) {
+            const gy = heightAt(worldX, worldZ);
+            overlayProjVec.set(worldX, gy + yOffset, worldZ);
+            overlayProjVec.project(camera);
+            return {
+              x: (overlayProjVec.x * 0.5 + 0.5) * ow,
+              y: (-overlayProjVec.y * 0.5 + 0.5) * oh,
+              visible:
+                overlayProjVec.z >= -1 && overlayProjVec.z <= 1,
+            };
+          },
+          projectAt(worldX, worldY, worldZ) {
+            overlayProjVec.set(worldX, worldY, worldZ);
+            overlayProjVec.project(camera);
+            return {
+              x: (overlayProjVec.x * 0.5 + 0.5) * ow,
+              y: (-overlayProjVec.y * 0.5 + 0.5) * oh,
+              visible:
+                overlayProjVec.z >= -1 && overlayProjVec.z <= 1,
+            };
+          },
+        };
+      }
+
+      const focus = playerRoot.position.clone();
       const desiredCam = focus
         .clone()
         .add(cameraOffsetFromOrbit(camYaw, camPitch, camDistance));
@@ -1435,6 +2519,10 @@ export default function MoeField3DCanvas({
 
     return () => {
       disposed = true;
+      petSwapRef.current = null;
+      petLoadGen += 1;
+      disposePetModel();
+      phoenixTailFire.dispose();
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("contextmenu", blockContextMenu, { capture: true });

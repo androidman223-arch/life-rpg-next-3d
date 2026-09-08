@@ -223,6 +223,24 @@ export function moe2dSuperBossSpawnPosition(rowLayout, mw) {
   return moe2dBossAreaLayout(rowLayout, mw).superBossPos;
 }
 
+/** マウンテンバイソン — エルビン バイソンの少し南西 */
+export function moe2dMountainBisonSpawnPosition(rowLayout, mw) {
+  const { midBossPos } = moe2dBossAreaLayout(rowLayout, mw);
+  return {
+    x: midBossPos.x - 52,
+    y: midBossPos.y + 68,
+  };
+}
+
+/** 荒くれバイソン — アウズンブラの少し南東 */
+export function moe2dRoughBisonSpawnPosition(rowLayout, mw) {
+  const { superBossPos } = moe2dBossAreaLayout(rowLayout, mw);
+  return {
+    x: superBossPos.x + 52,
+    y: superBossPos.y + 68,
+  };
+}
+
 /** 2Dボスエリア内か */
 export function moe2dIsInBossArea(x, y, rowLayout, mw, padding = 12) {
   const area = moe2dBossAreaLayout(rowLayout, mw);
@@ -267,6 +285,30 @@ export function moe2dIsNearPetHouse(px, py, rowLayout, mw) {
   const cx = house.npcX;
   const cy = house.npcY;
   return Math.hypot(px - cx, py - cy) <= house.interactRadius;
+}
+
+/** スタート列・南側 — 魂の記憶者ローダ（ペット小屋と離す） */
+export function moe2dRhodaLayout(rowLayout, mw) {
+  const start = rowLayout.find((r) => r.kind === "start");
+  const rowH = start?.h ?? 80;
+  const width = 80;
+  const height = 72;
+  const x = Math.min(mw - width - 48, mw * 0.44);
+  const y = start ? start.y + rowH * 0.78 : rowH * 0.78;
+  return {
+    x,
+    y,
+    width,
+    height,
+    npcX: x + width * 0.5,
+    npcY: y + height * 0.58,
+    interactRadius: 54,
+  };
+}
+
+export function moe2dIsNearRhoda(px, py, rowLayout, mw) {
+  const spot = moe2dRhodaLayout(rowLayout, mw);
+  return Math.hypot(px - spot.npcX, py - spot.npcY) <= spot.interactRadius;
 }
 
 export function moe2dRowLayoutTotalHeight(rowLayout) {
