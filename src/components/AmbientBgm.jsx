@@ -38,7 +38,7 @@ const LOCAL_TRACKS = [
   {
     id: "local",
     label: "マイ BGM：ambient-bgm.mp3",
-    path: `${BGM_DIR}/ambient-bgm.mp3`,
+    path: "/ambient-bgm.mp3",
   },
   ...Array.from({ length: 6 }, (_, i) => {
     const n = i + 2;
@@ -48,6 +48,11 @@ const LOCAL_TRACKS = [
       path: `${BGM_DIR}/ambient-bgm-${n}.mp3`,
     };
   }),
+  {
+    id: "eruan",
+    label: "エルアン：ambient-bgm-8eruan.mp3",
+    path: "/ambient-bgm-8eruan.mp3.mp3",
+  },
 ];
 
 const LOCAL_ID = LOCAL_TRACKS[0].id;

@@ -7,8 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "smoke": "node --test tests/moe/smoke.test.mjs",
     "generate:monsters": "node scripts/generateAllMonsterGlbs.mjs",
     "generate:pets": "node scripts/generateAllPetGlbs.mjs",
+    "generate:dragons": "node scripts/pets/generateDragonVariantsGlb.mjs",
+    "generate:monster-lineup": "node scripts/monsters/generateMonsterLineupGlb.mjs",
+    "generate:hatiil": "node scripts/monsters/generateHatiilGlb.mjs",
+    "generate:macro1": "node scripts/monsters/generateMacro1Glb.mjs",
+    "apply:showcase-delete": "node scripts/applyShowcaseDeleteQueue.mjs",
+    "apply:showcase-delete:dry-run": "node scripts/applyShowcaseDeleteQueue.mjs --dry-run",
     "generate:player": "node scripts/generatePlayerCogniteMaleGlb.mjs"
   },
   "dependencies": {

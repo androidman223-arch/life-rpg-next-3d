@@ -36,10 +36,6 @@ const MOE_PLAYER_SKILL_SLOT_BY_ID = {
   ninja_kakuremino: 2,
 };
 
-/** 神速 — 発動時間・再使用待ち（秒） */
-export const MOE_SHINSOKU_ACTIVE_MS = 5000;
-export const MOE_SHINSOKU_COOLDOWN_MS = 5000;
-
 /** 第1弾: Lv10 / 30 / 50 の3スキルのみ */
 export const MOE_PLAYER_NINJA_SKILLS = [
   {
@@ -60,13 +56,12 @@ export const MOE_PLAYER_NINJA_SKILLS = [
     name: "神速",
     nameEn: "Shinsoku",
     category: "movement",
-    activation: "timed",
+    activation: "toggle",
     iconComponent: "MoeShinsokuIcon",
     description:
-      "ボタンで5秒間、Shift 走行中の移動速度をさらに3倍（合計6倍速）。使用後5秒待機。",
+      "トグル ON で Shift 走行中の移動速度をさらに3倍（合計6倍速）。いつでも切替可能。",
     moeReference: "ツイスターラン ＋ 神速の勾玉",
     status: "done",
-    requiresObtain: true,
   },
   {
     id: "ninja_kakuremino",

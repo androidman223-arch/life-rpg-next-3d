@@ -89,9 +89,15 @@ export function shouldMoeEnemyDropTreasure(enemyKey) {
   return MOE_TREASURE_DROP_ENEMY_KEYS.has(enemyKey ?? "");
 }
 
-/** @param {string} sourceEnemyKey */
-export function lootItemIdForMoeTreasureDrop(sourceEnemyKey) {
+/**
+ * @param {string} sourceEnemyKey
+ * @param {{ playerHasShinsoku?: boolean }} [opts]
+ */
+export function lootItemIdForMoeTreasureDrop(sourceEnemyKey, opts = {}) {
   if (sourceEnemyKey === "gustav_junior") {
+    if (!opts.playerHasShinsoku) {
+      return MOE_ITEM_NINJA_TABI.id;
+    }
     return MOE_ITEM_EXPERIENCE_CUBE.id;
   }
   return MOE_ITEM_EXPERIENCE_POWDER.id;
@@ -108,14 +114,15 @@ export function createMoeFieldTreasureDrop(
   id,
   x,
   y,
-  sourceEnemyKey = "orc_infantry"
+  sourceEnemyKey = "orc_infantry",
+  opts = {}
 ) {
   return {
     id,
     x,
     y,
     state: "closed",
-    lootItemId: lootItemIdForMoeTreasureDrop(sourceEnemyKey),
+    lootItemId: lootItemIdForMoeTreasureDrop(sourceEnemyKey, opts),
     sourceEnemyKey,
   };
 }

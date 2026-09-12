@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { flushSync } from "react-dom";
-import { loadGameStatus } from "@/lib/gameStatus";
+import { DEFAULT_GAME_STATUS, loadGameStatus } from "@/lib/gameStatus";
 import {
   getDefaultPetForId,
   loadInitialMoePetFromStorage,
@@ -61,32 +61,125 @@ import {
 } from "../data/moePets";
 import { resolveMoeDuelSkillSequence } from "../data/moePetCombatSkills";
 import MoeField3DCanvas from "@/components/MoeField3DCanvas";
+import MoeAltarWarpPanel from "@/components/MoeAltarWarpPanel";
+import {
+  MOE_ALTARS,
+  moeAltarDestinationById,
+} from "@/data/moeAltarWarps";
+import {
+  moe3dClampMoveAgainstColumnColliders,
+  moe3dMacro3WorldCollidersAt,
+} from "@/lib/moe3dMacro3Colliders";
+import {
+  moe3dDefaultPlayerSpawn,
+  moe3dEstimatedTileSize,
+  moe3dFindNearbyAltar,
+  moe3dWarpDestSpawnWorld,
+} from "@/lib/moe3dAltarWarp";
+import {
+  countMoeHolyRecordItems,
+  createMoeHolyRecordStone,
+  isMoeHolyRecordBoxItem,
+  MOE_HOLY_RECORD_CHANT_SEC,
+  MOE_HOLY_RECORD_MAX_STONES,
+  MOE_TELEPORT_CHANT_SEC,
+  moeHolyRecordToBoxItem,
+} from "@/data/moeHolyRecord";
+import { clearHolyRecordWorldStones } from "@/lib/moeHolyRecordStorage";
+import { formatMoe3dHudCoordLabel } from "@/lib/moe3dHolyRecordStone";
+import {
+  moe3dMonsterFieldSpawnPoints,
+  moe3dPickRespawnInMapSlot,
+  moe3dMonsterFieldMapSlotIds,
+  moe3dIsMapSlotFieldEnemy,
+  moe3dMonsterFieldSpawnWorld,
+} from "@/lib/moe3dMonsterMapSpawns";
+import { moeMonsterFieldBase } from "@/data/moeMonsterFieldRegistry";
 import MoeField3DBattleOverlay from "@/components/MoeField3DBattleOverlay";
 import MoeField3DTreasureOverlay from "@/components/MoeField3DTreasureOverlay";
 import MoeTargetWindow from "@/components/MoeTargetWindow";
+import MoeEnemyStatSearchPanel from "@/components/MoeEnemyStatSearchPanel";
+import MoeCircleMarker from "@/components/MoeCircleMarker";
 import MoeCrystalMarker from "@/components/MoeCrystalMarker";
 import MoeNpcDialogue from "@/components/MoeNpcDialogue";
 import MoePetHpWindow from "@/components/MoePetHpWindow";
+import MoePlayerHpWindow from "@/components/MoePlayerHpWindow";
 import MoeDuelTimeBarWindow from "@/components/MoeDuelTimeBarWindow";
-import MoeSkillIconBar, {
-  MOE_SKILL_ICON_SLOT_COUNT,
-} from "@/components/MoeSkillIconBar";
-import MoePlayerSkillIconBar from "@/components/MoePlayerSkillIconBar";
-import MoeVerticalSkillPanel from "@/components/MoeVerticalSkillPanel";
+import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
+import MoeMergedSkillIconBar from "@/components/MoeMergedSkillIconBar";
+import MoeMergedVerticalSkillPanel from "@/components/MoeMergedVerticalSkillPanel";
+import MoeDragonLineupCanvas from "@/components/MoeDragonLineupCanvas";
+import MoeMonsterLineupCanvas from "@/components/MoeMonsterLineupCanvas";
+import MoeShowcaseDeletePicker from "@/components/MoeShowcaseDeletePicker";
+import MoeDraggableMinimapPanel from "@/components/MoeDraggableMinimapPanel";
+import MoeField3DCompassHud from "@/components/MoeField3DCompassHud";
+import { MOE_DRAGON_LINEUP } from "@/data/moeDragonVariants";
+import {
+  MOE_MONSTER_FAMILIES,
+  MOE_MONSTER_LINEUP,
+} from "@/data/moeMonsterLineup";
+import {
+  addHiddenShowcaseIds,
+  clearHiddenShowcaseIds,
+  filterShowcaseLineupByIds,
+  loadHiddenShowcaseIds,
+  removeHiddenShowcaseId,
+} from "@/lib/moeShowcaseDeleteList";
+import { appendShowcaseDeleteQueue } from "@/lib/moeShowcaseDeleteQueueFile";
 import {
   buildPlayerNinjaSkillSlots,
   loadPlayerSkillUnlocks,
   savePlayerSkillUnlocks,
-  removePlayerSkillUnlock,
-  MOE_SHINSOKU_ACTIVE_MS,
-  MOE_SHINSOKU_COOLDOWN_MS,
 } from "@/data/moePlayerNinjaSkills";
 import {
   loadPlayerSkillSlotOrder,
   savePlayerSkillSlotOrder,
   swapPlayerSkillSlotOrder,
 } from "@/data/moePlayerSkillSlotOrder";
-import { buildPlayerSkillSlotEntry } from "@/lib/moePlayerSkillSlotUi";
+import {
+  buildPlayerSkillSlotEntry,
+  buildPlayerUtilitySkillSlotEntry,
+} from "@/lib/moePlayerSkillSlotUi";
+import { defaultPlayerUtilitySlotOrder } from "@/data/moePlayerUtilitySkills";
+import { buildPlayerPhoenixSkillSlotEntries } from "@/lib/moePlayerPhoenixSkillUi";
+import {
+  MOE_PHOENIX_PLAYER_CHANT_SEC,
+  clearMoePetPoisonParalysis,
+  isMoePhoenixPlayerChantSkill,
+  petHasMoeAilment,
+} from "@/lib/moePhoenixPlayerSkill";
+import {
+  activateAtrumPetSkill,
+  getAtrumMagicBuffMult,
+  isAtrumManaAmpActive,
+  tickAtrumMpRegen,
+} from "@/lib/moeAtrumPetSkills";
+import {
+  defaultMoePlayerVitals,
+  loadMoePlayerVitals,
+  MOE_BANANA_MILK_STAMINA_REGEN_MULT,
+  moePlayerBananaMilkStaminaRegenPerSec,
+  saveMoePlayerVitals,
+  tickMoePlayerVitalsField,
+} from "@/lib/moePlayerVitals";
+import {
+  activateCondenseMindOnTarget,
+  isPlayerCondenseMindActive,
+  PLAYER_CONDENSE_MIND_MP_COST,
+  PLAYER_CONDENSE_MIND_MP_PER_SEC,
+  tickPlayerCondenseMind,
+} from "@/lib/moePlayerCondenseMind";
+import {
+  loadMoeAllyTarget,
+  saveMoeAllyTarget,
+} from "@/lib/moeAllyTargetSettings";
+import {
+  collectMoeFieldInvariantIssues,
+  installMoeDevRegistry,
+  moeDevAssert,
+  reportMoeFieldInvariantIssues,
+  updateMoeDevSnapshot,
+} from "@/lib/moe";
 import MoeItemBox from "@/components/MoeItemBox";
 import {
   createMoeFieldTreasureDrop,
@@ -108,6 +201,7 @@ import {
   getMysteryDragonMaxHpBonus,
   canRebirthMysteryDragon,
   isMoePetSkillUsableAtLevel,
+  MOE_MYSTERY_DRAGON_REBORN_ID,
 } from "@/data/moePhoenixDragon";
 import {
   loadMoePetSkillMode,
@@ -116,11 +210,18 @@ import {
   MOE_PET_SKILL_MODE_LEARNED,
   moePetSkillModeLabel,
 } from "@/lib/moePetSkillSettings";
-import { formatMoePetSkillDescription } from "@/lib/moePetSkillDescription";
+import {
+  formatMoePetSkillDescription,
+  formatMoeSkillHoverTip,
+} from "@/lib/moePetSkillDescription";
+import { MOE_EVENT_GUIDE_SECTIONS } from "@/data/moeEventGuide";
 import {
   addMoeItemBoxItem,
+  loadMoeItemBoxSelectedIndex,
   loadMoeItemBoxSlots,
   moeFieldLootToBoxItem,
+  MOE_ITEM_BOX_SELECTED_EVENT,
+  MOE_ITEM_BOX_SLOTS_EVENT,
   notifyMoeItemBoxSlotsChanged,
   removeMoeItemBoxSlot,
   saveMoeItemBoxSlots,
@@ -181,6 +282,9 @@ import {
   MOE_3D_ZONE_PAIR_LEVEL_OFFSET,
   MOE_3D_HALF_D,
   MOE_3D_HALF_W,
+  MOE_3D_LEGACY_REF_HALF,
+  MOE_3D_LEGACY_TILES_X,
+  MOE_3D_LEGACY_TILES_Z,
   MOE_SNAKE_ATTACK_MS,
   MOE_TENTH_BANNER_MS_2D,
   MOE_TENTH_BANNER_MS_3D,
@@ -204,6 +308,8 @@ import {
   moe3dPetStartNearPlayer,
   moe3dIsNearPetHouse,
   moe3dIsNearRhoda,
+  moe3dIsNearDragonShowcase,
+  moe3dIsNearMonsterShowcase,
   moe3dRhodaPosition,
   moe3dWorldToMinimap,
   moe3dZoneEnemyPosition,
@@ -220,6 +326,14 @@ import {
   rollMoeComboPopupMotion,
   moeComboPopupCssVars,
 } from "@/lib/moeField3DModels";
+import {
+  moe3dBiskWorldCenter,
+  moe3dFullWorldBounds,
+  moe3dMinimapFullTileRects,
+  moe3dMinimapViewSize,
+  moe3dPrototypeFieldStart,
+  moe3dWorldToMinimapInBounds,
+} from "@/lib/moe3dWorldLayout";
 import {
   buildMoe2dRowLayout,
   computeMoe2dWorldSize,
@@ -293,18 +407,47 @@ const MOVE_KEY_CODES = new Set([
   "ArrowLeft",
   "ArrowRight",
 ]);
-/** ミニマップ SVG の表示高さ（viewBox 比の 1/2） */
+/** 2D ミニマップ SVG */
 function minimapSvgStyle(mapW, mapH) {
   return { width: "100%", aspectRatio: `${mapW * 2} / ${mapH}` };
 }
+
+/** 3D 全体マップ — 横長でも縦方向を確保 */
+function minimap3dSvgStyle(mapW, mapH) {
+  return { width: "100%", aspectRatio: `${mapW} / ${mapH}` };
+}
+
+/** 全体マップ — 近くの通常敵だけ表示（ボスは常に表示） */
+const MINIMAP_ENEMY_NEAR_DIST = 48;
+
+function minimapEnemyVisible(en, playerX, playerZ) {
+  if (en.midBoss || en.superBoss || en.fieldGustav) return true;
+  const dx = en.x - playerX;
+  const dz = en.y - playerZ;
+  return dx * dx + dz * dz <= MINIMAP_ENEMY_NEAR_DIST * MINIMAP_ENEMY_NEAR_DIST;
+}
+
+function minimap3dEnemyDotRadius(en, miniW) {
+  if (en.superBoss) return Math.max(4, miniW * 0.013);
+  if (en.midBoss) return Math.max(3.5, miniW * 0.011);
+  if (en.fieldGustav) return Math.max(3, miniW * 0.01);
+  return Math.max(2, miniW * 0.0065);
+}
+
+function minimap3dEnemyDotOpacity(en) {
+  if (en.superBoss) return 0.68;
+  if (en.midBoss) return 0.63;
+  if (en.fieldGustav) return 0.58;
+  return 0.5;
+}
 const MOVE_SPEED = 4.5;
 /** 3Dマップは座標範囲が狭いので、同じ数値だと約10倍速く感じる */
-const MOVE_SPEED_3D = 0.18;
+const MOVE_SPEED_3D = 0.2;
 const SPRINT_MULTIPLIER_3D = 2;
 /** Shift ダッシュ ON 時の追加倍率（通常ダッシュ × この値） */
 const SPRINT_BOOST_MULT_3D = 3;
-const JUMP_VELOCITY_3D = 15;
-const GRAVITY_3D = 24;
+const JUMP_VELOCITY_3D = 17;
+const GRAVITY_3D = 30;
 /** プレイヤー操作の回復量（Wiki比率寄り: ライト基準 ×1 / ×1.5 / ×3） */
 const HEAL_AMOUNT_LIGHT = 30;
 const HEAL_AMOUNT_HEALING = 45;
@@ -329,9 +472,7 @@ const PET_SIT_REGEN_MP = 2;
 const PET_AUTO_ATTACK_COOLDOWN_MS = 1400;
 const PET_FOLLOW_DIST_3D = 5.5;
 const PET_FOLLOW_DIST_3D_AUTO = 8;
-const PET_FOLLOW_DIST_3D_TIGHT = 1.2;
 const PET_FOLLOW_DIST_2D = 60;
-const PET_FOLLOW_DIST_2D_TIGHT = 16;
 const PET_APPROACH_THRESHOLD_3D = 0.55;
 const PET_APPROACH_THRESHOLD_2D = 10;
 
@@ -340,7 +481,6 @@ const MOE_PET_COMMAND_UI = {
   wait: { label: "待て", toast: "待て！（その場で待機）", hint: "待機中" },
   sit: { label: "座れ", toast: "座れ！（自然回復）", hint: "座って回復中" },
   auto: { label: "オート", toast: "オート：敵を自動で攻撃", hint: "オート攻撃中" },
-  bero: { label: "ベロー", toast: "ベロー！（ぴったりくっつく）", hint: "ぴったり追従中" },
 };
 const INITIAL_MOE_PET_LEVEL = MOE_SAVED_PET_INITIAL_LEVEL;
 
@@ -699,7 +839,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const is3d = worldMode === "3d";
   const initial3dSpawn = is3d
     ? (() => {
-        const start = moe3dPlayerStartPosition(MOE_3D_HALF_W, MOE_3D_HALF_D);
+        const start = moe3dDefaultPlayerSpawn(MOE_3D_HALF_W, MOE_3D_HALF_D);
         return { player: start, pet: moe3dPetStartNearPlayer(start) };
       })()
     : null;
@@ -755,15 +895,40 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const nearPetHouseRef = useRef(false);
   const [nearRhoda, setNearRhoda] = useState(false);
   const nearRhodaRef = useRef(false);
+  const [nearAltar, setNearAltar] = useState(null);
+  const nearAltarRef = useRef(null);
+  const skillChantRef = useRef(null);
+  const cancelSkillChantRef = useRef(() => {});
+  const [skillChant, setSkillChant] = useState(null);
+  const [skillChantRemainSec, setSkillChantRemainSec] = useState(null);
+  const [itemBoxSelectedIndex, setItemBoxSelectedIndex] = useState(null);
+  const [altarOpen, setAltarOpen] = useState(false);
+  const [activeAltar, setActiveAltar] = useState(null);
+  const initialSpawnAppliedRef = useRef(false);
+  const nearDragonShowcaseRef = useRef(false);
+  const nearMonsterShowcaseRef = useRef(false);
   const petDebugSnapshotRef = useRef(null);
   const [hasPetDebugSnapshot, setHasPetDebugSnapshot] = useState(false);
   const [showFieldGuide, setShowFieldGuide] = useState(false);
+  const [showEventGuide, setShowEventGuide] = useState(false);
+  const [showDragonLineup, setShowDragonLineup] = useState(false);
+  const [showMonsterLineup, setShowMonsterLineup] = useState(false);
+  const [hiddenMonsterShowcaseIds, setHiddenMonsterShowcaseIds] = useState(
+    () => loadHiddenShowcaseIds("monster")
+  );
+  const [hiddenDragonShowcaseIds, setHiddenDragonShowcaseIds] = useState(
+    () => loadHiddenShowcaseIds("dragon")
+  );
+  const [monsterDeleteListIds, setMonsterDeleteListIds] = useState([]);
+  const [dragonDeleteListIds, setDragonDeleteListIds] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [nearDragonShowcase, setNearDragonShowcase] = useState(false);
+  const [nearMonsterShowcase, setNearMonsterShowcase] = useState(false);
   const [petSkillMode, setPetSkillMode] = useState(MOE_PET_SKILL_MODE_ALL);
   const [externalSaveFolderLabel, setExternalSaveFolderLabel] = useState(null);
   /** 3D：follow | wait | sit | auto */
   const [petCommandMode, setPetCommandMode] = useState("follow");
-  const [petFollowTight, setPetFollowTight] = useState(false);
+  const [enemyStatSearchOpen, setEnemyStatSearchOpen] = useState(false);
   /** ワールド座標上のダメージ（赤）・ペットEXP（黄・+N） */
   const [battlePopups, setBattlePopups] = useState([]);
   const battlePopupIdRef = useRef(0);
@@ -788,7 +953,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** @type {[{ pages: string[], index: number, tone?: 'up' | 'down' } | null]} */
   const [expConsumableLevelUpFlow, setExpConsumableLevelUpFlow] = useState(null);
   const [petTenthCelebrationActive, setPetTenthCelebrationActive] = useState(false);
-  const [trainerStatus, setTrainerStatus] = useState(() => loadGameStatus());
+  const [trainerStatus, setTrainerStatus] = useState(() => ({
+    ...DEFAULT_GAME_STATUS,
+  }));
+  const [playerVitals, setPlayerVitals] = useState(() =>
+    defaultMoePlayerVitals(1)
+  );
+  const playerVitalsRef = useRef(playerVitals);
   /** ヒーリング / ヒーリングオールのクールダウン終了時刻（ms） */
   const healCdUntilRef = useRef({ healing: 0, healAll: 0 });
   const [healCdSec, setHealCdSec] = useState({ healing: 0, healAll: 0 });
@@ -868,7 +1039,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }
   }, [pet, world]);
   const petCommandRef = useRef("follow");
-  const petFollowTightRef = useRef(false);
   const waitAnchorRef = useRef(null);
   /** 3D：待て/座れ中に固定する向き（プレイヤー追従回転を止める） */
   const petHoldYawRef = useRef(null);
@@ -876,7 +1046,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const sitRegenAccRef = useRef(0);
   const [regenActive, setRegenActive] = useState(false);
   const regenActiveRef = useRef(false);
+  const [bananaMilkActive, setBananaMilkActive] = useState(false);
+  const bananaMilkActiveRef = useRef(false);
+  const playerCondenseMindRef = useRef(null);
+  const [condenseMindActive, setCondenseMindActive] = useState(false);
+  const [allyTarget, setAllyTarget] = useState(() => loadMoeAllyTarget());
+  const allyTargetRef = useRef(allyTarget);
   const regenAccRef = useRef(0);
+  const playerNaturalRegenAccRef = useRef(0);
+  /** プレイヤー詠唱 — 安眠導歩 / 睡眠絶崩のペットリジェネ */
+  const phoenixAnsleepRegenRef = useRef(null);
+  const phoenixUltimateRegenRef = useRef(null);
+  /** アトルーム — 温故知新（魔力buff期限 ms） */
+  const atrumMagicBuffUntilRef = useRef(0);
+  /** アトルーム — マナ増幅法 MP回復 */
+  const atrumMpRegenRef = useRef(null);
+  const [phoenixHabitAtk2x, setPhoenixHabitAtk2x] = useState(false);
+  const phoenixHabitAtk2xRef = useRef(false);
   /** 3D：リジェネ回復ポップ（React state を介さず毎フレーム描画） */
   const worldHealPopupsRef = useRef([]);
   /** 3D: world → screen 投影（MoeField3DCanvas が毎フレーム更新） */
@@ -913,11 +1099,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const battleSpeedMultRef = useRef(1);
   const [dashBoost3x, setDashBoost3x] = useState(false);
   const dashBoost3xRef = useRef(false);
-  /** 神速クールダウン表示（秒）。null = 使用可能 */
-  const [shinsokuCooldownSec, setShinsokuCooldownSec] = useState(null);
-  const shinsokuActiveUntilRef = useRef(0);
-  const shinsokuCooldownUntilRef = useRef(0);
-  const shinsokuTimersRef = useRef({ active: null, cooldown: null });
   const [shinobiashiOn, setShinobiashiOn] = useState(false);
   const shinobiashiOnRef = useRef(false);
   useEffect(() => {
@@ -950,6 +1131,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     enemyStrikeVariantRef.current = { enemyId: null, variant: "weak" };
     duelRef.current = null;
     setDuel(null);
+    phoenixHabitAtk2xRef.current = false;
+    setPhoenixHabitAtk2x(false);
     flushPersistActivePet(petStateRef.current);
   }, []);
 
@@ -981,6 +1164,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     enemiesRef.current = enemies;
   }, [enemies]);
   useEffect(() => {
+    clearHolyRecordWorldStones();
+  }, []);
+  useEffect(() => {
     map3dReadyRef.current = map3dReady;
   }, [map3dReady]);
 
@@ -995,6 +1181,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     regenActiveRef.current = regenActive;
     if (!regenActive) regenAccRef.current = 0;
   }, [regenActive]);
+
+  useEffect(() => {
+    bananaMilkActiveRef.current = bananaMilkActive;
+  }, [bananaMilkActive]);
 
   const pushWorldDamagePopup = useCallback(
     (
@@ -1293,6 +1483,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
    * @param opts.clearToastWhenNoDefeatMsg false のとき、撃破以外でトーストを消さない（コンボ途中）
    * @param opts.attackScale 指定時は (攻撃力×係数) でダメージ式（通常アタック相当の減衰）
    * @param opts.magicScale 指定時は (魔力×係数) でダメージ式（attackScale より優先）
+   * @param opts.fixedDamage 指定時は固定ダメージ（防御無視）
    */
   const applyPetComboHit = React.useCallback(
     (
@@ -1306,6 +1497,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         clearToastWhenNoDefeatMsg = true,
         attackScale = null,
         magicScale = null,
+        fixedDamage = null,
         stackIndex = null,
       } = opts;
       const w = worldRef.current;
@@ -1335,19 +1527,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           const enemyDef = target.wiki?.defense ?? 0;
           const atkBase = stats?.attack ?? 1;
           const magBase = stats?.magic ?? 0;
+          const atkMult = phoenixHabitAtk2xRef.current ? 2 : 1;
+          const magicBuffMult = getAtrumMagicBuffMult(atrumMagicBuffUntilRef);
           let damage;
-          if (magicScale != null) {
+          if (fixedDamage != null) {
+            damage = Math.max(1, Math.floor(fixedDamage));
+          } else if (magicScale != null) {
             damage = computePetDamageAgainstEnemy(
-              magBase * magicScale,
+              magBase * magicBuffMult * magicScale,
               enemyDef
             );
           } else if (attackScale != null) {
             damage = computePetDamageAgainstEnemy(
-              atkBase * attackScale,
+              atkBase * atkMult * attackScale,
               enemyDef
             );
           } else {
-            damage = computePetDamageAgainstEnemy(atkBase, enemyDef);
+            damage = computePetDamageAgainstEnemy(atkBase * atkMult, enemyDef);
           }
           const newHpAfterHit = target.hp - damage;
           defeated = newHpAfterHit <= 0;
@@ -1432,7 +1628,54 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   zoneLevel: base.level,
                 };
               }
-              if (en.midBoss || en.superBoss) {
+              if (w.mode3d) {
+                const hw = w.halfW ?? w.mw / 2;
+                const hd = w.halfD ?? w.mh / 2;
+                if (moe3dIsMapSlotFieldEnemy(en)) {
+                  const { tileW, tileD } = moe3dEstimatedTileSize(hw, hd);
+                  const base =
+                    moeMonsterFieldBase(en.key) ??
+                    MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ??
+                    en;
+                  const area = en.spawnArea ?? en.mapSlotId;
+                  const fixed =
+                    en.midBoss || en.superBoss
+                      ? moe3dMonsterFieldSpawnWorld(
+                          area,
+                          en.key,
+                          en.slotInZone ?? 0,
+                          tileW,
+                          tileD
+                        )
+                      : null;
+                  const pos =
+                    fixed ??
+                    moe3dPickRespawnInMapSlot(
+                      area,
+                      tileW,
+                      tileD,
+                      playerPosRef.current,
+                      prevEn,
+                      enemyId
+                    );
+                  const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
+                  return {
+                    ...en,
+                    x: pos.x,
+                    y: pos.y,
+                    level: scaled.level,
+                    hpMax: scaled.hpMax,
+                    hp: scaled.hpMax,
+                    petDamage: scaled.petDamage,
+                    wiki: scaled.wiki,
+                    zoneLevel: base.level,
+                  };
+                }
+              }
+              if (
+                (en.midBoss || en.superBoss) &&
+                !moe3dIsMapSlotFieldEnemy(en)
+              ) {
                 const base =
                   MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
                 const pos = w.mode3d
@@ -1468,10 +1711,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 };
               }
               if (w.mode3d) {
-                const zoneIndex = en.zoneIndex ?? 0;
-                const zoneCount = MOE_3D_ENEMY_ZONES.length;
                 const hw = w.halfW ?? w.mw / 2;
                 const hd = w.halfD ?? w.mh / 2;
+                const zoneIndex = en.zoneIndex ?? 0;
+                const zoneCount = MOE_3D_ENEMY_ZONES.length;
                 const pos = moe3dPickRespawnInZone(
                   zoneIndex,
                   zoneCount,
@@ -1561,7 +1804,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             dropId,
             hitFollowUp.dropX,
             hitFollowUp.dropY,
-            hitFollowUp.enemyKey
+            hitFollowUp.enemyKey,
+            {
+              playerHasShinsoku:
+                playerSkillUnlocksRef.current.has("ninja_shinsoku"),
+            }
           ),
         ]);
       }
@@ -1689,6 +1936,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         return;
       }
       setPhoenixRebirthFlow({ slotIndex });
+      return;
+    }
+    if (isMoeHolyRecordBoxItem(item)) {
+      setToast("ホーリーレコードを選択した状態でテレポートを唱えてください");
       return;
     }
     setToast(`${item.label ?? "アイテム"}はまだ使えません`);
@@ -1985,11 +2236,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       window.setTimeout(() => {
         if (gen !== moeSkillComboGenRef.current) return;
         const d = duelRef.current;
-        if (
-          !d ||
-          d.phase !== "simultaneous_charge" ||
-          d.enemyId !== enemyId
-        ) {
+        if (!d || d.enemyId !== enemyId) {
           return;
         }
         const live = enemiesRef.current.find((e) => e.id === enemyId);
@@ -2005,6 +2252,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             o.clearToastWhenNoDefeatMsg ?? isLast,
           attackScale: o.attackScale ?? null,
           magicScale: o.magicScale ?? null,
+          fixedDamage: o.fixedDamage ?? null,
           stackIndex: o.stackIndex ?? idx,
         });
         if (ended) {
@@ -2025,7 +2273,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (msg) setSkillToast(msg);
       setToast(formatMoePetSkillDescription(skill));
 
-      if (
+      if (pet.id === "elemental_atrum") {
+        const atrumResult = activateAtrumPetSkill(skill, {
+          petRef,
+          setPet,
+          flushPersistActivePet,
+          pushWorldHealPopup,
+          playSfx,
+          duelRef,
+          scheduleMoeDuelSkillHits,
+          atrumMagicBuffUntilRef,
+          atrumMpRegenRef,
+          petPosRef,
+          petCombatLevel,
+        });
+        if (atrumResult.handled) {
+          if (atrumResult.skillToast) setSkillToast(atrumResult.skillToast);
+          if (atrumResult.toast) setToast(atrumResult.toast);
+          return;
+        }
+      }
+
+      if (skill.id === "phoenix_life_burst") {
+        const healAmt = skill.healFlat ?? 100;
+        const mpCost = skill.mpCost ?? 0;
+        setPet((prev) => {
+          if (mpCost > 0 && prev.mp < mpCost) return prev;
+          const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
+          const next = {
+            ...prev,
+            hp: nextHp,
+            mp: Math.max(0, prev.mp - mpCost),
+          };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          const pos = petPosRef.current;
+          pushWorldHealPopup(pos.x, pos.y, healAmt);
+          return next;
+        });
+      } else if (
         skill.type === "heal" ||
         skill.type === "heal_regen" ||
         skill.id === "phoenix_deep_sleep"
@@ -2045,9 +2332,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         });
       }
 
+      if (skill.id === "phoenix_habit_ascension") {
+        if (!duelRef.current) {
+          setToast("生活改鳳は戦闘中のみ使えます");
+          return;
+        }
+        const nextOn = !phoenixHabitAtk2xRef.current;
+        phoenixHabitAtk2xRef.current = nextOn;
+        setPhoenixHabitAtk2x(nextOn);
+        setToast(
+          nextOn
+            ? "生活改鳳 — 攻撃2倍【ON】"
+            : "生活改鳳 — 攻撃1倍に戻した"
+        );
+        return;
+      }
+
       const d = duelRef.current;
       const duelSkillSeq =
-        d?.phase === "simultaneous_charge" && d.enemyId != null
+        d?.enemyId != null
           ? resolveMoeDuelSkillSequence(pet.id, skill)
           : null;
       if (duelSkillSeq) {
@@ -2070,33 +2373,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return;
     }
     if (skill.id === "ninja_shinsoku") {
-      const now = Date.now();
-      if (now < shinsokuActiveUntilRef.current) return;
-      if (now < shinsokuCooldownUntilRef.current) return;
-
-      setDashBoost3x(true);
-      dashBoost3xRef.current = true;
-      shinsokuActiveUntilRef.current = now + MOE_SHINSOKU_ACTIVE_MS;
-      setShinsokuCooldownSec(null);
-      setToast(formatMoePetSkillDescription(skill));
-
-      if (shinsokuTimersRef.current.cooldown) {
-        clearTimeout(shinsokuTimersRef.current.cooldown);
-        shinsokuTimersRef.current.cooldown = null;
-      }
-      if (shinsokuTimersRef.current.active) {
-        clearTimeout(shinsokuTimersRef.current.active);
-      }
-      shinsokuTimersRef.current.active = window.setTimeout(() => {
-        setDashBoost3x(false);
-        dashBoost3xRef.current = false;
-        shinsokuActiveUntilRef.current = 0;
-        shinsokuCooldownUntilRef.current =
-          Date.now() + MOE_SHINSOKU_COOLDOWN_MS;
-        setShinsokuCooldownSec(
-          Math.ceil(MOE_SHINSOKU_COOLDOWN_MS / 1000)
+      setDashBoost3x((v) => {
+        const next = !v;
+        setToast(
+          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`
         );
-      }, MOE_SHINSOKU_ACTIVE_MS);
+        return next;
+      });
       return;
     }
     if (skill.id === "ninja_kakuremino") {
@@ -2105,6 +2388,202 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }
     setToast(formatMoePetSkillDescription(skill));
   }, []);
+
+  const applyPhoenixPlayerChantEffect = useCallback(
+    (skill) => {
+      if (!skill) return;
+
+      const mpCost = skill.mpCost ?? 0;
+      const now = Date.now();
+
+      if (skill.id === "phoenix_ansleep_walk") {
+        const intervalMs = skill.regenIntervalMs ?? 3000;
+        const durationMs = skill.regenDurationMs ?? 90000;
+        phoenixAnsleepRegenRef.current = {
+          until: now + durationMs,
+          hpPerTick: skill.regenHpPerTick ?? 20,
+          intervalSec: intervalMs / 1000,
+          acc: 0,
+        };
+        setPet((prev) => {
+          if (mpCost > 0 && prev.mp < mpCost) return prev;
+          const next = {
+            ...prev,
+            mp: Math.max(0, prev.mp - mpCost),
+          };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          return next;
+        });
+        setToast(
+          `🪶 ${skill.name} — ペットに3秒ごとHP${skill.regenHpPerTick ?? 20}回復`
+        );
+        playSfx("heal");
+        return;
+      }
+
+      if (skill.id === "phoenix_hot_spring") {
+        const hadAilment = petHasMoeAilment(petRef.current);
+        setPet((prev) => {
+          if (mpCost > 0 && prev.mp < mpCost) return prev;
+          const next = {
+            ...clearMoePetPoisonParalysis(prev),
+            mp: Math.max(0, prev.mp - mpCost),
+          };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          return next;
+        });
+        setToast(
+          hadAilment
+            ? `🪶 ${skill.name} — 毒・麻痺を解毒しました`
+            : `🪶 ${skill.name} — ペットの気を整えました`
+        );
+        playSfx("heal");
+        return;
+      }
+
+      if (
+        skill.type === "heal" ||
+        skill.type === "heal_regen" ||
+        skill.id === "phoenix_deep_sleep"
+      ) {
+        const ratio =
+          skill.healRatio ?? (skill.id === "phoenix_deep_sleep" ? 0.45 : 0.85);
+        setPet((prev) => {
+          if (mpCost > 0 && prev.mp < mpCost) return prev;
+          const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
+          const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
+          const next = {
+            ...prev,
+            hp: nextHp,
+            mp: Math.max(0, prev.mp - mpCost),
+          };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          const pos = petPosRef.current;
+          pushWorldHealPopup(pos.x, pos.y, healAmt);
+          return next;
+        });
+        if (skill.type === "heal_regen" || skill.id === "phoenix_ultimate_sleep") {
+          const intervalMs = skill.regenIntervalMs ?? 3000;
+          const durationMs = skill.regenDurationMs ?? 30000;
+          phoenixUltimateRegenRef.current = {
+            until: now + durationMs,
+            hpPerTick: skill.regenHpPerTick ?? 20,
+            intervalSec: intervalMs / 1000,
+            acc: 0,
+          };
+        }
+        setToast(`🪶 ${skill.name} — ペットのHPを回復しました`);
+        playSfx("heal");
+      }
+    },
+    [pushWorldHealPopup]
+  );
+
+  const startPhoenixPlayerSkillChant = useCallback(
+    (skill) => {
+      if (!skill) return;
+      if (skillChantRef.current) return;
+      const mpCost = skill.mpCost ?? 0;
+      if (mpCost > 0 && petRef.current.mp < mpCost) {
+        setToast("ペットのMPが足りません");
+        return;
+      }
+      const startedAt = Date.now();
+      skillChantRef.current = {
+        kind: "phoenix",
+        skillId: skill.id,
+        skill,
+        startedAt,
+        chantSec: MOE_PHOENIX_PLAYER_CHANT_SEC,
+      };
+      setSkillChant(skillChantRef.current);
+      setSkillChantRemainSec(MOE_PHOENIX_PLAYER_CHANT_SEC);
+      setToast(
+        `🪶 ${skill.name}をペットへ詠唱中…（${MOE_PHOENIX_PLAYER_CHANT_SEC}秒）`
+      );
+    },
+    []
+  );
+
+  const activatePlayerPhoenixSkill = useCallback(
+    (slotIndex, skill) => {
+      if (!skill) return;
+      if (!isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode)) {
+        setToast(`Lv.${skill.level}で習得`);
+        return;
+      }
+      if (isMoePhoenixPlayerChantSkill(skill)) {
+        startPhoenixPlayerSkillChant(skill);
+        return;
+      }
+      const msg = skillToastMessage(pet.id, slotIndex, skill);
+      if (msg) setSkillToast(msg);
+      setToast(formatMoePetSkillDescription(skill));
+
+      if (skill.id === "phoenix_life_burst") {
+        const healAmt = skill.healFlat ?? 100;
+        const mpCost = skill.mpCost ?? 0;
+        if (mpCost > 0 && petRef.current.mp < mpCost) {
+          setToast("ペットのMPが足りません");
+          return;
+        }
+        setPet((prev) => {
+          const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
+          const next = {
+            ...prev,
+            hp: nextHp,
+            mp: Math.max(0, prev.mp - mpCost),
+          };
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          pushWorldHealPopup(petPosRef.current.x, petPosRef.current.y, healAmt);
+          return next;
+        });
+        playSfx("heal");
+        return;
+      }
+
+      if (skill.id === "phoenix_habit_ascension") {
+        if (!duelRef.current) {
+          setToast("生活改鳳は戦闘中のみ使えます");
+          return;
+        }
+        const nextOn = !phoenixHabitAtk2xRef.current;
+        phoenixHabitAtk2xRef.current = nextOn;
+        setPhoenixHabitAtk2x(nextOn);
+        setToast(
+          nextOn
+            ? "生活改鳳 — 攻撃2倍【ON】"
+            : "生活改鳳 — 攻撃1倍に戻した"
+        );
+        return;
+      }
+
+      const d = duelRef.current;
+      const duelSkillSeq =
+        d?.enemyId != null
+          ? resolveMoeDuelSkillSequence(pet.id, skill)
+          : null;
+      if (duelSkillSeq) {
+        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq);
+      }
+    },
+    [
+      pet.id,
+      petCombatLevel,
+      petSkillMode,
+      scheduleMoeDuelSkillHits,
+      pushWorldHealPopup,
+      startPhoenixPlayerSkillChant,
+    ]
+  );
 
   const applyEnemyStrike = React.useCallback((enemyId) => {
     const d = duelRef.current;
@@ -2230,6 +2709,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const halfD = MOE_3D_HALF_D;
       const mw = halfW * 2;
       const mh = halfD * 2;
+      /** 試作 2×4 のタイル寸法見積もり（本編 halfW=180 より legacy 基準 100 を使う） */
+      const protoHalf = MOE_3D_LEGACY_REF_HALF;
+      const { tileW: legacyTw, tileD: legacyTd } = moe3dEstimatedTileSize(
+        protoHalf,
+        protoHalf
+      );
+      const protoStart = moe3dPrototypeFieldStart(legacyTw, legacyTd);
       const newEnemies = [];
       const zoneCount = MOE_3D_ENEMY_ZONES.length;
       MOE_3D_ENEMY_ZONES.forEach((zone, zoneIndex) => {
@@ -2275,7 +2761,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           buildMeerimMidBossEnemy(
             midBase,
             enemyIdRef.current++,
-            moe3dMidBossSpawnPosition(halfW, halfD),
+            moe3dMidBossSpawnPosition(
+              protoHalf,
+              protoHalf,
+              legacyTw,
+              legacyTd,
+              protoStart
+            ),
             MOE_MID_BOSS_HP_MULTIPLIER
           )
         );
@@ -2288,7 +2780,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           buildMeerimGustavJuniorEnemy(
             gustavBase,
             enemyIdRef.current++,
-            moe3dGustavJuniorSpawnPosition(halfW, halfD)
+            moe3dGustavJuniorSpawnPosition(halfW, halfD, protoStart)
           )
         );
       }
@@ -2300,7 +2792,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           buildMeerimSuperBossEnemy(
             superBase,
             enemyIdRef.current++,
-            moe3dSuperBossSpawnPosition(halfW, halfD),
+            moe3dSuperBossSpawnPosition(
+              protoHalf,
+              protoHalf,
+              legacyTw,
+              legacyTd,
+              protoStart
+            ),
             MOE_SUPER_BOSS_HP_MULTIPLIER
           )
         );
@@ -2313,7 +2811,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           buildMeerimFieldBisonEnemy(
             mountainBase,
             enemyIdRef.current++,
-            moe3dMountainBisonSpawnPosition(halfW, halfD)
+            moe3dMountainBisonSpawnPosition(
+              protoHalf,
+              protoHalf,
+              legacyTw,
+              legacyTd,
+              protoStart
+            )
           )
         );
       }
@@ -2325,16 +2829,65 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           buildMeerimFieldBisonEnemy(
             roughBase,
             enemyIdRef.current++,
-            moe3dRoughBisonSpawnPosition(halfW, halfD)
+            moe3dRoughBisonSpawnPosition(
+              protoHalf,
+              protoHalf,
+              legacyTw,
+              legacyTd,
+              protoStart
+            )
           )
         );
       }
-      setWorld({ mw, mh, mode3d: true, halfW, halfD });
+      const tileW = legacyTw;
+      const tileD = legacyTd;
+      for (const spot of moe3dMonsterFieldSpawnPoints(tileW, tileD)) {
+        const base = moeMonsterFieldBase(spot.key);
+        if (!base) continue;
+        const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
+        newEnemies.push({
+          ...base,
+          id: enemyIdRef.current++,
+          spawnArea: spot.mapSlotId,
+          mapSlotId: spot.mapSlotId,
+          modelVariantId: spot.modelVariantId,
+          slotInZone: spot.slotInZone,
+          x: spot.x,
+          y: spot.y,
+          level: scaled.level,
+          hp: scaled.hpMax,
+          hpMax: scaled.hpMax,
+          petDamage: scaled.petDamage,
+          wiki: scaled.wiki,
+          zoneLevel: base.level,
+          fieldBoss: base.fieldBoss ?? false,
+          midBoss: Boolean(base.fieldBoss && !base.superBoss),
+          superBoss: base.superBoss ?? false,
+          sy: 0,
+        });
+      }
+      const initTw = mw / MOE_3D_LEGACY_TILES_X;
+      const initTd = mh / MOE_3D_LEGACY_TILES_Z;
+      const initMiniBounds = moe3dFullWorldBounds(initTw, initTd);
+      const { miniMapW: initMiniMapW, miniMapH: initMiniMapH } =
+        moe3dMinimapViewSize(initMiniBounds);
+      setWorld({
+        mw,
+        mh,
+        mode3d: true,
+        halfW,
+        halfD,
+        tileWidth: initTw,
+        tileDepth: initTd,
+        miniBounds: initMiniBounds,
+        miniMapW: initMiniMapW,
+        miniMapH: initMiniMapH,
+      });
       setEnemies(newEnemies);
       approachChargeScheduledRef.current = false;
       duelRef.current = null;
       setDuel(null);
-      const start = moe3dPlayerStartPosition(halfW, halfD);
+      const start = moe3dDefaultPlayerSpawn(halfW, halfD, legacyTw, legacyTd);
       playerPosRef.current = start;
       setPlayer(start);
       setMinimap3d({ x: start.x, y: start.y, yaw: cameraYawRef.current });
@@ -2482,19 +3035,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         ),
       });
 
-      const cdUntil = shinsokuCooldownUntilRef.current;
-      if (cdUntil > now) {
-        setShinsokuCooldownSec(Math.max(0, Math.ceil((cdUntil - now) / 1000)));
-      } else if (cdUntil !== 0) {
-        shinsokuCooldownUntilRef.current = 0;
-        setShinsokuCooldownSec(0);
-        if (!shinsokuTimersRef.current.cooldown) {
-          shinsokuTimersRef.current.cooldown = window.setTimeout(() => {
-            setShinsokuCooldownSec(null);
-            shinsokuTimersRef.current.cooldown = null;
-          }, 350);
-        }
-      }
     };
     tick();
     const id = window.setInterval(tick, 200);
@@ -2529,21 +3069,34 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (integerLevelFlashTimerRef.current) {
         window.clearTimeout(integerLevelFlashTimerRef.current);
       }
-      if (shinsokuTimersRef.current.active) {
-        clearTimeout(shinsokuTimersRef.current.active);
-      }
-      if (shinsokuTimersRef.current.cooldown) {
-        clearTimeout(shinsokuTimersRef.current.cooldown);
-      }
     },
     []
   );
 
   useEffect(() => {
     const sync = () => setTrainerStatus(loadGameStatus());
+    sync();
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
   }, []);
+
+  const commitPlayerVitals = useCallback((next) => {
+    playerVitalsRef.current = next;
+    setPlayerVitals(next);
+    saveMoePlayerVitals(next);
+  }, []);
+
+  useEffect(() => {
+    allyTargetRef.current = allyTarget;
+  }, [allyTarget]);
+
+  useEffect(() => {
+    installMoeDevRegistry();
+  }, []);
+
+  useEffect(() => {
+    commitPlayerVitals(loadMoePlayerVitals(trainerStatus.level));
+  }, [trainerStatus.level, commitPlayerVitals]);
 
   useEffect(() => {
     const resetKeys = () => {
@@ -2590,18 +3143,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       !josephSynthOpen &&
       !expConsumableLevelUpFlow &&
       !showPetStatusOverlay &&
-      !showFieldGuide
+      !showFieldGuide &&
+      !showEventGuide &&
+      !showDragonLineup &&
+      !showMonsterLineup
     )
       return;
     keysRef.current = createEmptyInputKeys();
     playerSprintRef.current = false;
     petRunAnimRef.current = false;
-  }, [petMasterDialogue, expVendorOpen, rhodaOpen, josephOpen, josephSynthOpen, expConsumableLevelUpFlow, showPetStatusOverlay, showFieldGuide]);
+  }, [petMasterDialogue, expVendorOpen, rhodaOpen, josephOpen, josephSynthOpen, expConsumableLevelUpFlow, showPetStatusOverlay, showFieldGuide, showEventGuide, showDragonLineup, showMonsterLineup]);
 
   useEffect(() => {
     if (!world) return;
     let raf;
     let lastFrame = performance.now();
+    let moeDevLastCheck = 0;
 
     const scheduleApproachToCharge = (enemyIdSnapshot) => {
       if (approachChargeScheduledRef.current) return;
@@ -2706,6 +3263,44 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       });
     };
 
+    const tickPhoenixRegenSource = (ref, dt, now) => {
+      const src = ref.current;
+      if (!src) return 0;
+      if (now >= src.until) {
+        ref.current = null;
+        return 0;
+      }
+      src.acc += dt;
+      if (src.acc < src.intervalSec) return 0;
+      src.acc -= src.intervalSec;
+      return src.hpPerTick;
+    };
+
+    const tickPhoenixPetRegen = (dt) => {
+      const now = Date.now();
+      const gain =
+        tickPhoenixRegenSource(phoenixAnsleepRegenRef, dt, now) +
+        tickPhoenixRegenSource(phoenixUltimateRegenRef, dt, now);
+      if (gain <= 0) return;
+
+      setPet((prev) => {
+        if (prev.hp >= prev.hpMax) return prev;
+        const hpRaw = Math.min(prev.hpMax, prev.hp + gain);
+        const hp = petUsesPreciseWikiStats(prev.id)
+          ? roundPetStatInternal(hpRaw)
+          : hpRaw;
+        const hpGain = Math.max(0, hp - prev.hp);
+        if (hpGain <= 0) return prev;
+        const next = { ...prev, hp };
+        const pt = petPosRef.current;
+        pushWorldHealPopupRef.current(pt.x, pt.y, hpGain);
+        petRef.current = next;
+        petStateRef.current = next;
+        flushPersistActivePet(next);
+        return next;
+      });
+    };
+
     const ensureDuelStillValid = () => {
       const d = duelRef.current;
       if (!d || (d.phase !== "approach" && d.phase !== "simultaneous_charge")) {
@@ -2748,9 +3343,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         playerPos: playerPosRef.current,
         speed,
         approachThreshold: PET_APPROACH_THRESHOLD_3D,
-        followDist: petFollowTightRef.current
-          ? PET_FOLLOW_DIST_3D_TIGHT
-          : PET_FOLLOW_DIST_3D,
+        followDist: PET_FOLLOW_DIST_3D,
         followDistAuto: PET_FOLLOW_DIST_3D_AUTO,
         now,
         autoAttackCooldownRef,
@@ -2769,11 +3362,69 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
     };
 
+    const tickPlayerVitalsField = (dt, sprinting, moving) => {
+      const result = tickMoePlayerVitalsField(playerVitalsRef.current, dt, {
+        regenAcc: playerNaturalRegenAccRef.current,
+        sprinting,
+        moving,
+        staminaRegenMult: bananaMilkActiveRef.current
+          ? MOE_BANANA_MILK_STAMINA_REGEN_MULT
+          : 1,
+      });
+      playerNaturalRegenAccRef.current = result.regenAcc;
+      if (!result.changed) return;
+      commitPlayerVitals(result.vitals);
+    };
+
     const loop = (now) => {
       const dt = Math.min(0.05, (now - lastFrame) / 1000);
       lastFrame = now;
       ensureDuelStillValid();
       tickRegen(dt);
+      tickPhoenixPetRegen(dt);
+      const hadPetMpRegen = Boolean(atrumMpRegenRef.current);
+      tickAtrumMpRegen(
+        atrumMpRegenRef,
+        dt,
+        setPet,
+        flushPersistActivePet,
+        petRef
+      );
+      if (
+        allyTargetRef.current === "pet" &&
+        hadPetMpRegen &&
+        !atrumMpRegenRef.current
+      ) {
+        setCondenseMindActive(false);
+      }
+      tickPlayerCondenseMind(
+        playerCondenseMindRef,
+        dt,
+        playerVitalsRef,
+        commitPlayerVitals,
+        (active) => {
+          if (!active && allyTargetRef.current === "player") {
+            setCondenseMindActive(false);
+          }
+        }
+      );
+
+      if (now - moeDevLastCheck >= 1000) {
+        moeDevLastCheck = now;
+        const devSnap = {
+          allyTarget: allyTargetRef.current,
+          allyTargetRef,
+          condenseMindActive: Boolean(
+            playerCondenseMindRef.current || atrumMpRegenRef.current
+          ),
+          playerCondenseMindRef,
+          atrumMpRegenRef,
+        };
+        updateMoeDevSnapshot(devSnap);
+        reportMoeFieldInvariantIssues(
+          collectMoeFieldInvariantIssues(devSnap)
+        );
+      }
 
       const k = keysRef.current;
       let inputX = 0;
@@ -2783,12 +3434,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (k.left) inputX -= 1;
       if (k.right) inputX += 1;
 
+      const moving = inputX !== 0 || inputZ !== 0;
+      const sprinting3d = !!(world.mode3d && k.shift && moving);
+      tickPlayerVitalsField(dt, sprinting3d, moving);
+
       let dx = 0;
       let dy = 0;
       if (inputX !== 0 || inputZ !== 0) {
         if (world.mode3d) {
-          const sprinting = !!(k.shift && (inputX !== 0 || inputZ !== 0));
-          const speedMult = sprintSpeedMult3d(sprinting);
+          const speedMult = sprintSpeedMult3d(sprinting3d);
           const speed = MOVE_SPEED_3D * 60 * dt * speedMult;
           const { mx, my, facing } = moveInputForCameraYaw(
             inputX,
@@ -2807,18 +3461,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
 
       if (world.mode3d) {
-        const sprinting = !!(k.shift && (inputX !== 0 || inputZ !== 0));
-        playerSprintRef.current = sprinting;
+        playerSprintRef.current = sprinting3d;
         const cmd = petCommandRef.current;
         petRunAnimRef.current =
-          sprinting &&
+          sprinting3d &&
           (cmd === "follow" || cmd === "auto") &&
           duelRef.current?.phase !== "simultaneous_charge";
-        const speedMult = sprintSpeedMult3d(sprinting);
+        const speedMult = sprintSpeedMult3d(sprinting3d);
         const petSpeed = MOVE_SPEED_3D * 60 * dt * speedMult;
 
         const jump = playerJumpRef.current;
         if (k.space && jump.offset <= 0.02 && jump.vy <= 0) {
+          if (skillChantRef.current) {
+            cancelSkillChantRef.current();
+          }
           jump.vy = JUMP_VELOCITY_3D;
         }
         jump.offset += jump.vy * dt;
@@ -2831,6 +3487,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         if (map3dReadyRef.current) {
           let nx = playerPosRef.current.x + dx;
           let ny = playerPosRef.current.y + dy;
+          const px = playerPosRef.current.x;
+          const py = playerPosRef.current.y;
+          const tw = worldRef.current?.tileWidth;
+          const td = worldRef.current?.tileDepth;
+          if (tw && td) {
+            const resolved = moe3dClampMoveAgainstColumnColliders(
+              px,
+              py,
+              nx,
+              ny,
+              moe3dMacro3WorldCollidersAt(px, py, tw, td)
+            );
+            nx = resolved.x;
+            ny = resolved.z;
+          }
           const clamped = moe3dClampToPlayBounds(
             nx,
             ny,
@@ -2864,6 +3535,42 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           if (nearRhodaSpot !== nearRhodaRef.current) {
             nearRhodaRef.current = nearRhodaSpot;
             startTransition(() => setNearRhoda(nearRhodaSpot));
+          }
+          const nearDragonSpot = moe3dIsNearDragonShowcase(
+            nx,
+            ny,
+            hw,
+            hd,
+            22,
+            worldRef.current?.dragonShowcasePos
+          );
+          if (nearDragonSpot !== nearDragonShowcaseRef.current) {
+            nearDragonShowcaseRef.current = nearDragonSpot;
+            startTransition(() => setNearDragonShowcase(nearDragonSpot));
+          }
+          const nearMonsterSpot = moe3dIsNearMonsterShowcase(
+            nx,
+            ny,
+            hw,
+            hd,
+            40,
+            worldRef.current?.monsterShowcasePos
+          );
+          if (nearMonsterSpot !== nearMonsterShowcaseRef.current) {
+            nearMonsterShowcaseRef.current = nearMonsterSpot;
+            startTransition(() => setNearMonsterShowcase(nearMonsterSpot));
+          }
+          const nearbyAltar =
+            tw && td
+              ? moe3dFindNearbyAltar(nx, ny, tw, td, {
+                  halfW: worldRef.current?.halfW,
+                  halfD: worldRef.current?.halfD,
+                })
+              : null;
+          const altarKey = nearbyAltar?.id ?? null;
+          if (altarKey !== nearAltarRef.current?.id) {
+            nearAltarRef.current = nearbyAltar;
+            startTransition(() => setNearAltar(nearbyAltar));
           }
         }
         tickPet3d(petSpeed, dt, now);
@@ -2928,9 +3635,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               playerPos: playerPosRef.current,
               speed: MOVE_SPEED,
               approachThreshold: PET_APPROACH_THRESHOLD_2D,
-              followDist: petFollowTightRef.current
-                ? PET_FOLLOW_DIST_2D_TIGHT
-                : PET_FOLLOW_DIST_2D,
+              followDist: PET_FOLLOW_DIST_2D,
               followDistAuto: PET_FOLLOW_DIST_2D * 1.2,
               now,
               autoAttackCooldownRef,
@@ -2965,7 +3670,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [world, onBack]);
+  }, [world, onBack, commitPlayerVitals]);
 
   const dataForSkillSlots = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
   const combatSkillSlots = buildPetCombatSkillSlots(
@@ -2986,48 +3691,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     combatSkillSlots[i] ?? null
   );
   const playerSkillIconSlots = buildPlayerNinjaSkillSlots(50, playerSkillUnlocks);
-  const playerSkillCooldownSec =
-    shinsokuCooldownSec !== null
-      ? { ninja_shinsoku: shinsokuCooldownSec }
-      : {};
-
-  const swapPlayerSkillSlots = useCallback((from, to) => {
-    setPlayerSkillSlotOrder((prev) => {
-      const next = swapPlayerSkillSlotOrder(prev, from, to);
-      savePlayerSkillSlotOrder(next);
-      return next;
-    });
-  }, []);
+  const playerSkillCooldownSec = {};
 
   const resetShinsokuForGustavRematch = useCallback(() => {
-    setPlayerSkillUnlocks((prev) =>
-      removePlayerSkillUnlock(prev, "ninja_shinsoku")
-    );
     setDashBoost3x(false);
     dashBoost3xRef.current = false;
-    shinsokuActiveUntilRef.current = 0;
-    shinsokuCooldownUntilRef.current = 0;
-    setShinsokuCooldownSec(null);
-    if (shinsokuTimersRef.current.active) {
-      clearTimeout(shinsokuTimersRef.current.active);
-      shinsokuTimersRef.current.active = null;
-    }
-    if (shinsokuTimersRef.current.cooldown) {
-      clearTimeout(shinsokuTimersRef.current.cooldown);
-      shinsokuTimersRef.current.cooldown = null;
-    }
     setFieldTreasures((prev) => prev.filter((tr) => !isGustavJuniorTreasure(tr)));
   }, []);
 
   const beginDuelWithEnemy = useCallback(
     (id) => {
-      const cur = duelRef.current;
-      if (cur) {
-        if (cur.enemyId === id) return;
-        return;
-      }
+    const cur = duelRef.current;
+    if (cur) {
+      if (cur.enemyId === id) return;
+      return;
+    }
       const target = enemiesRef.current.find((en) => en.id === id);
-      if (!target || target.hp <= 0) return;
+    if (!target || target.hp <= 0) return;
       const ext = moe3dCombatExtentsRef.current;
       const slot = is3d
         ? moe3dDuelSlotFromPet(
@@ -3045,20 +3725,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             playerPosRef.current.y,
             52
           );
-      const next = {
-        enemyId: id,
-        phase: "approach",
-        petBar: 0,
-        enemyBar: 0,
-        slotX: slot.x,
-        slotY: slot.y,
+    const next = {
+      enemyId: id,
+      phase: "approach",
+      petBar: 0,
+      enemyBar: 0,
+      slotX: slot.x,
+      slotY: slot.y,
         petChargeSec: getPetChargeSeconds(pet.id, petCombatLevel),
-        enemyChargeSec: getEnemyChargeSeconds(target),
-      };
-      approachChargeScheduledRef.current = false;
-      duelRef.current = next;
-      setDuel(next);
-      playSfx("duelEngage");
+      enemyChargeSec: getEnemyChargeSeconds(target),
+    };
+    approachChargeScheduledRef.current = false;
+    duelRef.current = next;
+    setDuel(next);
+    playSfx("duelEngage");
     },
     [is3d, pet.id, petCombatLevel]
   );
@@ -3107,10 +3787,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const applyPetCommand = useCallback((mode) => {
     petCommandRef.current = mode;
     setPetCommandMode(mode);
-    if (mode !== "follow") {
-      petFollowTightRef.current = false;
-      setPetFollowTight(false);
-    }
     if (mode === "wait" || mode === "sit") {
       const anchor = worldRef.current?.mode3d
         ? petPosRef.current
@@ -3128,25 +3804,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const handlePetComeBack = useCallback(() => {
     const wasFighting = cancelActiveDuel();
-    petFollowTightRef.current = false;
-    setPetFollowTight(false);
     applyPetCommand("follow");
+    if (wasFighting && worldRef.current?.mode3d) {
+      petSpawnEpochRef.current += 1;
+      petRunAnimRef.current = true;
+    }
     setToast(
       wasFighting
         ? "もどれ！（戦闘をやめてプレイヤーのもとへ）"
         : MOE_PET_COMMAND_UI.follow.toast
-    );
-  }, [applyPetCommand, cancelActiveDuel]);
-
-  const handlePetBero = useCallback(() => {
-    const wasFighting = cancelActiveDuel();
-    applyPetCommand("follow");
-    petFollowTightRef.current = true;
-    setPetFollowTight(true);
-    setToast(
-      wasFighting
-        ? "ベロー！（戦闘やめてぴったりくっつく）"
-        : MOE_PET_COMMAND_UI.bero.toast
     );
   }, [applyPetCommand, cancelActiveDuel]);
 
@@ -3195,6 +3861,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     if (e?.button === 2) return;
     e?.preventDefault?.();
     e?.stopPropagation?.();
+    setAllyTarget("pet");
+    saveMoeAllyTarget("pet");
     setPetFocused((prev) => {
       const next = !prev;
       if (next) {
@@ -3230,7 +3898,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   useEffect(() => {
     if (targetEnemyId == null) return;
     const en = enemiesRef.current.find((e) => e.id === targetEnemyId);
-    if (!en || en.hp <= 0) setTargetEnemyId(null);
+    if (!en || en.hp <= 0) {
+      setTargetEnemyId(null);
+      setEnemyStatSearchOpen(false);
+    }
   }, [enemies, targetEnemyId]);
 
   useEffect(() => {
@@ -3347,15 +4018,320 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     });
   }, []);
 
+  const handleBananaMilkToggle = useCallback(() => {
+    setBananaMilkActive((on) => {
+      const next = !on;
+      setToast(
+        next
+          ? `🍌バナナミルク！ 走行中もスタミナ+${moePlayerBananaMilkStaminaRegenPerSec()}/秒`
+          : "バナナミルク効果 OFF"
+      );
+      if (next) playSfx("heal");
+      return next;
+    });
+  }, []);
+
+  const selectAllyTarget = useCallback(
+    (id) => {
+      moeDevAssert(
+        id === "player" || id === "pet",
+        "selectAllyTarget: invalid id",
+        { id }
+      );
+      setAllyTarget(id);
+      saveMoeAllyTarget(id);
+      allyTargetRef.current = id;
+      const petData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+      const label =
+        id === "player" ? trainerStatus.job ?? "プレイヤー" : petData.name;
+      setToast(`支援ターゲット: ${label}`);
+    },
+    [trainerStatus.job, pet.id]
+  );
+
+  const handlePlayerAllySelect = useCallback(() => {
+    setPetFocused(false);
+    selectAllyTarget("player");
+  }, [selectAllyTarget]);
+
+  const handleCondenseMind = useCallback(() => {
+    const caster = playerVitalsRef.current;
+    const trainerLevel = trainerStatus.level ?? 1;
+    const petData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
+    const targetName =
+      allyTarget === "player"
+        ? trainerStatus.job ?? "プレイヤー"
+        : petData.name;
+    const targetVitals =
+      allyTarget === "player"
+        ? caster
+        : { mp: petRef.current.mp, mpMax: petRef.current.mpMax };
+
+    const result = activateCondenseMindOnTarget(
+      caster,
+      targetVitals,
+      allyTarget,
+      trainerLevel,
+      targetName
+    );
+    if (!result.ok) {
+      setToast(result.toast ?? "使えません");
+      return;
+    }
+    commitPlayerVitals(result.casterVitals);
+    if (result.targetKind === "player") {
+      playerCondenseMindRef.current = result.buff;
+    } else {
+      atrumMpRegenRef.current = result.buff;
+    }
+    setCondenseMindActive(true);
+    setToast(result.toast ?? "コンデンスマインド！");
+    if (result.skillToast) setSkillToast(result.skillToast);
+    playSfx("heal");
+  }, [
+    allyTarget,
+    trainerStatus.level,
+    trainerStatus.job,
+    pet.id,
+    commitPlayerVitals,
+  ]);
+
+  const warpPlayer3d = useCallback(
+    (x, y, toastMsg) => {
+      const bounds = worldRef.current;
+      if (!bounds?.halfW) return false;
+      const playerAt = moe3dClampToPlayBounds(x, y, bounds, 1.5);
+      playerPosRef.current = playerAt;
+      setPlayer(playerAt);
+      const { petAt } = snapPet3dNearPlayer(bounds.halfW, bounds.halfD, playerAt);
+      setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
+      setMinimap3d({
+        x: playerAt.x,
+        y: playerAt.y,
+        yaw: cameraYawRef.current,
+      });
+      if (toastMsg) setToast(toastMsg);
+      return true;
+    },
+    [snapPet3dNearPlayer]
+  );
+
+  /** 地形にめり込んだときの緊急脱出（東へ10マス＋ペットを傍に寄せる） */
+  const emergencyUnstuck3d = useCallback(() => {
+    if (!worldRef.current?.mode3d) return;
+    cancelActiveDuel();
+    applyPetCommand("follow");
+    waitAnchorRef.current = null;
+    petHoldYawRef.current = null;
+    playerJumpRef.current = { offset: 0, vy: 0 };
+    const pos = playerPosRef.current;
+    const ok = warpPlayer3d(pos.x + 10, pos.y, "🆘 脱出 — 東へ少し移動したよ");
+    if (ok) {
+      petSpawnEpochRef.current += 1;
+      petRunAnimRef.current = false;
+    }
+  }, [applyPetCommand, cancelActiveDuel, warpPlayer3d]);
+
+  const handleEnemyStatSearch = useCallback(() => {
+    const tid = targetEnemyIdRef.current;
+    const en = enemiesRef.current.find((e) => e.id === tid && e.hp > 0);
+    if (!en) {
+      setEnemyStatSearchOpen(false);
+      setToast("敵をクリックしてターゲットを選んでください");
+      return;
+    }
+    setEnemyStatSearchOpen((wasOpen) => {
+      const next = !wasOpen;
+      if (next) setToast(`🔍 ${en.emoji} ${en.name} を調べた`);
+      return next;
+    });
+  }, []);
+
+  const cancelSkillChant = useCallback(() => {
+    if (!skillChantRef.current) return;
+    skillChantRef.current = null;
+    setSkillChant(null);
+    setSkillChantRemainSec(null);
+  }, []);
+
+  cancelSkillChantRef.current = cancelSkillChant;
+
+  const completeSkillChant = useCallback(() => {
+    const chant = skillChantRef.current;
+    skillChantRef.current = null;
+    setSkillChant(null);
+    setSkillChantRemainSec(null);
+    if (!chant) return;
+
+    if (chant.kind === "holy_record") {
+      const recordCount = countMoeHolyRecordItems();
+      if (recordCount >= MOE_HOLY_RECORD_MAX_STONES) {
+        setToast(`ホーリーレコードは最大${MOE_HOLY_RECORD_MAX_STONES}個までです`);
+        return;
+      }
+      const record = createMoeHolyRecordStone(chant.x, chant.y, recordCount + 1);
+      const boxItem = moeHolyRecordToBoxItem(record);
+      if (!addMoeItemBoxItem(boxItem)) {
+        setToast("アイテムボックスに空きがありません");
+        return;
+      }
+      setToast(
+        `📜 ホーリーレコードをアイテム枠に入れました\n${formatMoe3dHudCoordLabel(record.x, record.y)}（${recordCount + 1}/${MOE_HOLY_RECORD_MAX_STONES}）`
+      );
+      playSfx("heal");
+      return;
+    }
+
+    if (chant.kind === "teleport") {
+      const ok = warpPlayer3d(
+        chant.targetX,
+        chant.targetY,
+        chant.fromRecord
+          ? `🌀 ${chant.targetLabel} へテレポートしました\n${formatMoe3dHudCoordLabel(chant.targetX, chant.targetY)}`
+          : `🌀 ビスク中央へテレポートしました\n${formatMoe3dHudCoordLabel(chant.targetX, chant.targetY)}`
+      );
+      if (ok) playSfx("heal");
+      return;
+    }
+
+    if (chant.kind === "phoenix" && chant.skill) {
+      applyPhoenixPlayerChantEffect(chant.skill);
+    }
+  }, [warpPlayer3d, applyPhoenixPlayerChantEffect]);
+
+  const startHolyRecordChant = useCallback(() => {
+    if (!is3d) return;
+    if (skillChantRef.current) return;
+    if (duelRef.current) {
+      setToast("戦闘中はホーリーレコードを使えません");
+      return;
+    }
+    if (countMoeHolyRecordItems() >= MOE_HOLY_RECORD_MAX_STONES) {
+      setToast(`ホーリーレコードは最大${MOE_HOLY_RECORD_MAX_STONES}個までです`);
+      return;
+    }
+    const pos = playerPosRef.current;
+    const startedAt = Date.now();
+    skillChantRef.current = {
+      kind: "holy_record",
+      x: pos.x,
+      y: pos.y,
+      startedAt,
+      chantSec: MOE_HOLY_RECORD_CHANT_SEC,
+    };
+    setSkillChant(skillChantRef.current);
+    setSkillChantRemainSec(MOE_HOLY_RECORD_CHANT_SEC);
+    setToast(`📜 ホーリーレコードを詠唱中…（${MOE_HOLY_RECORD_CHANT_SEC}秒）`);
+  }, [is3d]);
+
+  const resolveTeleportTarget = useCallback(() => {
+    const idx = loadMoeItemBoxSelectedIndex();
+    const slots = loadMoeItemBoxSlots();
+    const item = idx != null ? slots[idx] : null;
+    if (isMoeHolyRecordBoxItem(item)) {
+      return {
+        targetX: item.recordX ?? 0,
+        targetY: item.recordY ?? 0,
+        targetLabel: item.label ?? "ホーリーRレコード",
+        fromRecord: true,
+      };
+    }
+    const bisk = moe3dBiskWorldCenter();
+    return {
+      targetX: bisk.x,
+      targetY: bisk.y,
+      targetLabel: "ビスク中央",
+      fromRecord: false,
+    };
+  }, []);
+
+  const startTeleportChant = useCallback(() => {
+    if (!is3d) return;
+    if (skillChantRef.current) return;
+    if (duelRef.current) {
+      setToast("戦闘中はテレポートできません");
+      return;
+    }
+    const target = resolveTeleportTarget();
+    const startedAt = Date.now();
+    skillChantRef.current = {
+      kind: "teleport",
+      startedAt,
+      chantSec: MOE_TELEPORT_CHANT_SEC,
+      ...target,
+    };
+    setSkillChant(skillChantRef.current);
+    setSkillChantRemainSec(MOE_TELEPORT_CHANT_SEC);
+    setToast(
+      target.fromRecord
+        ? `🌀 ${target.targetLabel} へテレポート詠唱中…（${MOE_TELEPORT_CHANT_SEC}秒）`
+        : `🌀 ビスク中央へテレポート詠唱中…（${MOE_TELEPORT_CHANT_SEC}秒）`
+    );
+  }, [is3d, resolveTeleportTarget]);
+
+  useEffect(() => {
+    const syncSelection = () =>
+      setItemBoxSelectedIndex(loadMoeItemBoxSelectedIndex());
+    syncSelection();
+    window.addEventListener(MOE_ITEM_BOX_SELECTED_EVENT, syncSelection);
+    window.addEventListener(MOE_ITEM_BOX_SLOTS_EVENT, syncSelection);
+    return () => {
+      window.removeEventListener(MOE_ITEM_BOX_SELECTED_EVENT, syncSelection);
+      window.removeEventListener(MOE_ITEM_BOX_SLOTS_EVENT, syncSelection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!skillChant) return undefined;
+    const tick = () => {
+      const chant = skillChantRef.current;
+      if (!chant) return;
+      const chantSec = chant.chantSec ?? MOE_HOLY_RECORD_CHANT_SEC;
+      const elapsed = Date.now() - chant.startedAt;
+      const remainMs = chantSec * 1000 - elapsed;
+      if (remainMs <= 0) {
+        completeSkillChant();
+        return;
+      }
+      setSkillChantRemainSec(Math.max(1, Math.ceil(remainMs / 1000)));
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [skillChant, completeSkillChant]);
+
+  const teleportRecordCtx = useMemo(() => {
+    const slots = loadMoeItemBoxSlots();
+    const item =
+      itemBoxSelectedIndex != null ? slots[itemBoxSelectedIndex] : null;
+    if (!isMoeHolyRecordBoxItem(item)) {
+      return { selected: false, label: null };
+    }
+    return { selected: true, label: item.label ?? "ホーリーRレコード" };
+  }, [itemBoxSelectedIndex]);
+
   const playerOrderedSkillSlots = useMemo(() => {
     const ninjaById = {
       ninja_shinobiashi: playerSkillIconSlots[0],
       ninja_shinsoku: playerSkillIconSlots[1],
       ninja_kakuremino: playerSkillIconSlots[2],
     };
+    const condenseMindActiveOnTarget =
+      allyTarget === "player"
+        ? isPlayerCondenseMindActive(playerCondenseMindRef)
+        : isAtrumManaAmpActive(atrumMpRegenRef);
     const ctx = {
       healCdSec,
       regenActive,
+      bananaMilkActive,
+      allyTarget,
+      allyTargetMp: allyTarget === "player" ? playerVitals.mp : pet.mp,
+      allyTargetMpMax: allyTarget === "player" ? playerVitals.mpMax : pet.mpMax,
+      condenseMindActiveOnTarget,
+      playerMp: playerVitals.mp,
+      playerMpMax: playerVitals.mpMax,
+      condenseMindMpCost: PLAYER_CONDENSE_MIND_MP_COST,
+      condenseMindMpPerSec: PLAYER_CONDENSE_MIND_MP_PER_SEC,
       shinobiashiOn,
       dashBoost3x,
       playerSkillCooldownSec,
@@ -3365,6 +4341,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       healAmountAll: HEAL_AMOUNT_HEAL_ALL,
       petRegenHp: PET_REGEN_HP,
       petRegenMp: PET_REGEN_MP,
+      skillChanting: Boolean(skillChant),
+      skillChantKind: skillChant?.kind ?? null,
+      skillChantRemainSec,
+      holyRecordMaxStones: MOE_HOLY_RECORD_MAX_STONES,
+      teleportRecordSelected: teleportRecordCtx.selected,
+      teleportRecordLabel: teleportRecordCtx.label,
+      onHolyRecord: startHolyRecordChant,
+      onTeleport: startTeleportChant,
       onLight: () => handleHeal(HEAL_AMOUNT_LIGHT, "ライトヒール"),
       onHeal: () =>
         handleHeal(
@@ -3381,6 +4365,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           HEAL_COOLDOWN_HEAL_ALL_SEC
         ),
       onRegenToggle: handleRegenToggle,
+      onBananaMilkToggle: handleBananaMilkToggle,
+      onCondenseMind: handleCondenseMind,
       onNinja: (skill) => activatePlayerSkillSlot(0, skill),
     };
     return playerSkillSlotOrder.map((key, slotIndex) =>
@@ -3391,30 +4377,294 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     playerSkillIconSlots,
     healCdSec,
     regenActive,
+    bananaMilkActive,
+    allyTarget,
+    pet.mp,
+    pet.mpMax,
+    playerVitals.mp,
+    playerVitals.mpMax,
     shinobiashiOn,
     dashBoost3x,
     playerSkillCooldownSec,
     handleRegenToggle,
+    handleBananaMilkToggle,
+    handleCondenseMind,
     activatePlayerSkillSlot,
+    skillChant,
+    skillChantRemainSec,
+    startHolyRecordChant,
+    startTeleportChant,
+    teleportRecordCtx,
   ]);
 
-  const playerVerticalSkillSlots = useMemo(
+  const playerUtilityOrderedSlots = useMemo(() => {
+    const ctx = {
+      onEnemyStatSearch: handleEnemyStatSearch,
+      targetEnemy:
+        targetEnemyId != null
+          ? enemies.find((e) => e.id === targetEnemyId && e.hp > 0) ?? null
+          : null,
+      enemyStatSearchOpen,
+    };
+    return defaultPlayerUtilitySlotOrder().map((key, slotIndex) =>
+      buildPlayerUtilitySkillSlotEntry(key, slotIndex, ctx)
+    );
+  }, [
+    handleEnemyStatSearch,
+    targetEnemyId,
+    enemies,
+    enemyStatSearchOpen,
+  ]);
+
+  const swapPlayerSkillSlots = useCallback((from, to) => {
+    setPlayerSkillSlotOrder((prev) => {
+      const next = swapPlayerSkillSlotOrder(prev, from, to);
+      savePlayerSkillSlotOrder(next);
+      return next;
+    });
+  }, []);
+
+  const playerPhoenixOrderedSlots = useMemo(
     () =>
-      playerOrderedSkillSlots.map(
-        ({ label, disabled, active, cooldownSec, title, onClick, reorderable }) => ({
+      buildPlayerPhoenixSkillSlotEntries(
+        petCombatLevel,
+        petSkillMode,
+        activatePlayerPhoenixSkill,
+        {
+          skillChanting: Boolean(skillChant),
+          skillChantKind: skillChant?.kind ?? null,
+          skillChantSkillId: skillChant?.skillId ?? null,
+          skillChantRemainSec,
+          phoenixHabitAtk2x,
+        }
+      ),
+    [
+      petCombatLevel,
+      petSkillMode,
+      activatePlayerPhoenixSkill,
+      skillChant,
+      skillChantRemainSec,
+      phoenixHabitAtk2x,
+    ]
+  );
+
+  const mapPlayerVerticalSkillSlots = useCallback(
+    (orderedSlots, includeHabitPreview = false) => {
+      const rows = orderedSlots.map(
+        ({
+          slotKey,
           label,
           disabled,
+          unusable,
+          active,
+          cooldownSec,
+          title,
+          onClick,
+          reorderable,
+        }) => ({
+          slotKey,
+          label,
+          disabled,
+          unusable,
           active,
           cooldownSec,
           title,
           onClick,
           reorderable,
         })
-      ),
-    [playerOrderedSkillSlots]
+      );
+      if (includeHabitPreview) {
+        const purifyIdx = rows.findIndex(
+          (r) => r.slotKey === "phoenix_purify_rebirth"
+        );
+        if (purifyIdx >= 0) {
+          rows.splice(purifyIdx + 1, 0, {
+            label: "習慣改鳳",
+            disabled: true,
+            previewOnly: true,
+            title: "名称プレビュー（みるだけ）",
+            reorderable: false,
+          });
+        }
+      }
+      return rows;
+    },
+    []
   );
 
-  const playerIconBarSlots = playerOrderedSkillSlots;
+  const playerVerticalSkillSlotsSet1 = useMemo(
+    () => mapPlayerVerticalSkillSlots(playerOrderedSkillSlots),
+    [mapPlayerVerticalSkillSlots, playerOrderedSkillSlots]
+  );
+
+  const playerVerticalSkillSlotsSet2 = useMemo(
+    () => mapPlayerVerticalSkillSlots(playerPhoenixOrderedSlots, true),
+    [mapPlayerVerticalSkillSlots, playerPhoenixOrderedSlots]
+  );
+
+  const playerVerticalSkillSlotsSet3 = useMemo(
+    () => mapPlayerVerticalSkillSlots(playerUtilityOrderedSlots),
+    [mapPlayerVerticalSkillSlots, playerUtilityOrderedSlots]
+  );
+
+  const petVerticalSkillSlots = useMemo(
+    () =>
+      skillPanelLabels.map((label, i) => {
+        const skill = combatSkillSlots[i];
+        const locked =
+          petSkillMode === MOE_PET_SKILL_MODE_LEARNED &&
+          skill &&
+          !isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode);
+        const skillName = skill?.name ?? "";
+        return {
+          label: skillName || label,
+          disabled: !skill || locked,
+          title: skill
+            ? formatMoeSkillHoverTip(skill, { locked })
+            : label,
+          onClick: () => activateCombatSkillSlot(i, skill),
+        };
+      }),
+    [
+      skillPanelLabels,
+      combatSkillSlots,
+      petSkillMode,
+      petCombatLevel,
+      activateCombatSkillSlot,
+    ]
+  );
+
+  const activePetSkillTitle = dataForSkillSlots.name
+    ? `ペット（${dataForSkillSlots.name}）`
+    : "ペット";
+
+  const mergedSkillPanelProps = {
+    showPlayer: is3d,
+    petLabel: activePetSkillTitle,
+    pet: {
+      topAction: {
+        label: battleSpeed2x ? "⚡×2 ON" : "⚡×2",
+        active: battleSpeed2x,
+        title: "交戦中：チャージ・スタン・攻撃アニメを2倍速",
+        onClick: () => setBattleSpeed2x((v) => !v),
+      },
+      slots: petVerticalSkillSlots,
+    },
+    player1: {
+      slots: playerVerticalSkillSlotsSet1,
+      reorderable: true,
+      onSwapSlots: swapPlayerSkillSlots,
+    },
+    player2: {
+      slots: playerVerticalSkillSlotsSet2,
+    },
+    player3: {
+      slots: playerVerticalSkillSlotsSet3,
+    },
+  };
+
+  const mergedIconBarProps = {
+    showPlayer: is3d,
+    petLabel: activePetSkillTitle,
+    petSlots: skillIconSlots,
+    onPetActivate: activateCombatSkillSlot,
+    isPetSkillUsable: (skill) =>
+      isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode),
+    player1Slots: playerOrderedSkillSlots,
+    player2Slots: playerPhoenixOrderedSlots,
+    player3Slots: playerUtilityOrderedSlots,
+    onSwapPlayer1Slots: swapPlayerSkillSlots,
+  };
+
+  const visibleMonsterLineup = useMemo(
+    () => filterShowcaseLineupByIds(MOE_MONSTER_LINEUP, hiddenMonsterShowcaseIds),
+    [hiddenMonsterShowcaseIds]
+  );
+  const visibleDragonLineup = useMemo(
+    () => filterShowcaseLineupByIds(MOE_DRAGON_LINEUP, hiddenDragonShowcaseIds),
+    [hiddenDragonShowcaseIds]
+  );
+
+  const toggleMonsterDeleteList = useCallback((id) => {
+    setMonsterDeleteListIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }, []);
+
+  const toggleDragonDeleteList = useCallback((id) => {
+    setDragonDeleteListIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }, []);
+
+  const applyMonsterDeleteList = useCallback(async () => {
+    if (monsterDeleteListIds.length === 0) return;
+    const count = monsterDeleteListIds.length;
+    if (
+      !window.confirm(
+        `削除リスト ${count}体を\n・ゲーム内で非表示\n・data/moeShowcaseDeleteQueue.json に保存\nしますか？\n\nGLBファイルの完全削除は Cursor で\nnpm run apply:showcase-delete:dry-run\nnpm run apply:showcase-delete`
+      )
+    ) {
+      return;
+    }
+    try {
+      const entries = monsterDeleteListIds.map((id) => {
+        const v = MOE_MONSTER_LINEUP.find((x) => x.id === id);
+        return {
+          id,
+          nameJa: v?.nameJa ?? id,
+          file: v?.file ?? "",
+          variantLabel: v?.variantLabel,
+          note: v?.note,
+        };
+      });
+      await appendShowcaseDeleteQueue("monster", entries);
+      const next = addHiddenShowcaseIds("monster", monsterDeleteListIds);
+      setHiddenMonsterShowcaseIds(next);
+      setMonsterDeleteListIds([]);
+      setToast(
+        `敵 ${count}体を非表示＋削除キュー保存（data/moeShowcaseDeleteQueue.json）`
+      );
+    } catch (err) {
+      setToast(
+        err instanceof Error ? err.message : "削除キューの保存に失敗しました"
+      );
+    }
+  }, [monsterDeleteListIds]);
+
+  const applyDragonDeleteList = useCallback(async () => {
+    if (dragonDeleteListIds.length === 0) return;
+    const count = dragonDeleteListIds.length;
+    if (
+      !window.confirm(
+        `削除リスト ${count}体を\n・ゲーム内で非表示\n・data/moeShowcaseDeleteQueue.json に保存\nしますか？\n\nGLBファイルの完全削除は Cursor で\nnpm run apply:showcase-delete:dry-run\nnpm run apply:showcase-delete`
+      )
+    ) {
+      return;
+    }
+    try {
+      const entries = dragonDeleteListIds.map((id) => {
+        const v = MOE_DRAGON_LINEUP.find((x) => x.id === id);
+        return {
+          id,
+          nameJa: v?.nameJa ?? id,
+          file: v?.file ?? "",
+          note: v?.note,
+        };
+      });
+      await appendShowcaseDeleteQueue("dragon", entries);
+      const next = addHiddenShowcaseIds("dragon", dragonDeleteListIds);
+      setHiddenDragonShowcaseIds(next);
+      setDragonDeleteListIds([]);
+      setToast(
+        `ドラゴン ${count}体を非表示＋削除キュー保存（data/moeShowcaseDeleteQueue.json）`
+      );
+    } catch (err) {
+      setToast(
+        err instanceof Error ? err.message : "削除キューの保存に失敗しました"
+      );
+    }
+  }, [dragonDeleteListIds]);
 
   const handlePetExpReset = () => {
     if (
@@ -3566,6 +4816,57 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setRhodaView("lines");
     setRhodaOpen(true);
   }, []);
+
+  const openAltarPanel = useCallback((altar) => {
+    if (!altar) return;
+    setActiveAltar(altar);
+    setAltarOpen(true);
+  }, []);
+
+  const handleAltarOpen = useCallback(() => {
+    openAltarPanel(nearAltarRef.current);
+  }, [openAltarPanel]);
+
+  const handleAltarClickById = useCallback(
+    (altarId) => {
+      const altar = MOE_ALTARS.find((a) => a.id === altarId) ?? null;
+      openAltarPanel(altar);
+    },
+    [openAltarPanel]
+  );
+
+  const closeAltar = useCallback(() => {
+    setAltarOpen(false);
+    setActiveAltar(null);
+  }, []);
+
+  const handleAltarWarp = useCallback(
+    (destId) => {
+      const dest = moeAltarDestinationById(destId);
+      const bounds = worldRef.current;
+      const tw = bounds?.tileWidth;
+      const td = bounds?.tileDepth;
+      if (!dest?.available || !tw || !td || !bounds?.halfW) return;
+      const spawn = moe3dWarpDestSpawnWorld(dest, tw, td, {
+        halfW: bounds.halfW,
+        halfD: bounds.halfD,
+      });
+      if (!spawn) return;
+      const playerAt = moe3dClampToPlayBounds(spawn.x, spawn.y, bounds, 1.5);
+      playerPosRef.current = playerAt;
+      setPlayer(playerAt);
+      const { petAt } = snapPet3dNearPlayer(bounds.halfW, bounds.halfD, playerAt);
+      setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
+      setMinimap3d({
+        x: playerAt.x,
+        y: playerAt.y,
+        yaw: cameraYawRef.current,
+      });
+      closeAltar();
+      setToast(`${dest.emoji ?? "✨"} ${dest.nameJa} へ転送しました`);
+    },
+    [closeAltar, snapPet3dNearPlayer]
+  );
 
   const closeRhoda = useCallback(() => {
     setRhodaOpen(false);
@@ -4060,29 +5361,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const camY = is3d ? 0 : view.h / 2 - player.y;
   const mini3HalfW = world.halfW ?? MOE_3D_HALF_W;
   const mini3HalfD = world.halfD ?? MOE_3D_HALF_D;
-  const mini3W = world.mw ?? mini3HalfW * 2;
-  const mini3H = world.mh ?? mini3HalfD * 2;
-  const mini3Player = is3d
-    ? moe3dWorldToMinimap(
-        minimap3d.x,
-        minimap3d.y,
-        mini3HalfW,
-        mini3HalfD,
-        mini3W,
-        mini3H
-      )
-    : null;
-  const mini3Rhoda = is3d
-    ? (() => {
-        const spot = world.rhodaPos ?? moe3dRhodaPosition(mini3HalfW, mini3HalfD);
-        return moe3dWorldToMinimap(
-          spot.x,
-          spot.y,
+  const mini3Bounds = world.miniBounds ?? null;
+  const mini3W = world.miniMapW ?? world.mw ?? mini3HalfW * 2;
+  const mini3H = world.miniMapH ?? world.mh ?? mini3HalfD * 2;
+  const mini3Project = (wx, wz) =>
+    mini3Bounds
+      ? moe3dWorldToMinimapInBounds(wx, wz, mini3Bounds, mini3W, mini3H)
+      : moe3dWorldToMinimap(
+          wx,
+          wz,
           mini3HalfW,
           mini3HalfD,
           mini3W,
           mini3H
         );
+  const mini3Player = is3d ? mini3Project(minimap3d.x, minimap3d.y) : null;
+  const mini3Rhoda = is3d
+    ? (() => {
+        const spot = world.rhodaPos ?? moe3dRhodaPosition(mini3HalfW, mini3HalfD);
+        return mini3Project(spot.x, spot.y);
       })()
     : null;
   const mini3ViewLen = Math.min(mini3W, mini3H) * 0.14;
@@ -4105,6 +5402,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         y: mini3Player.y + Math.cos(mini3Yaw + 0.5) * mini3ViewLen * 0.55,
       }
     : null;
+  const mini3TileRects =
+    mini3Bounds
+      ? moe3dMinimapFullTileRects(
+          mini3Bounds,
+          mini3W,
+          mini3H,
+          world.tileWidth,
+          world.tileDepth
+        )
+      : moe3dMinimapZoneRects(mini3HalfW, mini3HalfD, mini3W, mini3H);
   const duelEnemy = duel ? enemies.find((e) => e.id === duel.enemyId) : null;
   const targetEnemy =
     targetEnemyId != null
@@ -4138,12 +5445,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const petMasterView = petMasterDialogue?.view ?? "menu";
 
+  const allyTargetView = {
+    emoji: allyTarget === "player" ? "🧑" : currentPetDisplay.emoji,
+    name:
+      allyTarget === "player"
+        ? trainerStatus.job ?? "勇者"
+        : currentPetDisplay.name,
+    hp: allyTarget === "player" ? playerVitals.hp : pet.hp,
+    hpMax: allyTarget === "player" ? playerVitals.hpMax : pet.hpMax,
+    mp: allyTarget === "player" ? playerVitals.mp : pet.mp,
+    mpMax: allyTarget === "player" ? playerVitals.mpMax : pet.mpMax,
+  };
+
   return (
     <div
       className="relative h-dvh w-full overflow-hidden bg-sky-900"
       onContextMenu={is3d ? (e) => e.preventDefault() : undefined}
     >
-      <MoeTargetWindow target={targetEnemy} duelUi={targetDuelUi} />
+      <MoeTargetWindow
+        target={targetEnemy}
+        duelUi={targetDuelUi}
+        allyTarget={allyTargetView}
+        allyTargetMode={allyTarget}
+        onSelectAllyTarget={selectAllyTarget}
+      />
+      <MoeEnemyStatSearchPanel
+        enemy={targetEnemy}
+        open={enemyStatSearchOpen}
+        onClose={() => setEnemyStatSearchOpen(false)}
+      />
+      <MoePlayerHpWindow
+        name={trainerStatus.job ?? "勇者"}
+        hp={playerVitals.hp}
+        hpMax={playerVitals.hpMax}
+        stamina={playerVitals.stamina}
+        staminaMax={playerVitals.staminaMax}
+        mp={playerVitals.mp}
+        mpMax={playerVitals.mpMax}
+        allySelected={allyTarget === "player"}
+        onSelectAllyTarget={() => selectAllyTarget("player")}
+      />
       <MoePetHpWindow
         emoji={currentPetDisplay.emoji}
         name={currentPetDisplay.name}
@@ -4151,6 +5492,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         hp={pet.hp}
         hpMax={pet.hpMax}
         duelUi={petDuelUi}
+        allySelected={allyTarget === "pet"}
+        onSelectAllyTarget={() => selectAllyTarget("pet")}
       />
       {duel && (
         <MoeDuelTimeBarWindow
@@ -4170,7 +5513,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           className="pointer-events-none absolute left-1/2 top-24 z-[60] max-w-[min(96vw,22rem)] -translate-x-1/2 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 px-4 py-3 text-center text-sm font-bold leading-snug text-amber-950 shadow-[0_0_40px_rgba(251,191,36,0.85)] whitespace-pre-wrap break-words"
         >
           🎉 {petLevelUpFlash}
-        </div>
+                </div>
       )}
       {expConsumableLevelUpFlow && (
         <div
@@ -4219,8 +5562,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               expConsumableLevelUpFlow.pages.length - 1
                 ? "クリック / Enter で次へ"
                 : "クリック / Enter で閉じる"}
-            </p>
-          </div>
+              </p>
+            </div>
         </div>
       )}
       {skillToast && (
@@ -4348,7 +5691,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   type="button"
                   onClick={handlePetComeBack}
                   className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                    petCommandMode === "follow" && !petFollowTight
+                    petCommandMode === "follow"
                       ? "border-cyan-400/70 bg-cyan-900/90 text-cyan-50"
                       : "border-cyan-600/50 bg-cyan-950/80 text-cyan-100 hover:bg-cyan-900/90"
                   }`}
@@ -4390,45 +5733,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 </button>
                 <button
                   type="button"
-                  onClick={handlePetBero}
-                  className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                    petFollowTight && petCommandMode === "follow"
-                      ? "border-pink-400/70 bg-pink-900/90 text-pink-50 ring-1 ring-pink-300/50"
-                      : "border-pink-600/50 bg-pink-950/85 text-pink-100 hover:bg-pink-900/90"
-                  }`}
+                  onClick={emergencyUnstuck3d}
+                  disabled={!world.mode3d}
+                  className="rounded border border-amber-500/55 bg-amber-950/85 px-0.5 py-1 text-[7px] font-bold leading-tight text-amber-100 transition hover:bg-amber-900/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="地形にめり込んだとき — 東へ10マス移動"
                 >
-                  ベロー
+                  🆘 SOS
                 </button>
                 </div>
                 </div>
-                {pet.id === "mystery_dragon" && pet.rebornPhoenix ? (
-                  <div className="mt-1 grid grid-cols-2 gap-0.5 rounded-md border border-fuchsia-500/35 bg-zinc-950/60 p-1">
-                    <button
-                      type="button"
-                      onClick={() => applyMysterySkillSet(1)}
-                      className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                        pet.activeSkillSet !== 2
-                          ? "border-indigo-300/75 bg-indigo-900/90 text-indigo-50 ring-1 ring-indigo-200/40"
-                          : "border-indigo-700/50 bg-indigo-950/80 text-indigo-100 hover:bg-indigo-900/85"
-                      }`}
-                      title="技① — ミステリー ドラゴン系"
-                    >
-                      技①
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyMysterySkillSet(2)}
-                      className={`rounded border px-0.5 py-1 text-[7px] font-bold leading-tight transition active:scale-95 ${
-                        pet.activeSkillSet === 2
-                          ? "border-fuchsia-300/75 bg-fuchsia-900/90 text-fuchsia-50 ring-1 ring-fuchsia-200/40"
-                          : "border-fuchsia-700/50 bg-fuchsia-950/80 text-fuchsia-100 hover:bg-fuchsia-900/85"
-                      }`}
-                      title="技② — 健康のフェニックス系"
-                    >
-                      技②
-                    </button>
-                  </div>
-                ) : null}
             <div className="mt-1 flex items-stretch justify-center gap-0.5">
               <button
                 type="button"
@@ -4676,61 +5989,41 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       </div>
       )}
 
-      {/* スキル 1〜7 — 縦パネル（⚡×2 付き） */}
-      <MoeVerticalSkillPanel
-        storageKey="life-rpg-moe-skill-panel-pos"
-        title="ペット"
-        variant="amber"
-        topAction={{
-          label: battleSpeed2x ? "⚡×2 ON" : "⚡×2",
-          active: battleSpeed2x,
-          title: "交戦中：チャージ・スタン・攻撃アニメを2倍速",
-          onClick: () => setBattleSpeed2x((v) => !v),
-        }}
-        slots={skillPanelLabels.map((label, i) => {
-          const skill = combatSkillSlots[i];
-          const locked =
-            petSkillMode === MOE_PET_SKILL_MODE_LEARNED &&
-            skill &&
-            !isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode);
-          return {
-            label,
-            disabled: !skill || locked,
-            title: skill?.name ?? "",
-            onClick: () => activateCombatSkillSlot(i, skill),
-          };
+      {/* 縦スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
+      <MoeMergedVerticalSkillPanel
+        storageKey="life-rpg-moe-merged-skill-panel-a"
+        defaultPos={() => ({
+          x: Math.max(8, window.innerWidth - 90),
+          y: 8,
         })}
+        {...mergedSkillPanelProps}
+      />
+      <MoeMergedVerticalSkillPanel
+        storageKey="life-rpg-moe-merged-skill-panel-b"
+        defaultPos={() => ({
+          x: Math.max(8, window.innerWidth - 180),
+          y: 8,
+        })}
+        {...mergedSkillPanelProps}
       />
 
-      {is3d && (
-        <MoeVerticalSkillPanel
-          storageKey="life-rpg-moe-player-skill-panel-pos"
-          defaultPos={() => ({
-            x: Math.max(8, window.innerWidth - 166),
-            y: 8,
-          })}
-          title="プレイヤースキル"
-          variant="emerald"
-          reorderable
-          onSwapSlots={swapPlayerSkillSlots}
-          slots={playerVerticalSkillSlots}
-        />
-      )}
-
-      <MoeSkillIconBar
-        slots={skillIconSlots}
-        onActivate={activateCombatSkillSlot}
-        isSkillUsable={(skill) =>
-          isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode)
-        }
+      {/* 横スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
+      <MoeMergedSkillIconBar
+        storageKey="life-rpg-moe-merged-icon-bar-a"
+        defaultPos={() => ({
+          x: Math.max(8, (window.innerWidth - 360) / 2),
+          y: Math.max(8, window.innerHeight - 148),
+        })}
+        {...mergedIconBarProps}
       />
-
-      {is3d && (
-        <MoePlayerSkillIconBar
-          slots={playerIconBarSlots}
-          onSwapSlots={swapPlayerSkillSlots}
-        />
-      )}
+      <MoeMergedSkillIconBar
+        storageKey="life-rpg-moe-merged-icon-bar-b"
+        defaultPos={() => ({
+          x: Math.max(8, (window.innerWidth - 360) / 2),
+          y: Math.max(8, window.innerHeight - 220),
+        })}
+        {...mergedIconBarProps}
+      />
 
       <MoeItemBox onToast={setToast} onUse={handleItemBoxUse} />
 
@@ -4806,7 +6099,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         open={gustavResetPromptOpen}
         mode="menu"
         menuPrompt={
-          "神速のスキルを消しますか？\n\nはい → スキル記録をリセット\n（ギュスターヴの宝＝キューブは再ドロップ可）"
+          "神速のスキルを消しますか？\n\nはい → スキル記録をリセット\n（次の撃破で忍者の足袋 · 以降はキューブ）"
         }
         menuActions={[
           { id: "yes_reset", label: "はい" },
@@ -4818,10 +6111,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         npc={MOE_GUSTAV_EVENT_NPC}
       />
 
-      <div className="absolute left-3 top-3 z-40 max-w-[min(90vw,22rem)]">
+      <div className="absolute left-3 top-3 z-40 flex max-w-[min(90vw,22rem)] items-start gap-2">
+        {is3d ? (
+          <MoeField3DCompassHud
+            playerX={minimap3d.x}
+            playerY={minimap3d.y}
+            yaw={minimap3d.yaw}
+          />
+        ) : null}
+        <div className="min-w-0 flex-1">
         {!showSettings ? (
-          <button
-            type="button"
+              <button
+                type="button"
             onClick={() => setShowSettings(true)}
             className="rounded-lg border border-zinc-400/50 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-zinc-100 shadow-md backdrop-blur-sm transition hover:bg-black/75 active:scale-[0.98]"
             aria-expanded={false}
@@ -4856,6 +6157,40 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               >
                 操作ガイド
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSettings(false);
+                  setShowEventGuide(true);
+                }}
+                className="rounded border border-sky-500/40 bg-sky-950/50 px-2 py-1.5 text-left text-[11px] font-bold text-sky-200 transition hover:bg-sky-900/40 active:scale-[0.98]"
+              >
+                イベント情報
+              </button>
+              {is3d ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSettings(false);
+                      setShowDragonLineup(true);
+                    }}
+                    className="rounded border border-amber-500/40 bg-amber-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-amber-200 transition hover:bg-amber-900/35 active:scale-[0.98]"
+                  >
+                    ドラゴン10体展示
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSettings(false);
+                      setShowMonsterLineup(true);
+                    }}
+                    className="rounded border border-rose-500/40 bg-rose-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-rose-200 transition hover:bg-rose-900/35 active:scale-[0.98]"
+                  >
+                    敵32体展示
+                  </button>
+                </>
+              ) : null}
               <div className="rounded border border-violet-500/30 bg-violet-950/30 px-2 py-1.5">
                 <p className="text-[10px] font-bold text-violet-100/95">
                   ペットスキル
@@ -4864,9 +6199,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   現在: {moePetSkillModeLabel(petSkillMode)}
                 </p>
                 <div className="mt-1.5 grid grid-cols-1 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
+              <button
+                type="button"
+                onClick={() => {
                       setPetSkillMode(MOE_PET_SKILL_MODE_ALL);
                       saveMoePetSkillMode(MOE_PET_SKILL_MODE_ALL);
                       setToast("ペットスキル: 全部使える");
@@ -4957,6 +6292,183 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             </div>
           </div>
         )}
+        </div>
+
+        {showMonsterLineup && is3d && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm"
+            role="dialog"
+            aria-label="敵32体展示"
+          >
+            <div className="flex max-h-[min(92vh,680px)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-rose-500/35 bg-slate-950/95 shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between gap-2 border-b border-rose-500/20 px-3 py-2">
+                <div>
+                  <p className="text-sm font-bold text-rose-100">敵32体展示</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    フィールド東にも実物が並んでいます（Dキーで東へ歩く）
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMonsterLineup(false)}
+                  className="shrink-0 rounded border border-white/20 px-2 py-1 text-[10px] text-white/80 hover:bg-white/10"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                <MoeMonsterLineupCanvas
+                  variants={visibleMonsterLineup}
+                  interactive
+                />
+                <MoeShowcaseDeletePicker
+                  kind="monster"
+                  lineup={MOE_MONSTER_LINEUP}
+                  families={MOE_MONSTER_FAMILIES}
+                  hiddenIds={hiddenMonsterShowcaseIds}
+                  deleteListIds={monsterDeleteListIds}
+                  onToggleDeleteList={toggleMonsterDeleteList}
+                  onRemoveFromDeleteList={(id) =>
+                    setMonsterDeleteListIds((prev) =>
+                      prev.filter((x) => x !== id)
+                    )
+                  }
+                  onApplyDelete={applyMonsterDeleteList}
+                  onClearDeleteList={() => setMonsterDeleteListIds([])}
+                  onRestoreHidden={(id) => {
+                    setHiddenMonsterShowcaseIds(
+                      removeHiddenShowcaseId("monster", id)
+                    );
+                    setToast("1体を再表示しました");
+                  }}
+                  onRestoreAllHidden={() => {
+                    setHiddenMonsterShowcaseIds(
+                      clearHiddenShowcaseIds("monster")
+                    );
+                    setToast("非表示の敵をすべて戻しました");
+                  }}
+                  theme="rose"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDragonLineup && is3d && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm"
+            role="dialog"
+            aria-label="ドラゴン10体展示"
+          >
+            <div className="flex max-h-[min(92vh,640px)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-amber-500/35 bg-slate-950/95 shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between gap-2 border-b border-amber-500/20 px-3 py-2">
+                <div>
+                  <p className="text-sm font-bold text-amber-100">
+                    ドラゴン10体展示
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    フィールド南にも実物が並んでいます（Sキーで南へ歩く）
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDragonLineup(false)}
+                  className="shrink-0 rounded border border-white/20 px-2 py-1 text-[10px] text-white/80 hover:bg-white/10"
+                >
+                  閉じる
+              </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                <MoeDragonLineupCanvas
+                  variants={visibleDragonLineup}
+                  interactive
+                />
+                <MoeShowcaseDeletePicker
+                  kind="dragon"
+                  lineup={MOE_DRAGON_LINEUP}
+                  hiddenIds={hiddenDragonShowcaseIds}
+                  deleteListIds={dragonDeleteListIds}
+                  onToggleDeleteList={toggleDragonDeleteList}
+                  onRemoveFromDeleteList={(id) =>
+                    setDragonDeleteListIds((prev) =>
+                      prev.filter((x) => x !== id)
+                    )
+                  }
+                  onApplyDelete={applyDragonDeleteList}
+                  onClearDeleteList={() => setDragonDeleteListIds([])}
+                  onRestoreHidden={(id) => {
+                    setHiddenDragonShowcaseIds(
+                      removeHiddenShowcaseId("dragon", id)
+                    );
+                    setToast("1体を再表示しました");
+                  }}
+                  onRestoreAllHidden={() => {
+                    setHiddenDragonShowcaseIds(
+                      clearHiddenShowcaseIds("dragon")
+                    );
+                    setToast("非表示のドラゴンをすべて戻しました");
+                  }}
+                  theme="amber"
+                />
+        </div>
+      </div>
+          </div>
+        )}
+
+        {showEventGuide && (
+          <div
+            id="moe-event-guide-panel"
+            className="mt-2 max-h-[min(70vh,28rem)] overflow-y-auto overscroll-contain rounded-lg border border-white/20 bg-black/55 px-3 py-2 text-xs text-white/90 backdrop-blur-sm [scrollbar-width:thin]"
+          >
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="font-bold text-sky-300">イベント情報</p>
+              <button
+                type="button"
+                onClick={() => setShowEventGuide(false)}
+                className="shrink-0 rounded border border-white/20 px-1.5 py-0.5 text-[9px] text-white/70 hover:bg-white/10"
+                aria-label="イベント情報を閉じる"
+              >
+                閉じる
+              </button>
+            </div>
+            <p className="mb-2 text-[9px] leading-snug text-sky-100/65">
+              アイテム・スキル・NPC の入手メモ（忘れ防止用）
+            </p>
+            <div className="flex flex-col gap-2">
+              {MOE_EVENT_GUIDE_SECTIONS.map((section) => (
+                <section
+                  key={section.id}
+                  className="rounded border border-white/10 bg-black/35 px-2 py-1.5"
+                >
+                  <p className="text-[10px] font-bold text-sky-200/95">
+                    {section.emoji ? `${section.emoji} ` : ""}
+                    {section.title}
+                  </p>
+                  <ul className="mt-1 flex flex-col gap-1.5">
+                    {section.entries.map((entry) => (
+                      <li
+                        key={`${section.id}-${entry.label}`}
+                        className="border-t border-white/5 pt-1 first:border-t-0 first:pt-0"
+                      >
+                        <p className="text-[10px] font-bold text-amber-100/95">
+                          {entry.label}
+                        </p>
+                        <p className="text-[9px] leading-snug text-white/80">
+                          ➛ {entry.detail}
+                        </p>
+                        {entry.note ? (
+                          <p className="mt-0.5 text-[8px] leading-snug text-zinc-400">
+                            {entry.note}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </div>
+        )}
 
         {showFieldGuide && (
           <div
@@ -4979,9 +6491,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             {is3d ? (
               <>
                 <p>WASD＝移動 · Shift＝走る · 🐉転生＝羽根をミステリードラゴンに使用 · 🔮ローダ＝{MOE_SOUL_MEMORY_RHODA_FIELD.directionHint}</p>
+                <p>🐉<strong className="text-amber-200">ドラゴン10体</strong>＝スポーンから<strong className="text-amber-200">南</strong>へ · 設定→ドラゴン10体展示</p>
+                <p>👾<strong className="text-rose-200">敵32体</strong>＝スポーンから<strong className="text-rose-200">東</strong>へ · 設定→敵32体展示</p>
                 <p>★中ボス＝<strong className="text-amber-200">エルビン バイソン</strong>（スタート東の丘） · 🐊<strong className="text-emerald-300">ギュスターヴ Lv80</strong>＝スタートから北（ミニマップ上）へ体7つ分</p>
                 <p className="text-zinc-400">方角は全体マップに合わせてください（<strong className="text-zinc-200">南＝下 · 北＝上</strong> · Sキーで南へ）</p>
-                <p>敵クリック＝ターゲット · 設定→外部保存でペットEXPをバックアップ · Space＝ジャンプ</p>
+                <p>敵クリック＝ターゲット · 設定→外部保存でペットEXPをバックアップ · Space＝ジャンプ（詠唱中は中断）</p>
                 {!map3dReady && (
                   <p className="text-amber-200/90">3Dマップ読み込み中…</p>
                 )}
@@ -4989,10 +6503,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             ) : (
               <p>WASDで移動 / 奥の列（3→4→5）ほど強い敵 / 左下ミニマップ / 敵クリックでターゲット</p>
             )}
-            <p className="font-bold text-pink-300">
-              討伐で訓練士EXP +（敵Lv×5 目安）／ペットは攻撃・敵攻撃の直後それぞれ約
-              {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%でEXP（Wiki表）
-            </p>
+        <p className="font-bold text-pink-300">
+          討伐で訓練士EXP +（敵Lv×5 目安）／ペットは攻撃・敵攻撃の直後それぞれ約
+          {Math.round(MOE_PET_ATTACK_EXP_SUCCESS_RATE * 100)}%でEXP（Wiki表）
+        </p>
             <p className="text-pink-200/90">ペット／スキル／スキルアイコンバー／プレイヤースキルはそれぞれドラッグで移動できます</p>
             {is3d && onBack && (
               <button
@@ -5350,6 +6864,49 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
       )}
 
+      {is3d && nearAltar && !altarOpen && (
+        <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4 -translate-y-48">
+          <button
+            type="button"
+            onClick={handleAltarOpen}
+            className="pointer-events-auto rounded-xl border-2 border-sky-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-sky-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            🌀 アルターで転送する
+          </button>
+        </div>
+      )}
+
+      <MoeAltarWarpPanel
+        open={is3d && altarOpen}
+        altar={activeAltar}
+        onClose={closeAltar}
+        onSelect={handleAltarWarp}
+      />
+
+      {is3d && nearDragonShowcase && !showDragonLineup && (
+        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+          <button
+            type="button"
+            onClick={() => setShowDragonLineup(true)}
+            className="rounded-xl border-2 border-amber-400/55 bg-zinc-950/92 px-4 py-2 text-xs font-bold leading-snug text-amber-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            🐉 ドラゴン10体 — 一覧を見る
+          </button>
+        </div>
+      )}
+
+      {is3d && nearMonsterShowcase && !showMonsterLineup && (
+        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+          <button
+            type="button"
+            onClick={() => setShowMonsterLineup(true)}
+            className="rounded-xl border-2 border-rose-400/55 bg-zinc-950/92 px-4 py-2 text-xs font-bold leading-snug text-rose-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+          >
+            👾 敵32体 — 一覧を見る
+          </button>
+        </div>
+      )}
+
       {is3d ? (
         <>
         <div className="absolute inset-0 z-0">
@@ -5359,12 +6916,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           battlePopups={battlePopups.filter(
             (p) => p.space === "world" && p.type === "tenthBanner"
           )}
+          hiddenShowcaseIds={{
+            monsters: hiddenMonsterShowcaseIds,
+            dragons: hiddenDragonShowcaseIds,
+          }}
           overlayProjectRef={overlayProjectRef}
           onEnemyClick={(id) => handleEnemySelect(id)}
           onTreasureClick={handleTreasureClick}
           onPetClick={() => handlePetSelect()}
+          onPlayerClick={handlePlayerAllySelect}
           onPetDoubleClick={() => handlePetDoubleClick()}
           onRhodaClick={handleRhodaShrineClick}
+          onAltarClick={handleAltarClickById}
           targetEnemyId={targetEnemyId}
           petFocused={petFocused}
           petLabel={{
@@ -5395,13 +6958,37 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               setMap3dReady(true);
               return;
             }
-            const start = moe3dPlayerStartPosition(bounds.halfW, bounds.halfD);
-            const playerAt = moe3dClampToPlayBounds(
-              start.x,
-              start.y,
-              bounds,
-              1.5
-            );
+            let playerAt;
+            if (
+              !initialSpawnAppliedRef.current &&
+              bounds.tileWidth &&
+              bounds.tileDepth
+            ) {
+              initialSpawnAppliedRef.current = true;
+              const spawnAt = moe3dDefaultPlayerSpawn(
+                bounds.halfW,
+                bounds.halfD,
+                bounds.tileWidth,
+                bounds.tileDepth
+              );
+              playerAt = moe3dClampToPlayBounds(
+                spawnAt.x,
+                spawnAt.y,
+                bounds,
+                1.5
+              );
+            } else {
+              const start = moe3dPlayerStartPosition(
+                bounds.halfW,
+                bounds.halfD
+              );
+              playerAt = moe3dClampToPlayBounds(
+                start.x,
+                start.y,
+                bounds,
+                1.5
+              );
+            }
             playerPosRef.current = playerAt;
             setPlayer(playerAt);
             setMinimap3d({
@@ -5417,29 +7004,41 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
             map3dReadyRef.current = true;
             setMap3dReady(true);
-            setWorld((w) =>
-              w?.mode3d
-                ? {
-                    ...w,
-                    halfW: bounds.halfW,
-                    halfD: bounds.halfD,
-                    minX: bounds.minX,
-                    maxX: bounds.maxX,
-                    minZ: bounds.minZ,
-                    maxZ: bounds.maxZ,
-                    mw: bounds.halfW * 2,
-                    mh: bounds.halfD * 2,
-                    midBossPos: bounds.midBossPos ?? w.midBossPos,
-                    superBossPos: bounds.superBossPos ?? w.superBossPos,
-                    mountainBisonPos:
-                      bounds.mountainBisonPos ?? w.mountainBisonPos,
-                    roughBisonPos: bounds.roughBisonPos ?? w.roughBisonPos,
-                    gustavJuniorPos:
-                      bounds.gustavJuniorPos ?? w.gustavJuniorPos,
-                    rhodaPos: bounds.rhodaPos ?? w.rhodaPos,
-                  }
-                : w
-            );
+            setWorld((w) => {
+              if (!w?.mode3d) return w;
+              const tw = bounds.tileWidth ?? w.tileWidth ?? 100;
+              const td = bounds.tileDepth ?? w.tileDepth ?? 50;
+              const miniBounds = moe3dFullWorldBounds(tw, td);
+              const { miniMapW, miniMapH } = moe3dMinimapViewSize(miniBounds);
+              return {
+                ...w,
+                halfW: bounds.halfW,
+                halfD: bounds.halfD,
+                minX: bounds.minX,
+                maxX: bounds.maxX,
+                minZ: bounds.minZ,
+                maxZ: bounds.maxZ,
+                mw: bounds.halfW * 2,
+                mh: bounds.halfD * 2,
+                midBossPos: bounds.midBossPos ?? w.midBossPos,
+                superBossPos: bounds.superBossPos ?? w.superBossPos,
+                mountainBisonPos:
+                  bounds.mountainBisonPos ?? w.mountainBisonPos,
+                roughBisonPos: bounds.roughBisonPos ?? w.roughBisonPos,
+                gustavJuniorPos:
+                  bounds.gustavJuniorPos ?? w.gustavJuniorPos,
+                rhodaPos: bounds.rhodaPos ?? w.rhodaPos,
+                dragonShowcasePos:
+                  bounds.dragonShowcasePos ?? w.dragonShowcasePos,
+                monsterShowcasePos:
+                  bounds.monsterShowcasePos ?? w.monsterShowcasePos,
+                tileWidth: tw,
+                tileDepth: td,
+                miniBounds,
+                miniMapW,
+                miniMapH,
+              };
+            });
             setEnemies((prev) => {
               const zoneCount = MOE_3D_ENEMY_ZONES.length;
               return prev.map((en) => {
@@ -5484,12 +7083,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                       ? bounds.mountainBisonPos ??
                         moe3dMountainBisonSpawnPosition(
                           bounds.halfW,
-                          bounds.halfD
+                          bounds.halfD,
+                          bounds.tileWidth,
+                          bounds.tileDepth
                         )
                       : bounds.roughBisonPos ??
                         moe3dRoughBisonSpawnPosition(
                           bounds.halfW,
-                          bounds.halfD
+                          bounds.halfD,
+                          bounds.tileWidth,
+                          bounds.tileDepth
                         );
                   const scaled = moe3dEnemyStatsForZoneLevel(
                     base,
@@ -5507,14 +7110,56 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     hp: en.hp <= 0 ? en.hp : Math.min(en.hp, scaled.hpMax),
                   };
                 }
-                if (en.midBoss || en.superBoss) {
+                if (moe3dIsMapSlotFieldEnemy(en)) {
+                  const base = moeMonsterFieldBase(en.key) ?? en;
+                  const tw = bounds.tileWidth ?? w.tileWidth;
+                  const td = bounds.tileDepth ?? w.tileDepth;
+                  const area = en.spawnArea ?? en.mapSlotId;
+                  const pos =
+                    moe3dMonsterFieldSpawnWorld(
+                      area,
+                      en.key,
+                      en.slotInZone ?? 0,
+                      tw,
+                      td
+                    ) ?? { x: en.x, y: en.y };
+                  const scaled = moe3dEnemyStatsForZoneLevel(
+                    base,
+                    base.level
+                  );
+                  return {
+                    ...en,
+                    x: pos.x,
+                    y: pos.y,
+                    level: scaled.level,
+                    hpMax: scaled.hpMax,
+                    petDamage: scaled.petDamage,
+                    wiki: scaled.wiki,
+                    zoneLevel: base.level,
+                    hp: en.hp <= 0 ? en.hp : Math.min(en.hp, scaled.hpMax),
+                  };
+                }
+                if (
+                  (en.midBoss || en.superBoss) &&
+                  !moe3dIsMapSlotFieldEnemy(en)
+                ) {
                   const base =
                     MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
                   const pos = en.superBoss
                     ? bounds.superBossPos ??
-                      moe3dSuperBossSpawnPosition(bounds.halfW, bounds.halfD)
+                      moe3dSuperBossSpawnPosition(
+                        bounds.halfW,
+                        bounds.halfD,
+                        bounds.tileWidth,
+                        bounds.tileDepth
+                      )
                     : bounds.midBossPos ??
-                      moe3dMidBossSpawnPosition(bounds.halfW, bounds.halfD);
+                      moe3dMidBossSpawnPosition(
+                        bounds.halfW,
+                        bounds.halfD,
+                        bounds.tileWidth,
+                        bounds.tileDepth
+                      );
                   const scaled = moe3dEnemyStatsForZoneLevel(
                     base,
                     base.level
@@ -5589,6 +7234,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           petCommandRef={petCommandRef}
           petHoldYawRef={petHoldYawRef}
           duelRef={duelRef}
+          duelCombatSessionRef={duelCombatSessionRef}
           petStrikeUntilRef={petStrikeUntilRef}
           petAttackMsRef={petAttackMsRef}
           enemyStrikeUntilRef={enemyStrikeUntilRef}
@@ -5612,23 +7258,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
 
         {world.mode3d && mini3Player && (
-          <div className="absolute bottom-6 left-3 z-[45] w-[9.75rem] rounded-lg border border-white/25 bg-black/78 p-1.5 text-white shadow-lg backdrop-blur-md">
-            <p className="mb-1 text-center text-[8px] font-bold tracking-wide text-cyan-200/95">
-              全体マップ
-            </p>
+          <MoeDraggableMinimapPanel
+            storageKey="life-rpg-moe-minimap-pos-3d"
+            hint="黄＝視界 · 紫＝自分 · 🔮＝ローダ · 赤＝敵 · 右下＝サイズ · 南↓北↑"
+          >
             <svg
               className="block w-full rounded border border-white/10"
-              style={minimapSvgStyle(mini3W, mini3H)}
+              style={minimap3dSvgStyle(mini3W, mini3H)}
               viewBox={`0 0 ${mini3W} ${mini3H}`}
               preserveAspectRatio="xMidYMid meet"
               aria-label="3D全体マップミニマップ"
             >
-              {moe3dMinimapZoneRects(
-                mini3HalfW,
-                mini3HalfD,
-                mini3W,
-                mini3H
-              ).map((rect) => (
+              {mini3TileRects.map((rect) => (
                 <rect
                   key={rect.key}
                   x={rect.x}
@@ -5637,29 +7278,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   height={rect.height}
                   fill={rect.fill}
                   opacity={rect.opacity ?? 1}
+                  stroke={rect.stroke}
+                  strokeWidth={rect.strokeWidth ?? 0}
                 />
               ))}
               {enemies
-                .filter((en) => en.hp > 0)
+                .filter(
+                  (en) =>
+                    en.hp > 0 &&
+                    minimapEnemyVisible(en, minimap3d.x, minimap3d.y)
+                )
                 .map((en) => {
-                  const p = moe3dWorldToMinimap(
-                    en.x,
-                    en.y,
-                    mini3HalfW,
-                    mini3HalfD,
-                    mini3W,
-                    mini3H
-                  );
+                  const p = mini3Project(en.x, en.y);
                   const isMid = en.midBoss;
                   const isSuper = en.superBoss;
                   const isGustav = en.fieldGustav;
-                  const r = isSuper
-                    ? Math.max(8, mini3W * 0.032)
-                    : isMid
-                      ? Math.max(7, mini3W * 0.028)
-                      : isGustav
-                        ? Math.max(6, mini3W * 0.024)
-                        : Math.max(4, mini3W * 0.018);
+                  const r = minimap3dEnemyDotRadius(en, mini3W);
                   const fill = isSuper
                     ? "#a78bfa"
                     : isMid
@@ -5674,18 +7308,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                         cy={p.y}
                         r={r}
                         fill={fill}
-                        opacity={0.95}
+                        opacity={minimap3dEnemyDotOpacity(en)}
                         stroke={isMid || isSuper ? "#fff" : "none"}
-                        strokeWidth={isMid || isSuper ? 1.5 : 0}
+                        strokeWidth={isMid || isSuper ? 1 : 0}
+                        strokeOpacity={isMid || isSuper ? 0.75 : 0}
                       />
                       {isMid && (
                         <text
                           x={p.x}
-                          y={p.y - r - 2}
+                          y={p.y - r - 1}
                           textAnchor="middle"
                           fill="#fde68a"
-                          fontSize={Math.max(7, mini3W * 0.07)}
+                          fontSize={Math.max(6, mini3W * 0.045)}
                           fontWeight="bold"
+                          opacity={0.7}
                         >
                           ★
                         </text>
@@ -5693,11 +7329,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                       {isGustav && (
                         <text
                           x={p.x}
-                          y={p.y - r - 2}
+                          y={p.y - r - 1}
                           textAnchor="middle"
-                          fill="#bbf7d0"
-                          fontSize={Math.max(7, mini3W * 0.07)}
-                          fontWeight="bold"
+                          fontSize={Math.max(5, mini3W * 0.04)}
+                          opacity={0.75}
                         >
                           🐊
                         </text>
@@ -5705,6 +7340,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     </g>
                   );
                 })}
+              {mini3TileRects.map((rect) =>
+                rect.label && rect.width > 18 && rect.height > 10 ? (
+                  <text
+                    key={`${rect.key}-label`}
+                    x={rect.x + rect.width / 2}
+                    y={rect.y + rect.height / 2 + 1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#0f172a"
+                    fontSize={Math.max(7, Math.min(11, rect.height * 0.42))}
+                    fontWeight="bold"
+                    opacity={0.92}
+                  >
+                    {rect.label}
+                  </text>
+                ) : null
+              )}
               {mini3Rhoda && (
                 <g aria-label={MOE_SOUL_MEMORY_RHODA_FIELD.spotLabel}>
                   <circle
@@ -5753,10 +7405,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 opacity={0.35}
               />
             </svg>
-            <p className="mt-1 text-center text-[7px] text-white/55">
-              黄＝視界 · 紫＝自分 · 🔮＝ローダ（南） · 赤＝敵 · 南↓北↑ · S＝南
-            </p>
-          </div>
+          </MoeDraggableMinimapPanel>
         )}
         </>
       ) : (
@@ -6121,6 +7770,17 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     {en.name}
                   </p>
                 </div>
+                {!isTarget && (
+                  <div
+                    className="pointer-events-none absolute z-[13] -translate-x-1/2"
+                    style={{
+                      left: en.x,
+                      top: en.y - nameTop - 12,
+                    }}
+                  >
+                    <MoeCircleMarker size={10} className="mx-auto" />
+                  </div>
+                )}
                 {isTarget && (
                   <>
                     <div
@@ -6335,10 +7995,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       </div>
 
       {world.rowLayout && (
-        <div className="absolute bottom-6 left-3 z-[45] w-[9.75rem] rounded-lg border border-white/25 bg-black/78 p-1.5 text-white shadow-lg backdrop-blur-md">
-          <p className="mb-1 text-center text-[8px] font-bold tracking-wide text-cyan-200/95">
-            全体マップ
-          </p>
+        <MoeDraggableMinimapPanel
+          storageKey="life-rpg-moe-minimap-pos-2d"
+          hint="黄枠＝現在の画面 · 紫＝自分 · 赤＝敵"
+        >
           <svg
             className="block w-full rounded border border-white/10"
             style={minimapSvgStyle(world.mw, world.mh)}
@@ -6395,15 +8055,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               />
             ))}
             {enemies
-              .filter((en) => en.hp > 0)
+              .filter(
+                (en) =>
+                  en.hp > 0 &&
+                  minimapEnemyVisible(en, player.x, player.y)
+              )
               .map((en) => (
                 <circle
                   key={`mini-en-${en.id}`}
                   cx={en.x}
                   cy={en.y}
-                  r={10}
-                  fill="#ef4444"
-                  opacity={0.9}
+                  r={en.midBoss || en.superBoss ? 6 : 4}
+                  fill={
+                    en.superBoss
+                      ? "#a78bfa"
+                      : en.midBoss
+                        ? "#fbbf24"
+                        : "#ef4444"
+                  }
+                  opacity={en.midBoss || en.superBoss ? 0.65 : 0.5}
                 />
               ))}
             <circle
@@ -6425,10 +8095,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               opacity={0.9}
             />
           </svg>
-          <p className="mt-1 text-center text-[7px] text-white/55">
-            黄枠＝現在の画面 · 紫＝自分 · 赤＝敵
-          </p>
-        </div>
+        </MoeDraggableMinimapPanel>
       )}
       </>
       )}

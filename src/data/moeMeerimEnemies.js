@@ -252,10 +252,17 @@ export function enemyWikiStatsTitle(en) {
   if (!en?.wiki) return en?.name ?? "";
   const w = en.wiki;
   const lv = formatEnemyLevelUi(en.level);
+  const moeLabel = en.moeName && en.moeName !== en.name ? ` · MOE ${en.moeName}` : "";
+  const life =
+    en.captureLife && en.captureLife !== "—"
+      ? `命（捕獲） ${en.captureLife}  `
+      : "";
+  const skillLine =
+    en.skills?.length > 0 ? `\n技 ${en.skills.join(" / ")}` : "";
   return [
-    `${en.name}（Wiki表 Lv${lv}）`,
-    `HP ${w.hp}  MP ${w.mp}  攻撃 ${w.attack}  防御 ${w.defense}`,
+    `${en.name}（Wiki表 Lv${lv}${moeLabel}）`,
+    `${life}HP ${w.hp}  MP ${w.mp}  攻撃 ${w.attack}  防御 ${w.defense}`,
     `命中 ${w.hit}  回避 ${w.evasion}  魔力 ${w.magic}`,
-    `攻撃間隔 ${en.attackInterval}`,
+    `攻撃間隔 ${en.attackInterval}${skillLine}`,
   ].join("\n");
 }

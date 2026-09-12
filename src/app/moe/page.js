@@ -2,8 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import MoeFieldMap from "@/components/MoeFieldMap";
+import dynamic from "next/dynamic";
 import { addGameExp } from "@/lib/gameStatus";
+
+const MoeFieldMap = dynamic(() => import("@/components/MoeFieldMap"), {
+  ssr: false,
+  loading: () => (
+    <main className="min-h-dvh flex items-center justify-center bg-zinc-900 text-white">
+      <p className="text-violet-200">MOEフィールドを準備中…</p>
+    </main>
+  ),
+});
 
 export default function MoePage() {
   const router = useRouter();

@@ -10,6 +10,7 @@ import { getSunSpirit16BeatComboParams } from "./moePets";
  * @property {boolean} [grantExp]
  * @property {number|null} [attackScale]
  * @property {number|null} [magicScale]
+ * @property {number|null} [fixedDamage]
  * @property {boolean} [playSound]
  * @property {boolean} [skipPetDamageDedupe]
  * @property {boolean} [clearToastWhenNoDefeatMsg]
@@ -63,6 +64,18 @@ function magicMultiHits(n, ratioPerHit, stepMs) {
     hits.push({
       atMs: i * stepMs,
       opts: { magicScale: ratioPerHit, grantExp: i === n - 1 },
+    });
+  }
+  return { hits };
+}
+
+function fixedDamageHits(n, damagePerHit, stepMs) {
+  /** @type {MoeDuelSkillHit[]} */
+  const hits = [];
+  for (let i = 0; i < n; i++) {
+    hits.push({
+      atMs: i * stepMs,
+      opts: { fixedDamage: damagePerHit, grantExp: i === n - 1 },
     });
   }
   return { hits };
@@ -202,15 +215,28 @@ export function resolveMoeDuelSkillSequence(petId, skill) {
       return magHit(skill.combatMagicRatio ?? 0.95, false);
     }
     if (skill.id === "phoenix_life_burst") {
-      return magHit(skill.combatMagicRatio ?? 1.35, true);
+      return null;
+    }
+    if (skill.id === "phoenix_scorching_sky") {
+      return fixedDamageHits(1, skill.combatFixedDamage ?? 100, 0);
     }
     if (skill.id === "phoenix_purify_rebirth") {
-      return magHit(skill.combatMagicRatio ?? 1.65, true);
+      return fixedDamageHits(
+        skill.combatWaveHits ?? 5,
+        skill.combatFixedDamage ?? 30,
+        skill.combatStepMs ?? 400
+      );
     }
   }
 
   if (petId === "elemental_atrum") {
-    if (skill.name === "禁断魔法のページ（アトルーム）") {
+    if (skill.type === "physical" && skill.name === "アタック") {
+      return physHit(skill.ratio ?? 1.0, true);
+    }
+    if (
+      skill.id === "atrum_forbidden_magic" ||
+      skill.name === "禁断魔法のページ（アトルーム）"
+    ) {
       return magHit(skill.combatMagicRatio ?? 0.78, true);
     }
     return null;

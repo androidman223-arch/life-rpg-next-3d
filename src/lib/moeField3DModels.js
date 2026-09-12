@@ -1,4 +1,19 @@
 import * as THREE from "three";
+import { MOE_MONSTER_LINEUP } from "@/data/moeMonsterLineup";
+import { moeMacro1DisplayHeight } from "@/data/moeMacro1Constants";
+import { moeMacro2EnemyDisplayHeight } from "@/lib/moe3dMacro2L6EnemyScale";
+import {
+  MOE_MONSTER_FIELD_REGISTRY,
+  MOE_MONSTER_MODEL_FILE_BY_VARIANT,
+  moeMonsterFieldAllEntries,
+} from "@/data/moeMonsterFieldRegistry";
+
+const MOE_MONSTER_GLB_BASE = "/assets/models/monster";
+
+/** @param {string} file */
+export function moeMonsterGlbUrl(file) {
+  return `${MOE_MONSTER_GLB_BASE}/${file}`;
+}
 
 /** 3D MOE — モンスターはすべて glb（runtime procedural 禁止）。
  *  配置: public/assets/models/monster/（制作元 src/app/monster）
@@ -93,6 +108,11 @@ export const MOE_HILLTOP_LION_MODEL_URL =
 /** ギュスターヴ ジャイアント（簡易）— 低ポリ緑ワニ glb */
 export const MOE_GUSTAV_GIANT_MODEL_URL =
   "/assets/models/monster/GustavGiant.glb";
+/** トータス / ジャイアント トータス（低ポリ glb） */
+export const MOE_IPS_TURTLE_MODEL_URL =
+  "/assets/models/monster/IpsTurtleA.glb";
+export const MOE_IPS_GIANT_TORTOISE_MODEL_URL =
+  "/assets/models/monster/IpsGiantTortoiseA.glb";
 
 /** 敵 key → glb（未指定は Snake） */
 export const MOE_ENEMY_MODEL_BY_KEY = {
@@ -104,11 +124,31 @@ export const MOE_ENEMY_MODEL_BY_KEY = {
   stray_ixion: MOE_STRAY_IXION_MODEL_URL,
   hilltop_lion: MOE_HILLTOP_LION_MODEL_URL,
   gustav_junior: MOE_GUSTAV_GIANT_MODEL_URL,
+  turtle: MOE_IPS_TURTLE_MODEL_URL,
+  giant_tortoise: MOE_IPS_GIANT_TORTOISE_MODEL_URL,
+  ...Object.fromEntries(
+    moeMonsterFieldAllEntries().map((e) => [
+      e.key,
+      moeMonsterGlbUrl(e.modelFile),
+    ])
+  ),
 };
+
+/** variantId → glb（2色バリエーション） */
+export const MOE_ENEMY_MODEL_BY_VARIANT = Object.fromEntries(
+  Object.entries(MOE_MONSTER_MODEL_FILE_BY_VARIANT).map(([id, file]) => [
+    id,
+    moeMonsterGlbUrl(file),
+  ])
+);
 
 /** 3D Canvas が preload するモンスター glb（重複なし） */
 export const MOE_ALL_MONSTER_MODEL_URLS = [
-  ...new Set([MONSTER_MODEL_URL, ...Object.values(MOE_ENEMY_MODEL_BY_KEY)]),
+  ...new Set([
+    MONSTER_MODEL_URL,
+    ...Object.values(MOE_ENEMY_MODEL_BY_KEY),
+    ...MOE_MONSTER_LINEUP.map((v) => moeMonsterGlbUrl(v.file)),
+  ]),
 ];
 
 /** 敵 key ごとの色（同じ glb を clone して material.color を差し替え） */
@@ -170,11 +210,28 @@ export const MOE_EARTH_WORM_STRIPE_COUNT = 10;
 export const MOE_EARTH_WORM_STRIPE_BLACK_FRAC = 0.3;
 
 /** 3D フィールドの半幅（Three.js x / z とも ±この値。マップ読込後に実測で上書き） */
-export const MOE_3D_HALF_W = 100;
-export const MOE_3D_HALF_D = 100;
-/** 地形 glb の敷き詰め枚数（横×奥行き）。2×4＝南から北へ細長い MOE 海岸 */
-export const MOE_3D_TILES_X = 2;
-export const MOE_3D_TILES_Z = 4;
+export const MOE_3D_HALF_W = 180;
+export const MOE_3D_HALF_D = 180;
+/** 試作マップ（既存 2×4 プロトタイプ）の敷き詰め枚数 */
+export const MOE_3D_LEGACY_TILES_X = 2;
+export const MOE_3D_LEGACY_TILES_Z = 4;
+/** 試作マップのスポーン／アルター基準 half（本編拡張前の 100） */
+export const MOE_3D_LEGACY_REF_HALF = 100;
+/**
+ * 1マップ面あたりのワールド間隔倍率（マクロ追い込み後の余裕 · 推奨 1.6〜1.8）
+ * 位置間隔とタイル mesh の xz スケールに共通利用
+ */
+export const MOE_3D_TILE_SPACING = 1.7;
+
+/** @param {number} tileW */
+export function moe3dLayoutTileW(tileW) {
+  return tileW * MOE_3D_TILE_SPACING;
+}
+
+/** @param {number} tileD */
+export function moe3dLayoutTileD(tileD) {
+  return tileD * MOE_3D_TILE_SPACING;
+}
 /** 距離帯（ゾーン）ごとに同種2匹。外側ほど Lv が上がる */
 export const MOE_3D_ENEMIES_PER_ZONE = 2;
 /** @type {{ level: number, key: string }[]} 中心に近い順（Wiki Lv・小数） */
@@ -191,12 +248,22 @@ export const MOE_3D_ZONE_PAIR_LEVEL_OFFSET = 0.3;
 /** 初期位置そば・専用ボスエリア（通常敵ゾーンと被らない東側） */
 export function moe3dBossAreaLayout(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  tileW,
+  tileD,
+  startOverride
 ) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
-  const east = Math.max(24, halfW * 0.24);
-  const slotSep = Math.max(16, halfW * 0.14);
-  const north = Math.max(10, halfD * 0.08);
+  const start =
+    startOverride ?? moe3dPlayerStartPosition(halfW, halfD);
+  const east = tileW
+    ? Math.max(12, tileW * 0.28)
+    : Math.max(24, halfW * 0.24);
+  const slotSep = tileW
+    ? Math.max(10, tileW * 0.22)
+    : Math.max(16, halfW * 0.14);
+  const north = tileD
+    ? Math.max(8, tileD * 0.52)
+    : Math.max(10, halfD * 0.08);
   const midBossPos = { x: start.x + east, y: start.y - north };
   const superBossPos = { x: start.x + east + slotSep, y: start.y - north };
   return {
@@ -207,47 +274,83 @@ export function moe3dBossAreaLayout(
     midBossPos,
     superBossPos,
     radiusX: slotSep * 0.65 + 8,
-    radiusZ: Math.max(12, halfD * 0.07),
+    radiusZ: tileD ? Math.max(8, tileD * 0.2) : Math.max(12, halfD * 0.07),
   };
 }
 
 /** 丘の上・中ボス（エルビン バイソン）— ボスエリア内 */
 export function moe3dMidBossSpawnPosition(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  tileW,
+  tileD,
+  startOverride
 ) {
-  return moe3dBossAreaLayout(halfW, halfD).midBossPos;
+  return moe3dBossAreaLayout(
+    halfW,
+    halfD,
+    tileW,
+    tileD,
+    startOverride
+  ).midBossPos;
 }
 
 /** 超ボス（アウズンブラ）— ボスエリア内・バイソンの隣 */
 export function moe3dSuperBossSpawnPosition(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  tileW,
+  tileD,
+  startOverride
 ) {
-  return moe3dBossAreaLayout(halfW, halfD).superBossPos;
+  return moe3dBossAreaLayout(
+    halfW,
+    halfD,
+    tileW,
+    tileD,
+    startOverride
+  ).superBossPos;
 }
 
 /** マウンテンバイソン — エルビン バイソンの少し南西 */
 export function moe3dMountainBisonSpawnPosition(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  tileW,
+  tileD,
+  startOverride
 ) {
-  const { midBossPos } = moe3dBossAreaLayout(halfW, halfD);
+  const { midBossPos } = moe3dBossAreaLayout(
+    halfW,
+    halfD,
+    tileW,
+    tileD,
+    startOverride
+  );
   return {
-    x: midBossPos.x - Math.max(16, halfW * 0.1),
-    y: midBossPos.y + Math.max(20, halfD * 0.14),
+    x: midBossPos.x - (tileW ? Math.max(8, tileW * 0.12) : Math.max(16, halfW * 0.1)),
+    y: midBossPos.y + (tileD ? Math.max(10, tileD * 0.22) : Math.max(20, halfD * 0.14)),
   };
 }
 
 /** 荒くれバイソン — アウズンブラの少し南東 */
 export function moe3dRoughBisonSpawnPosition(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  tileW,
+  tileD,
+  startOverride
 ) {
-  const { superBossPos } = moe3dBossAreaLayout(halfW, halfD);
+  const { superBossPos } = moe3dBossAreaLayout(
+    halfW,
+    halfD,
+    tileW,
+    tileD,
+    startOverride
+  );
   return {
-    x: superBossPos.x + Math.max(16, halfW * 0.1),
-    y: superBossPos.y + Math.max(20, halfD * 0.14),
+    x: superBossPos.x + (tileW ? Math.max(8, tileW * 0.12) : Math.max(16, halfW * 0.1)),
+    y: superBossPos.y + (tileD ? Math.max(10, tileD * 0.22) : Math.max(20, halfD * 0.14)),
   };
 }
 
@@ -360,9 +463,10 @@ export const MOE_GUSTAV_SPAWN_BODY_LENGTHS_NORTH = 7;
 /** ギュスターヴ spawn — スタートから北へ体7つ分（南＝プレイヤー側を向く） */
 export function moe3dGustavJuniorSpawnPosition(
   halfW = MOE_3D_HALF_W,
-  halfD = MOE_3D_HALF_D
+  halfD = MOE_3D_HALF_D,
+  startOverride
 ) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const start = startOverride ?? moe3dPlayerStartPosition(halfW, halfD);
   const east = Math.max(8, halfW * 0.06);
   const northOffset =
     moe3dGustavBodyLengthWorld() * MOE_GUSTAV_SPAWN_BODY_LENGTHS_NORTH;
@@ -462,9 +566,11 @@ export function bisonModelHeightForKey(key) {
 export function enemyModelHeightForKey(key) {
   if (key === "mountain_bison") return MOE_MOUNTAIN_BISON_MODEL_HEIGHT;
   if (key === "rough_bison") return MOE_ROUGH_BISON_MODEL_HEIGHT;
-  if (key === "elvin_bison" || key === "auzun_bura") {
+  if (key === "auzun_bura") {
     return MOE_BISON_MODEL_HEIGHT;
   }
+  const macro2Height = moeMacro2EnemyDisplayHeight(key);
+  if (macro2Height != null) return macro2Height;
   if (key === "gustav_junior") {
     return MOE_GUSTAV_JUNIOR_MODEL_HEIGHT * MOE_GUSTAV_JUNIOR_DISPLAY_SCALE;
   }
@@ -475,7 +581,7 @@ export function enemyModelHeightForKey(key) {
     return MOE_HILLTOP_LION_MODEL_HEIGHT * MOE_HILLTOP_LION_DISPLAY_SCALE;
   }
   if (key === "stray_ixion") return MOE_STRAY_IXION_MODEL_HEIGHT;
-  return MOE_MONSTER_MODEL_HEIGHT;
+  return moeMacro1DisplayHeight(key, MOE_MONSTER_MODEL_HEIGHT);
 }
 
 /** バイソン（フィールド）は displayScale でサイズ決定 → fit は 1 */
@@ -570,15 +676,20 @@ export function isGustavModelUrl(url) {
 }
 
 /** glb 内蔵カラーを使う敵（外部 tint しない） */
+const MOE_BAKED_COLOR_ENEMY_KEYS = new Set([
+  "mountain_bison",
+  "rough_bison",
+  "orc_infantry",
+  "stray_ixion",
+  "hilltop_lion",
+  "gustav_junior",
+  "turtle",
+  "giant_tortoise",
+  ...moeMonsterFieldAllEntries().map((e) => e.key),
+]);
+
 export function enemyUsesBakedModelColors(key) {
-  return (
-    key === "mountain_bison" ||
-    key === "rough_bison" ||
-    key === "orc_infantry" ||
-    key === "stray_ixion" ||
-    key === "hilltop_lion" ||
-    key === "gustav_junior"
-  );
+  return MOE_BAKED_COLOR_ENEMY_KEYS.has(key);
 }
 /** Shift 走行中の RUN アニメ速度 */
 export const MOE_SNAKE_RUN_SPRINT_TIME_SCALE = 1.5;
@@ -856,6 +967,114 @@ export function moe3dIsNearRhoda(px, py, halfW, halfD, radius = 12, spot = null)
   return Math.hypot(px - center.x, py - center.y) <= radius;
 }
 
+/** ドラゴン10体展示 — スポーン南 · 東西に横並び */
+export function moe3dDragonShowcaseLayout(
+  halfW = MOE_3D_HALF_W,
+  halfD = MOE_3D_HALF_D,
+  count = 10
+) {
+  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const spacing = 4.6;
+  const total = (count - 1) * spacing;
+  const baseY = start.y + 14;
+  const baseX = start.x - total / 2;
+  return Array.from({ length: count }, (_, i) => ({
+    x: baseX + i * spacing,
+    y: baseY,
+  }));
+}
+
+export function moe3dDragonShowcaseCenter(
+  halfW = MOE_3D_HALF_W,
+  halfD = MOE_3D_HALF_D
+) {
+  const spots = moe3dDragonShowcaseLayout(halfW, halfD);
+  let sx = 0;
+  let sy = 0;
+  for (const p of spots) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / spots.length, y: sy / spots.length };
+}
+
+export function moe3dIsNearDragonShowcase(
+  px,
+  py,
+  halfW,
+  halfD,
+  radius = 22,
+  spot = null
+) {
+  const center = spot ?? moe3dDragonShowcaseCenter(halfW, halfD);
+  return Math.hypot(px - center.x, py - center.y) <= radius;
+}
+
+/** 敵32体展示 — スポーン東のグリッド（8列） */
+export const MOE_3D_MONSTER_SHOWCASE_COLS = 8;
+export const MOE_3D_MONSTER_SHOWCASE_COUNT = 32;
+
+export function moe3dMonsterShowcaseLayout(
+  halfW = MOE_3D_HALF_W,
+  halfD = MOE_3D_HALF_D,
+  count = MOE_3D_MONSTER_SHOWCASE_COUNT
+) {
+  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const cols = MOE_3D_MONSTER_SHOWCASE_COLS;
+  const spX = 3.35;
+  const spZ = 4.75;
+  const rows = Math.ceil(count / cols);
+  const east = Math.max(20, halfW * 0.2);
+  const baseX = start.x + east;
+  const baseY = start.y + 2;
+  const offsetX = ((cols - 1) * spX) / 2;
+  return Array.from({ length: count }, (_, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    return {
+      x: baseX + col * spX - offsetX,
+      y: baseY - row * spZ,
+    };
+  });
+}
+
+export function moe3dMonsterShowcaseCenter(
+  halfW = MOE_3D_HALF_W,
+  halfD = MOE_3D_HALF_D
+) {
+  const spots = moe3dMonsterShowcaseLayout(halfW, halfD);
+  let sx = 0;
+  let sy = 0;
+  for (const p of spots) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / spots.length, y: sy / spots.length };
+}
+
+export function moe3dIsNearMonsterShowcase(
+  px,
+  py,
+  halfW,
+  halfD,
+  radius = 38,
+  spot = null
+) {
+  const center = spot ?? moe3dMonsterShowcaseCenter(halfW, halfD);
+  return Math.hypot(px - center.x, py - center.y) <= radius;
+}
+
+/** 敵展示 glb の fit 目標高（ワールド） */
+export function moe3dMonsterShowcaseTargetHeight(familyId) {
+  if (familyId === "gigas_boss" || familyId === "giant_boss") return 3.55;
+  if (familyId === "gigas_mammoth" || familyId === "giant_mammoth") return 3.35;
+  if (familyId === "orc_gang" || familyId === "orc_magician") return 2.65;
+  if (familyId === "rescue_amazoness") return 2.45;
+  if (familyId === "giant_tortoise") return 2.85;
+  if (familyId === "turtle") return 1.35;
+  return 1.42;
+}
+
 function moe3dZoneBandY(zoneIndex, zoneCount, halfD) {
   const limD = halfD * 0.78;
   /** ゾーン0＝南側（弱）→ 最終ゾーン＝北側（強） */
@@ -919,6 +1138,17 @@ export function moe3dMinimapZoneRects(halfW, halfD, mw, mh) {
       opacity: 0.82,
     });
   }
+
+  /** 東側 — 砂漠1面プレビュー（見本） */
+  rects.push({
+    key: "desert-preview",
+    x: mw * 0.68,
+    y: mh * 0.28,
+    width: mw * 0.3,
+    height: mh * 0.38,
+    fill: "#d4a574",
+    opacity: 0.92,
+  });
 
   return rects;
 }
@@ -1506,7 +1736,14 @@ export function createGustavAnimController(mixer, clips, opts = {}) {
   };
 }
 
-export function monsterModelUrlForKey(key) {
+/**
+ * @param {string} key
+ * @param {string | null | undefined} [modelVariantId]
+ */
+export function monsterModelUrlForKey(key, modelVariantId) {
+  if (modelVariantId && MOE_ENEMY_MODEL_BY_VARIANT[modelVariantId]) {
+    return MOE_ENEMY_MODEL_BY_VARIANT[modelVariantId];
+  }
   return MOE_ENEMY_MODEL_BY_KEY[key] ?? MONSTER_MODEL_URL;
 }
 
@@ -1671,22 +1908,96 @@ const MOE_MYSTERY_DRAGON_FORM2_EMISSIVE = [
   0xff5500,
 ];
 
-function applyMysteryDragonMeshPalette(root, colorPalette, emissivePalette = null) {
-  let meshIdx = 0;
+/** @typedef {'body' | 'eye' | 'eye_detail' | 'pupil'} MysteryDragonMeshKind */
+
+/** 目・瞳メッシュを体色パレットから分離（名前付き GLB 優先） */
+function classifyMysteryDragonMesh(obj) {
+  if (!obj.isMesh) return "body";
+  const name = obj.name ?? "";
+  if (name.includes("MysteryDragonPupil")) return "pupil";
+  if (name.includes("MysteryDragonEyeShine")) return "eye_detail";
+  if (name.includes("MysteryDragonEyeRing") || name.includes("MysteryDragonEye")) {
+    return "eye";
+  }
+
+  if (!obj.geometry) return "body";
+  const geo = obj.geometry;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const sx = bb.max.x - bb.min.x;
+  const sy = bb.max.y - bb.min.y;
+  const sz = bb.max.z - bb.min.z;
+  const maxDim = Math.max(sx, sy, sz);
+  const vol = sx * sy * sz;
+  const py = obj.position.y;
+  const pz = obj.position.z;
+
+  // 正面の目（頭グループ · 高 z）
+  if (py >= 0.12 && py <= 0.28 && pz >= 0.12 && maxDim <= 0.14) {
+    if (maxDim <= 0.035) return "pupil";
+    if (vol <= 0.0015) return "eye_detail";
+    return "eye";
+  }
+
+  return "body";
+}
+
+/** @type {Record<MysteryDragonMeshKind, { color: number, emissive?: number, emissiveIntensity?: number }>} */
+const MOE_MYSTERY_DRAGON_FORM1_EYE = {
+  body: { color: 0x4a3d5c },
+  eye: { color: 0xe8e0ff, emissive: 0x3d2a66, emissiveIntensity: 0.12 },
+  eye_detail: { color: 0x9b59ff, emissive: 0x6b3fa0, emissiveIntensity: 0.35 },
+  pupil: { color: 0x0a0018 },
+};
+
+/** ドラゴンⅡ — 白目・金瞳・黒瞳で炎色の顔とコントラスト */
+const MOE_MYSTERY_DRAGON_FORM2_EYE = {
+  body: { color: 0xff4400 },
+  eye: { color: 0xfff8e8, emissive: 0x442200, emissiveIntensity: 0.08 },
+  eye_detail: { color: 0xffcc00, emissive: 0xff8800, emissiveIntensity: 0.62 },
+  pupil: { color: 0x120400, emissive: 0x000000, emissiveIntensity: 0 },
+};
+
+function applyMysteryDragonMeshPalette(
+  root,
+  colorPalette,
+  emissivePalette = null,
+  eyePalette = null
+) {
+  let bodyIdx = 0;
   root.traverse((obj) => {
     if (!obj.isMesh || !obj.material) return;
+    const kind = eyePalette ? classifyMysteryDragonMesh(obj) : "body";
+    let colorHex;
+    let emissiveHex = null;
+    let emissiveIntensity = 0;
+
+    if (kind !== "body" && eyePalette?.[kind]) {
+      const eye = eyePalette[kind];
+      colorHex = eye.color;
+      emissiveHex = eye.emissive ?? null;
+      emissiveIntensity = eye.emissiveIntensity ?? 0;
+    } else {
+      colorHex = colorPalette[bodyIdx % colorPalette.length];
+      emissiveHex = emissivePalette
+        ? emissivePalette[bodyIdx % emissivePalette.length]
+        : null;
+      emissiveIntensity = emissiveHex ? 0.38 + (bodyIdx % 3) * 0.08 : 0;
+      bodyIdx += 1;
+    }
+
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-    const colorHex = colorPalette[meshIdx % colorPalette.length];
-    const emissiveHex = emissivePalette
-      ? emissivePalette[meshIdx % emissivePalette.length]
-      : null;
-    meshIdx += 1;
     const cloned = mats.map((m) => {
       const c = m.clone();
       if (c.color) c.color.setHex(colorHex);
-      if (emissiveHex && c.emissive) {
-        c.emissive.setHex(emissiveHex);
-        c.emissiveIntensity = 0.38 + (meshIdx % 3) * 0.08;
+      if (c.emissive) {
+        if (emissiveHex != null) {
+          c.emissive.setHex(emissiveHex);
+          c.emissiveIntensity = emissiveIntensity;
+        } else {
+          c.emissive.setHex(0x000000);
+          c.emissiveIntensity = 0;
+        }
       }
       return c;
     });
@@ -1696,7 +2007,12 @@ function applyMysteryDragonMeshPalette(root, colorPalette, emissivePalette = nul
 
 /** 転生ミステリー ドラゴンⅠ */
 export function applyMysteryDragonForm1Tint(root) {
-  applyMysteryDragonMeshPalette(root, MOE_MYSTERY_DRAGON_FORM1_PALETTE);
+  applyMysteryDragonMeshPalette(
+    root,
+    MOE_MYSTERY_DRAGON_FORM1_PALETTE,
+    null,
+    MOE_MYSTERY_DRAGON_FORM1_EYE
+  );
 }
 
 /** 転生ミステリー ドラゴンⅡ — 炎のフェニックスカラー */
@@ -1704,7 +2020,8 @@ export function applyPhoenixDragonTint(root) {
   applyMysteryDragonMeshPalette(
     root,
     MOE_MYSTERY_DRAGON_FORM2_PALETTE,
-    MOE_MYSTERY_DRAGON_FORM2_EMISSIVE
+    MOE_MYSTERY_DRAGON_FORM2_EMISSIVE,
+    MOE_MYSTERY_DRAGON_FORM2_EYE
   );
 }
 

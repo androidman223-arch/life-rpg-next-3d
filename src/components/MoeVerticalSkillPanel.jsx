@@ -3,6 +3,11 @@
 import { useCallback } from "react";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import { useMoeSkillSlotSwap } from "@/hooks/useMoeSkillSlotSwap";
+import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
+
+/** MOE風 — 枠からはみ出した文字は途中で切る（…なし） */
+const MOE_SKILL_LABEL_CLIP =
+  "block max-w-full overflow-hidden whitespace-nowrap px-0.5 leading-tight";
 
 const VARIANTS = {
   amber: {
@@ -43,6 +48,7 @@ const VARIANTS = {
  *   title: string,
  *   variant?: 'amber' | 'emerald',
  *   topAction?: { label: string, active?: boolean, title?: string, onClick: () => void } | null,
+ *   headerExtra?: React.ReactNode,
  *   reorderable?: boolean,
  *   onSwapSlots?: (from: number, to: number) => void,
  *   slots: {
@@ -52,6 +58,7 @@ const VARIANTS = {
  *     active?: boolean,
  *     cooldownSec?: number|null,
  *     onClick?: () => void,
+ *     previewOnly?: boolean,
  *     reorderable?: boolean,
  *   }[],
  * }} props
@@ -62,6 +69,7 @@ export default function MoeVerticalSkillPanel({
   title,
   variant = "amber",
   topAction = null,
+  headerExtra = null,
   reorderable = false,
   onSwapSlots,
   slots,
@@ -80,13 +88,12 @@ export default function MoeVerticalSkillPanel({
     getDefaultPos
   );
 
+  const canReorder = reorderable && typeof onSwapSlots === "function";
   const { bindSlot } = useMoeSkillSlotSwap(onSwapSlots ?? (() => {}));
 
   const theme = VARIANTS[variant] ?? VARIANTS.amber;
 
   if (!pos) return null;
-
-  const canReorder = reorderable && typeof onSwapSlots === "function";
 
   return (
     <div
@@ -99,7 +106,7 @@ export default function MoeVerticalSkillPanel({
       style={{ left: pos.x, top: pos.y }}
     >
       <div
-        className={`flex max-h-[min(72vh,480px)] w-[4.65rem] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-lg border bg-black/70 p-1 pr-0.5 text-white backdrop-blur-md [scrollbar-width:thin] ${theme.border}`}
+        className={`flex max-h-[min(72vh,480px)] w-[5.35rem] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-lg border bg-black/70 p-1 pr-0.5 text-white backdrop-blur-md [scrollbar-width:thin] ${theme.border}`}
       >
         <p
           className={`sticky top-0 z-10 cursor-grab touch-none bg-black/85 pb-0.5 text-center text-[8px] font-bold active:cursor-grabbing ${theme.header}`}
@@ -108,21 +115,35 @@ export default function MoeVerticalSkillPanel({
         >
           {title}
         </p>
+        {headerExtra}
         {topAction && (
           <button
             type="button"
             onClick={topAction.onClick}
             title={topAction.title ?? topAction.label}
-            className={`shrink-0 rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 ${
+            className={`shrink-0 overflow-hidden rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 ${
               topAction.active ? theme.topOn : theme.topOff
             }`}
           >
-            {topAction.label}
+            <span className={MOE_SKILL_LABEL_CLIP}>{topAction.label}</span>
           </button>
         )}
         {slots.map((slot, i) => {
+          if (slot.previewOnly) {
+            return (
+              <div
+                key={`slot-${i}-${slot.label}`}
+                title={slot.title ?? slot.label}
+                className="shrink-0 overflow-hidden rounded-md border border-dashed border-fuchsia-400/30 bg-fuchsia-950/25 py-1 text-center text-[8px] font-bold leading-tight text-fuchsia-100/75"
+              >
+                <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
+              </div>
+            );
+          }
+
           const onCooldown =
             slot.cooldownSec !== null && slot.cooldownSec !== undefined;
+          const alwaysClickable = slot.slotKey === "condense_mind";
           const btnClass = onCooldown
             ? theme.skillCooldown
             : slot.active
@@ -131,41 +152,45 @@ export default function MoeVerticalSkillPanel({
           const slotReorder =
             canReorder && slot.reorderable !== false;
           const pointerProps = bindSlot(i, { reorderable: slotReorder });
+          const tipText = slot.title ?? slot.label;
+          const blocked =
+            !alwaysClickable && (slot.disabled || onCooldown);
 
           return (
-            <button
+            <MoeCompactSkillTip
               key={`slot-${i}-${slot.label}`}
-              type="button"
-              {...(pointerProps.slotAttr ?? {})}
-              disabled={!slotReorder && (slot.disabled || onCooldown)}
-              title={
-                slotReorder
-                  ? `${slot.title ?? slot.label} · 長押し→光ったらドラッグで入れ替え`
-                  : (slot.title ?? slot.label)
-              }
-              onClick={() => {
-                if (slot.disabled || onCooldown) return;
-                slot.onClick?.();
-              }}
-              className={`relative shrink-0 touch-none rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${btnClass} ${pointerProps.className ?? ""}`}
-              style={pointerProps.style}
-              onPointerDown={pointerProps.onPointerDown}
-              onPointerCancel={pointerProps.onPointerCancel}
-              onClickCapture={pointerProps.onClickCapture}
+              text={tipText}
+              className="shrink-0 w-full"
             >
-              {onCooldown ? (
-                <span className="relative flex min-h-[1.1rem] items-center justify-center">
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none opacity-25">
-                    {slot.label}
+              <button
+                type="button"
+                {...(pointerProps.slotAttr ?? {})}
+                disabled={!slotReorder && blocked}
+                aria-label={tipText}
+                onClick={() => {
+                  if (blocked) return;
+                  slot.onClick?.();
+                }}
+                style={pointerProps.style}
+                className={`relative w-full touch-none overflow-hidden rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${btnClass} ${pointerProps.className ?? ""}`}
+                onPointerDown={pointerProps.onPointerDown}
+                onPointerCancel={pointerProps.onPointerCancel}
+                onClickCapture={pointerProps.onClickCapture}
+              >
+                {onCooldown ? (
+                  <span className="relative flex min-h-[1.1rem] items-center justify-center">
+                    <span className="pointer-events-none absolute inset-x-0 top-0.5 flex justify-center overflow-hidden text-[6px] font-bold leading-none opacity-25">
+                      <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
+                    </span>
+                    <span className="relative text-[11px] tabular-nums leading-none">
+                      {slot.cooldownSec}
+                    </span>
                   </span>
-                  <span className="relative text-[11px] tabular-nums leading-none">
-                    {slot.cooldownSec}
-                  </span>
-                </span>
-              ) : (
-                slot.label
-              )}
-            </button>
+                ) : (
+                  <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
+                )}
+              </button>
+            </MoeCompactSkillTip>
           );
         })}
       </div>

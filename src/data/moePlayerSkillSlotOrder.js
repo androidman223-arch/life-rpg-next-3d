@@ -3,13 +3,17 @@
 export const MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY =
   "life-rpg-moe-player-skill-slot-order";
 
-/** @typedef {'light'|'heal'|'heal-all'|'regen'|'ninja_shinobiashi'|'ninja_shinsoku'|'ninja_kakuremino'} MoePlayerSlotSkillKey */
+/** @typedef {'light'|'heal'|'heal-all'|'regen'|'banana_milk'|'condense_mind'|'holy_record'|'teleport'|'ninja_shinobiashi'|'ninja_shinsoku'|'ninja_kakuremino'} MoePlayerSlotSkillKey */
 
 export const MOE_PLAYER_SLOT_SKILL_KEYS = [
   "light",
   "heal",
   "heal-all",
   "regen",
+  "banana_milk",
+  "condense_mind",
+  "holy_record",
+  "teleport",
   "ninja_shinobiashi",
   "ninja_shinsoku",
   "ninja_kakuremino",
@@ -21,6 +25,10 @@ export const MOE_PLAYER_SLOT_LABELS = {
   heal: "ヒール",
   "heal-all": "オール",
   regen: "リジェネ",
+  banana_milk: "🍌バナナミルク",
+  condense_mind: "コンデンス",
+  holy_record: "ホーリーRレコード",
+  teleport: "テレポ",
   ninja_shinobiashi: "忍び足",
   ninja_shinsoku: "神速",
   ninja_kakuremino: "隠れ蓑",
@@ -32,6 +40,10 @@ export const MOE_PLAYER_SLOT_ICONS = {
   heal: "💗",
   "heal-all": "💖",
   regen: "🍃",
+  banana_milk: "🍌",
+  condense_mind: "💠",
+  holy_record: "📜",
+  teleport: "🌀",
 };
 
 /** @returns {(MoePlayerSlotSkillKey|null)[]} */
@@ -41,6 +53,10 @@ export function defaultPlayerSkillSlotOrder() {
     "heal",
     "heal-all",
     "regen",
+    "banana_milk",
+    "condense_mind",
+    "holy_record",
+    "teleport",
     "ninja_shinobiashi",
     "ninja_shinsoku",
     "ninja_kakuremino",
@@ -48,6 +64,18 @@ export function defaultPlayerSkillSlotOrder() {
     null,
     null,
   ];
+}
+
+/** 新スキルを空き枠へ自動追加（localStorage 旧データ対応） */
+export function mergeMissingSkillKeys(order) {
+  const next = [...order];
+  for (const key of MOE_PLAYER_SLOT_SKILL_KEYS) {
+    if (!next.includes(key)) {
+      const emptyIdx = next.findIndex((k) => k == null);
+      if (emptyIdx >= 0) next[emptyIdx] = key;
+    }
+  }
+  return next;
 }
 
 /** @param {unknown} raw @returns {(MoePlayerSlotSkillKey|null)[]} */
@@ -67,7 +95,8 @@ export function normalizePlayerSkillSlotOrder(raw) {
     out.push(key);
   }
   if (out.length !== 10) return def;
-  return out;
+  const migrated = out.map((key) => (key === "enemy_stat_search" ? null : key));
+  return mergeMissingSkillKeys(migrated);
 }
 
 /** @returns {(MoePlayerSlotSkillKey|null)[]} */
@@ -78,7 +107,12 @@ export function loadPlayerSkillSlotOrder() {
       MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY
     );
     if (!raw) return defaultPlayerSkillSlotOrder();
-    return normalizePlayerSkillSlotOrder(JSON.parse(raw));
+    const normalized = normalizePlayerSkillSlotOrder(JSON.parse(raw));
+    const merged = mergeMissingSkillKeys(normalized);
+    if (merged.some((k, i) => k !== normalized[i])) {
+      savePlayerSkillSlotOrder(merged);
+    }
+    return merged;
   } catch {
     return defaultPlayerSkillSlotOrder();
   }

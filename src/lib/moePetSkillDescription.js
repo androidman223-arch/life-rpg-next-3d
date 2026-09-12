@@ -24,8 +24,18 @@ function fallbackSkillNote(skill) {
       return "広範囲継続魔法";
     case "heal":
       return "HP回復";
+    case "heal_area":
+      return "範囲HP回復";
     case "heal_regen":
       return "HP回復＋リジェネ";
+    case "buff_magic":
+      return "魔力上昇バフ";
+    case "buff_mp_regen":
+      return "MP自然回復上昇";
+    case "special_purge":
+      return "状態異常解除";
+    case "magic_wind_area":
+      return "風属性攻撃";
     case "cure_status":
       return "状態異常回復";
     case "field_regen":
@@ -60,4 +70,18 @@ export function formatMoePetSkillDescription(skill) {
   if (meta.length) lines.push(meta.join(" · "));
 
   return lines.join("\n");
+}
+
+/**
+ * スキルバー・ホバーツールチップ用（名前＋短い説明）
+ * @param {object | null | undefined} skill
+ * @param {{ locked?: boolean }} [opts]
+ */
+export function formatMoeSkillHoverTip(skill, opts = {}) {
+  if (!skill) return "";
+  const name = skill.name ?? "スキル";
+  if (opts.locked) {
+    return `${name}\n（Lv.${skill.level ?? 1}で習得）`;
+  }
+  return formatMoePetSkillDescription(skill);
 }

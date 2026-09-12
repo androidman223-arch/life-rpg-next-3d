@@ -23,14 +23,19 @@ function loadSavedPos(storageKey) {
  * @param {() => { x: number, y: number }} getDefaultPos
  */
 export function useMoeDraggablePos(storageKey, getDefaultPos) {
-  const [pos, setPos] = useState(() => {
-    if (typeof window === "undefined") return { x: 8, y: 56 };
-    return loadSavedPos(storageKey) ?? getDefaultPos();
-  });
+  /** 未ロード時は null（左上に一瞬出さない・保存位置を上書きしない） */
+  const [pos, setPos] = useState(null);
+  const canSaveRef = useRef(false);
   const sizeRef = useRef({ w: 130, h: 32 });
 
   useEffect(() => {
-    if (!pos) return;
+    canSaveRef.current = false;
+    setPos(loadSavedPos(storageKey) ?? getDefaultPos());
+    canSaveRef.current = true;
+  }, [storageKey, getDefaultPos]);
+
+  useEffect(() => {
+    if (!canSaveRef.current || pos == null) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(pos));
     } catch {
@@ -48,7 +53,7 @@ export function useMoeDraggablePos(storageKey, getDefaultPos) {
 
   const onDragPointerDown = useCallback(
     (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || pos == null) return;
       e.preventDefault();
       e.stopPropagation();
       const drag = {

@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import {
+  loadMoeItemBoxSelectedIndex,
   loadMoeItemBoxSlots,
   MOE_ITEM_BOX_COLS,
   MOE_ITEM_BOX_ROWS,
   MOE_ITEM_SLOT_COUNT,
+  MOE_ITEM_BOX_SELECTED_EVENT,
   MOE_ITEM_BOX_SLOTS_EVENT,
+  notifyMoeItemBoxSelectedChanged,
+  saveMoeItemBoxSelectedIndex,
   saveMoeItemBoxSlots,
 } from "@/lib/moeItemBoxStorage";
+import MoeHolyRecordIcon from "@/components/icons/MoeHolyRecordIcon";
 import MoeExperiencePowderIcon from "@/components/MoeExperiencePowderIcon";
 import MoeExperienceCubeIcon from "@/components/MoeExperienceCubeIcon";
 
@@ -124,6 +129,9 @@ function ItemSlotIcon({ item }) {
       </span>
     );
   }
+  if (item.iconKind === "holy_record") {
+    return <MoeHolyRecordIcon size={22} />;
+  }
   return item.emoji ?? "📦";
 }
 
@@ -153,6 +161,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
 
   useEffect(() => {
     setGold(loadGold());
+    setSelectedIndex(loadMoeItemBoxSelectedIndex());
     syncSlotsFromStorage();
   }, [syncSlotsFromStorage]);
 
@@ -162,6 +171,24 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
     return () =>
       window.removeEventListener(MOE_ITEM_BOX_SLOTS_EVENT, onSlotsChanged);
   }, [syncSlotsFromStorage]);
+
+  useEffect(() => {
+    const onSelectedChanged = (event) => {
+      const index = event?.detail?.index;
+      setSelectedIndex(
+        typeof index === "number" && index >= 0 ? index : loadMoeItemBoxSelectedIndex()
+      );
+    };
+    window.addEventListener(MOE_ITEM_BOX_SELECTED_EVENT, onSelectedChanged);
+    return () =>
+      window.removeEventListener(MOE_ITEM_BOX_SELECTED_EVENT, onSelectedChanged);
+  }, []);
+
+  const selectSlot = useCallback((index) => {
+    setSelectedIndex(index);
+    saveMoeItemBoxSelectedIndex(index);
+    if (index != null) notifyMoeItemBoxSelectedChanged(index);
+  }, []);
 
   const updateSlots = useCallback((updater) => {
     setSlots((prev) => {
@@ -217,6 +244,8 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
     onToast?.(`${label}を捨てた`);
     setTrashConfirmOpen(false);
   }, [onToast, onTrash, selectedIndex, selectedItem, updateSlots]);
+
+  if (!pos) return null;
 
   return (
     <div
@@ -295,7 +324,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
                   }
                   onClick={() => {
                     setTrashConfirmOpen(false);
-                    setSelectedIndex((cur) => (cur === i ? null : i));
+                    selectSlot(selectedIndex === i ? null : i);
                   }}
                   style={{
                     width: SLOT_PX,

@@ -3,20 +3,22 @@
 import { useCallback } from "react";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import { renderPetSkillIcon } from "@/lib/moePetSkillIcons";
+import { formatMoeSkillHoverTip } from "@/lib/moePetSkillDescription";
+import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
 
 export const MOE_SKILL_ICON_SLOT_COUNT = 10;
 
-const STORAGE_KEY = "life-rpg-moe-skill-icon-bar-pos";
+const DEFAULT_STORAGE_KEY = "life-rpg-moe-skill-icon-bar-pos";
 const SLOT_PX = 32;
 const CAP_W = 5;
 const ICON_SIZE = 22;
 
-function defaultPos() {
+function defaultBarPos(yFromBottom = 88) {
   const barW =
     CAP_W * 2 + MOE_SKILL_ICON_SLOT_COUNT * SLOT_PX + (MOE_SKILL_ICON_SLOT_COUNT - 1) * 2 + 16;
   return {
     x: Math.max(8, (window.innerWidth - barW) / 2),
-    y: Math.max(8, window.innerHeight - 88),
+    y: Math.max(8, window.innerHeight - yFromBottom),
   };
 }
 
@@ -27,17 +29,36 @@ function iconForSkill(skill) {
 
 /**
  * MOE風スキルアイコンバー（10 マス横並び · ドラッグ可）
- * @param {{ slots: (object|null)[], onActivate: (index: number, skill: object) => void, isSkillUsable?: (skill: object) => boolean }} props
+ * @param {{
+ *   storageKey?: string,
+ *   defaultPos?: () => { x: number, y: number },
+ *   title?: string,
+ *   slots: (object|null)[],
+ *   onActivate: (index: number, skill: object) => void,
+ *   isSkillUsable?: (skill: object) => boolean,
+ * }} props
  */
-export default function MoeSkillIconBar({ slots, onActivate, isSkillUsable }) {
-  const getDefaultPos = useCallback(defaultPos, []);
+export default function MoeSkillIconBar({
+  storageKey = DEFAULT_STORAGE_KEY,
+  defaultPos,
+  title = "ペットスキル",
+  slots,
+  onActivate,
+  isSkillUsable,
+}) {
+  const getDefaultPos = useCallback(
+    () => defaultPos?.() ?? defaultBarPos(),
+    [defaultPos]
+  );
   const { pos, sizeRef, onDragPointerDown } = useMoeDraggablePos(
-    STORAGE_KEY,
+    storageKey,
     getDefaultPos
   );
 
   const row = slots.slice(0, MOE_SKILL_ICON_SLOT_COUNT);
   while (row.length < MOE_SKILL_ICON_SLOT_COUNT) row.push(null);
+
+  if (!pos) return null;
 
   return (
     <div
@@ -56,7 +77,7 @@ export default function MoeSkillIconBar({ slots, onActivate, isSkillUsable }) {
           title="ドラッグで移動"
         >
           <p className="text-center text-[8px] font-bold leading-tight text-amber-50 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
-            スキル
+            {title}
           </p>
         </div>
         <div className="h-px shrink-0 bg-white/55" aria-hidden />
@@ -74,18 +95,15 @@ export default function MoeSkillIconBar({ slots, onActivate, isSkillUsable }) {
               const locked =
                 filled && typeof isSkillUsable === "function" && !isSkillUsable(skill);
               const usable = filled && !locked;
+              const tip = filled
+                ? formatMoeSkillHoverTip(skill, { locked })
+                : `${i + 1}（未設定）`;
               return (
+                <MoeCompactSkillTip key={i} text={tip}>
                 <button
-                  key={i}
                   type="button"
                   disabled={!usable}
-                  title={
-                    filled
-                      ? locked
-                        ? `${label}（Lv.${skill.level}で習得）`
-                        : label
-                      : `${i + 1}（未設定）`
-                  }
+                  aria-label={tip}
                   onClick={() => usable && onActivate(i, skill)}
                   style={{ width: SLOT_PX, height: SLOT_PX }}
                   className={`relative shrink-0 overflow-hidden rounded-[3px] border transition active:scale-95 ${
@@ -107,6 +125,7 @@ export default function MoeSkillIconBar({ slots, onActivate, isSkillUsable }) {
                     {filled ? icon : "·"}
                   </span>
                 </button>
+                </MoeCompactSkillTip>
               );
             })}
           </div>

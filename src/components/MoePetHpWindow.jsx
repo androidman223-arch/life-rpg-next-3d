@@ -32,7 +32,7 @@ function loadSavedPos() {
 
 /**
  * MOE風ペットHP窓（上：青・名前 / 中央：区切り線 / 下：赤HPバー）
- * @param {{ emoji: string, name: string, levelLabel?: string, hp: number, hpMax: number, duelUi?: { phase: string, bar?: number, chargeFrozenUntil?: number } | null }} props
+ * @param {{ emoji: string, name: string, levelLabel?: string, hp: number, hpMax: number, duelUi?: { phase: string, bar?: number, chargeFrozenUntil?: number } | null, allySelected?: boolean, onSelectAllyTarget?: () => void }} props
  */
 export default function MoePetHpWindow({
   emoji,
@@ -41,21 +41,27 @@ export default function MoePetHpWindow({
   hp,
   hpMax,
   duelUi = null,
+  allySelected = false,
+  onSelectAllyTarget,
 }) {
-  const [pos, setPos] = useState(() => {
-    if (typeof window === "undefined") return { x: 12, y: 56 };
-    const saved = loadSavedPos();
-    return (
-      saved ?? {
-        x: Math.max(8, 12),
-        y: Math.max(56, window.innerHeight * 0.12),
-      }
-    );
-  });
+  const [pos, setPos] = useState(null);
+  const canSaveRef = useRef(false);
   const sizeRef = useRef({ w: WINDOW_W, h: 32 });
 
   useEffect(() => {
-    if (!pos) return;
+    canSaveRef.current = false;
+    const saved = loadSavedPos();
+    setPos(
+      saved ?? {
+        x: Math.max(8, WINDOW_W + 20),
+        y: Math.max(56, window.innerHeight * 0.12),
+      }
+    );
+    canSaveRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!canSaveRef.current || pos == null) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
     } catch {
@@ -73,7 +79,7 @@ export default function MoePetHpWindow({
 
   const onDragPointerDown = useCallback(
     (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || pos == null) return;
       e.preventDefault();
       e.stopPropagation();
       const drag = {
@@ -82,9 +88,16 @@ export default function MoePetHpWindow({
         startY: e.clientY,
         ox: pos.x,
         oy: pos.y,
+        moved: false,
       };
       const onMove = (ev) => {
         if (ev.pointerId !== drag.pointerId) return;
+        if (
+          Math.abs(ev.clientX - drag.startX) > 4 ||
+          Math.abs(ev.clientY - drag.startY) > 4
+        ) {
+          drag.moved = true;
+        }
         setPos(
           clampPos(
             drag.ox + ev.clientX - drag.startX,
@@ -97,15 +110,18 @@ export default function MoePetHpWindow({
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
+        if (!drag.moved) onSelectAllyTarget?.();
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clampPos, pos]
+    [clampPos, onSelectAllyTarget, pos]
   );
 
   const pct = hpPct(hp, hpMax);
+
+  if (!pos) return null;
 
   return (
     <div
@@ -114,14 +130,20 @@ export default function MoePetHpWindow({
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[48] select-none"
+      className={`fixed pointer-events-auto select-none ${allySelected ? "z-[58]" : "z-[54]"}`}
       style={{ left: pos.x, top: pos.y, width: WINDOW_W }}
     >
-      <div className="overflow-hidden rounded-[4px] border border-slate-300/90 bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)]">
+      <div
+        className={`overflow-hidden rounded-[4px] border bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)] ${
+          allySelected
+            ? "border-cyan-300/90 ring-1 ring-cyan-300/55"
+            : "border-slate-300/90"
+        } ${onSelectAllyTarget ? "cursor-pointer hover:brightness-110" : ""}`}
+      >
         <div
           className="cursor-grab touch-none bg-gradient-to-b from-blue-600 to-blue-800 px-1.5 py-0.5 active:cursor-grabbing"
           onPointerDown={onDragPointerDown}
-          title="ドラッグで移動"
+          title="クリックでターゲット · ドラッグで移動"
         >
           <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
             {emoji} {name}
@@ -137,13 +159,18 @@ export default function MoePetHpWindow({
         </div>
         <div className="h-px shrink-0 bg-white/60" aria-hidden />
         <div
-          className="flex h-2.5 rounded-none"
-          role="progressbar"
-          aria-valuenow={Math.round(pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${name} HP`}
+          role="button"
+          tabIndex={0}
+          title="クリックで支援ターゲットにする"
+          onClick={() => onSelectAllyTarget?.()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelectAllyTarget?.();
+            }
+          }}
         >
+        <div className="flex h-2.5 w-full rounded-none" aria-label={`${name} HP`}>
           <div
             className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
             style={{ width: SIDE_CAP_W }}
@@ -170,6 +197,7 @@ export default function MoePetHpWindow({
             ariaLabel={`${name} アタックチャージ`}
           />
         ) : null}
+        </div>
       </div>
     </div>
   );

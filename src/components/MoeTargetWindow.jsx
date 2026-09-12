@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MoeNameWindowChargeRow from "@/components/MoeNameWindowChargeRow";
 
 const WINDOW_W = 130;
@@ -14,14 +14,30 @@ function hpPct(current, max) {
   return Math.max(0, Math.min(100, (Number(current) / m) * 100));
 }
 
-export default function MoeTargetWindow({ target, duelUi = null }) {
-  const [pos, setPos] = useState(() => ({
-    x:
-      typeof window !== "undefined"
-        ? Math.max(8, (window.innerWidth - WINDOW_W) / 2)
-        : 8,
-    y: 56,
-  }));
+/**
+ * @param {{
+ *   target?: object|null,
+ *   duelUi?: object|null,
+ *   allyTarget?: { emoji?: string, name?: string, hp?: number, hpMax?: number, mp?: number, mpMax?: number }|null,
+ *   allyTargetMode?: 'player' | 'pet',
+ *   onSelectAllyTarget?: (id: 'player' | 'pet') => void,
+ * }} props
+ */
+export default function MoeTargetWindow({
+  target,
+  duelUi = null,
+  allyTarget = null,
+  allyTargetMode = "pet",
+  onSelectAllyTarget,
+}) {
+  const [pos, setPos] = useState({ x: 8, y: 56 });
+
+  useEffect(() => {
+    setPos({
+      x: Math.max(8, (window.innerWidth - WINDOW_W) / 2),
+      y: 56,
+    });
+  }, []);
   const sizeRef = useRef({ w: WINDOW_W, h: 32 });
 
   const clampPos = useCallback((x, y) => {
@@ -70,6 +86,16 @@ export default function MoeTargetWindow({ target, duelUi = null }) {
   const hpNow = target ? Math.ceil(target.hp) : 0;
   const hpMax = target?.hpMax ?? 0;
   const prefix = target?.superBoss ? "◆ " : target?.midBoss ? "★ " : "";
+  const allyMpPct = allyTarget ? hpPct(allyTarget.mp, allyTarget.mpMax) : 0;
+  const allyMpNow = allyTarget ? Math.ceil(allyTarget.mp ?? 0) : 0;
+  const allyMpMax = allyTarget?.mpMax ?? 0;
+  const showAlly = Boolean(onSelectAllyTarget);
+  const visible = Boolean(target || showAlly);
+
+  const allyBtnClass = (id) =>
+    allyTargetMode === id
+      ? "border-cyan-200/80 bg-cyan-700/90 text-cyan-50 ring-1 ring-cyan-200/40"
+      : "border-cyan-800/50 bg-cyan-950/70 text-cyan-100/85 hover:bg-cyan-900/50";
 
   return (
     <div
@@ -78,77 +104,143 @@ export default function MoeTargetWindow({ target, duelUi = null }) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[48] select-none"
+      className="fixed z-[57] pointer-events-auto select-none"
       style={{
         left: pos.x,
         top: pos.y,
         width: WINDOW_W,
-        visibility: target ? "visible" : "hidden",
-        pointerEvents: target ? "auto" : "none",
+        visibility: visible ? "visible" : "hidden",
+        pointerEvents: visible ? "auto" : "none",
       }}
-      aria-hidden={!target}
+      aria-hidden={!visible}
     >
-      <div className="overflow-hidden rounded-[4px] border border-slate-300/90 bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)]">
-        <div
-          className="cursor-grab touch-none bg-gradient-to-b from-blue-600 to-blue-800 px-1.5 py-0.5 active:cursor-grabbing"
-          onPointerDown={onHeaderPointerDown}
-          title="ドラッグで移動"
-        >
-          <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
-            {target ? (
-              <>
-                {prefix}
-                {target.emoji} {target.name}
-              </>
-            ) : (
-              "\u00a0"
-            )}
-          </p>
-        </div>
-        <div className="h-px shrink-0 bg-white/60" aria-hidden />
-        <div
-          className="flex h-2.5"
-          role="progressbar"
-          aria-valuenow={hpNow}
-          aria-valuemin={0}
-          aria-valuemax={hpMax}
-          aria-label={target ? `${target.name} HP` : "ターゲット HP"}
-        >
+      {target ? (
+        <div className="overflow-hidden rounded-[4px] border border-slate-300/90 bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)]">
           <div
-            className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
-            style={{ width: SIDE_CAP_W }}
-            aria-hidden
-          />
-          <div className="relative min-w-0 flex-1 overflow-hidden rounded-b-[1.5px] bg-zinc-950">
+            className="cursor-grab touch-none bg-gradient-to-b from-blue-600 to-blue-800 px-1.5 py-0.5 active:cursor-grabbing"
+            onPointerDown={onHeaderPointerDown}
+            title="ドラッグで移動"
+          >
+            <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
+              {prefix}
+              {target.emoji} {target.name}
+            </p>
+          </div>
+          <div className="h-px shrink-0 bg-white/60" aria-hidden />
+          <div
+            className="flex h-2.5"
+            role="progressbar"
+            aria-valuenow={hpNow}
+            aria-valuemin={0}
+            aria-valuemax={hpMax}
+            aria-label={`${target.name} HP`}
+          >
             <div
-              className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none"
+              className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
+              style={{ width: SIDE_CAP_W }}
               aria-hidden
-            >
-              <span className="text-[7px] font-bold tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
-                {hpNow} / {hpMax}
-              </span>
+            />
+            <div className="relative min-w-0 flex-1 overflow-hidden rounded-b-[1.5px] bg-zinc-950">
+              <div
+                className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none"
+                aria-hidden
+              >
+                <span className="text-[7px] font-bold tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+                  {hpNow} / {hpMax}
+                </span>
+              </div>
+              <div
+                className="relative z-0 block h-full rounded-bl-[1.5px] transition-[width] duration-150"
+                style={{ width: `${pct}%`, backgroundColor: MOE_HP_RED }}
+              />
             </div>
             <div
-              className="relative z-0 block h-full rounded-bl-[1.5px] transition-[width] duration-150"
-              style={{ width: `${pct}%`, backgroundColor: MOE_HP_RED }}
+              className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
+              style={{ width: SIDE_CAP_W }}
+              aria-hidden
             />
           </div>
-          <div
-            className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
-            style={{ width: SIDE_CAP_W }}
-            aria-hidden
-          />
+          {duelUi ? (
+            <MoeNameWindowChargeRow
+              phase={duelUi.phase}
+              duelRef={duelUi.duelRef}
+              barKey={duelUi.barKey}
+              fillColor={MOE_ENEMY_CHARGE}
+              ariaLabel={`${target.name} 攻撃チャージ`}
+            />
+          ) : null}
         </div>
-        {duelUi ? (
-          <MoeNameWindowChargeRow
-            phase={duelUi.phase}
-            duelRef={duelUi.duelRef}
-            barKey={duelUi.barKey}
-            fillColor={MOE_ENEMY_CHARGE}
-            ariaLabel={target ? `${target.name} 攻撃チャージ` : "敵 攻撃チャージ"}
-          />
-        ) : null}
-      </div>
+      ) : null}
+      {showAlly ? (
+        <div
+          className={`overflow-hidden rounded-[4px] border border-cyan-300/75 bg-black shadow-[0_1px_5px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.14)] ${
+            target ? "mt-1" : ""
+          }`}
+        >
+          <div className="bg-gradient-to-b from-cyan-700 to-cyan-950 px-1 py-0.5">
+            <p className="text-center text-[7px] font-bold leading-tight text-cyan-50">
+              支援ターゲット
+            </p>
+            <div className="mt-0.5 flex gap-0.5">
+              <button
+                type="button"
+                onClick={() => onSelectAllyTarget?.("player")}
+                className={`min-w-0 flex-1 rounded border px-0.5 py-0.5 text-[7px] font-bold leading-none transition active:scale-95 ${allyBtnClass("player")}`}
+              >
+                🧑 プレイヤー
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectAllyTarget?.("pet")}
+                className={`min-w-0 flex-1 rounded border px-0.5 py-0.5 text-[7px] font-bold leading-none transition active:scale-95 ${allyBtnClass("pet")}`}
+              >
+                🐾 ペット
+              </button>
+            </div>
+          </div>
+          {allyTarget ? (
+            <>
+              <div className="h-px shrink-0 bg-white/60" aria-hidden />
+              <p className="truncate bg-cyan-950/50 px-1 py-0.5 text-center text-[8px] font-bold text-cyan-100">
+                {allyTarget.emoji} {allyTarget.name}
+              </p>
+              <div
+                className="flex h-2.5"
+                role="progressbar"
+                aria-valuenow={allyMpNow}
+                aria-valuemin={0}
+                aria-valuemax={allyMpMax}
+                aria-label={`${allyTarget.name} MP`}
+              >
+                <div
+                  className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
+                  style={{ width: SIDE_CAP_W }}
+                  aria-hidden
+                />
+                <div className="relative min-w-0 flex-1 overflow-hidden bg-zinc-950">
+                  <div
+                    className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none"
+                    aria-hidden
+                  >
+                    <span className="text-[7px] font-bold tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+                      MP {allyMpNow}/{allyMpMax}
+                    </span>
+                  </div>
+                  <div
+                    className="relative z-0 block h-full transition-[width] duration-150"
+                    style={{ width: `${allyMpPct}%`, backgroundColor: "#ec4899" }}
+                  />
+                </div>
+                <div
+                  className="shrink-0 bg-gradient-to-b from-slate-200/95 to-slate-400/90"
+                  style={{ width: SIDE_CAP_W }}
+                  aria-hidden
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
