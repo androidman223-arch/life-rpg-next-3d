@@ -5,8 +5,10 @@
  *   __MOE_DEV__.snapshot()  — 直近のフィールド状態
  *   __MOE_DEV__.guide()       — サブシステム一覧
  *   __MOE_DEV__.storage()     — localStorage 監査
+ *   __MOE_DEV__.fieldNonActive() — ノンアクティブ敵 key 一覧
  */
 
+import { listMoeEnemyFieldNonActiveKeys } from "@/lib/moeEnemyFieldActive";
 import { auditMoeLocalStorage } from "@/lib/moe/moeStorageRegistry";
 import { printMoeSubsystemGuide, MOE_SUBSYSTEMS } from "@/lib/moe/moeSubsystemGuide";
 import { collectMoeFieldInvariantIssues } from "@/lib/moe/moeFieldInvariants";
@@ -40,9 +42,10 @@ export function installMoeDevRegistry() {
         : ["no snapshot yet"],
     guide: printMoeSubsystemGuide,
     storage: auditMoeLocalStorage,
+    fieldNonActive: listMoeEnemyFieldNonActiveKeys,
   };
 
   console.info(
-    "[MOE] Dev registry installed. Try: __MOE_DEV__.guide() / __MOE_DEV__.snapshot() / __MOE_DEV__.storage()"
+    "[MOE] Dev registry installed. Try: __MOE_DEV__.guide() / __MOE_DEV__.fieldNonActive() / __MOE_DEV__.snapshot()"
   );
 }

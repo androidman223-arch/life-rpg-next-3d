@@ -2,11 +2,11 @@
  * マクロ１ — フィールド敵の表示スケール（全公式敵 GLB）
  */
 import { MOE_MONSTER_FIELD_REGISTRY } from "@/data/moeMonsterFieldRegistry";
-import { moeHatiilDesertActiveFieldEntries } from "@/data/moeHatiilDesertPlanned";
-import { moeAlbeezForestActiveFieldEntries } from "@/data/moeAlbeezForestPlanned";
-import { moeElanPalaceActiveFieldEntries } from "@/data/moeElanPalacePlanned";
-import { moeNeokuMountainActiveFieldEntries } from "@/data/moeNeokuMountainPlanned";
-import { moeSulfurMineActiveFieldEntries } from "@/data/moeSulfurMinePlanned";
+import { moeHatiilDesertActiveFieldEntries } from "@/data/maps/moeHatiilDesertPlanned";
+import { moeAlbeezForestActiveFieldEntries } from "@/data/maps/moeAlbeezForestPlanned";
+import { moeElanPalaceActiveFieldEntries } from "@/data/maps/moeElanPalacePlanned";
+import { moeNeokuMountainActiveFieldEntries } from "@/data/maps/moeNeokuMountainPlanned";
+import { moeSulfurMineActiveFieldEntries } from "@/data/maps/moeSulfurMinePlanned";
 
 /** マクロ１で配置した全フィールド敵の表示倍率 */
 export const MOE_MACRO1_DISPLAY_SCALE = 3;

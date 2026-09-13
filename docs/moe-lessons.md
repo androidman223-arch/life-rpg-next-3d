@@ -20,3 +20,12 @@
 ### ペット戦闘「もどれ」
 - 攻撃モーション中に戻れ → 3Dの `petCombatPosLock` / 攻撃アニメが残りその場で揺れ続ける
 - `endActiveDuel` の `duelCombatSessionRef` で Canvas 側ロックを即解除する
+
+### 敵索敵（プレイヤー検知）
+- 視野=前方扇形 · 聴覚=足音（敏感/普通/鈍感）· 検知対象はプレイヤー
+- データは `moeEnemyDetection.js` · 扇形/円は `MoeField3DCanvas` · 敵ステでライブ表示
+
+### 敵アクティブ / ノンアクティブ（ヘイトとは別）
+- **索敵**（色・ステサーチ「検知」）と **追跡**（`aggro`）は分離。ノンアクティブも範囲内は色変化する
+- 一覧は `moeEnemyFieldActive.js` の `MOE_ENEMY_FIELD_NON_ACTIVE_KEYS` · スキル表の「ノンアクティブ」も参照
+- プレイヤー先制攻撃はノンアクティブでも可。牛・鹿・亀が勝手に追ってくるのはここを疑う

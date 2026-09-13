@@ -17,6 +17,7 @@ function hpPct(current, max) {
 /**
  * @param {{
  *   target?: object|null,
+ *   chaseAggro?: boolean,
  *   duelUi?: object|null,
  *   allyTarget?: { emoji?: string, name?: string, hp?: number, hpMax?: number, mp?: number, mpMax?: number }|null,
  *   allyTargetMode?: 'player' | 'pet',
@@ -25,6 +26,7 @@ function hpPct(current, max) {
  */
 export default function MoeTargetWindow({
   target,
+  chaseAggro = false,
   duelUi = null,
   allyTarget = null,
   allyTargetMode = "pet",
@@ -124,6 +126,11 @@ export default function MoeTargetWindow({
             <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
               {prefix}
               {target.emoji} {target.name}
+              {chaseAggro ? (
+                <span className="ml-0.5 text-[7px] font-bold text-red-200">
+                  追跡中
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="h-px shrink-0 bg-white/60" aria-hidden />

@@ -46,9 +46,9 @@ export const MOE_PLAYER_NINJA_SKILLS = [
     category: "stealth",
     activation: "toggle",
     iconComponent: "MoeShinobiashiIcon",
-    description: "敵のサーチに気付かれない。足音・索敵を抑える。",
+    description: "足音索敵されない。視野（扇）には入ると気付かれる。",
     moeReference: "自然調和 Lv1 サイレントラン",
-    status: "stub",
+    status: "done",
   },
   {
     id: "ninja_shinsoku",
@@ -74,7 +74,7 @@ export const MOE_PLAYER_NINJA_SKILLS = [
     description:
       "ネイチャーミミックのように体を消して約5秒歩ける。ヘイトを0にする。",
     moeReference: "物まね・自然の真似（透明）",
-    status: "stub",
+    status: "done",
   },
 ];
 

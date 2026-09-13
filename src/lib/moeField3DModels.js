@@ -423,6 +423,7 @@ export const MOE_SUPER_BOSS_DISPLAY_SCALE = 10.2;
 export const MOE_BISON_BOSS_LAYOUT_REV = 2;
 
 export function moe3dEnemyDisplayScale(en) {
+  /** 1 = fitModelToGround 済みスケールをそのまま使う（毎フレーム上書きしない） */
   /** 中・超ボスは create 時に scale 焼き込み済み */
   if (en?.superBoss || en?.midBoss) return 1;
   /** フィールドバイソンは MODEL_HEIGHT がそのまま root.scale（fitModelToGround は毎フレーム上書きされる） */

@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildMoeEnemyStatSearchView } from "@/lib/moeEnemyStatSearch";
+import {
+  buildMoeEnemyLiveDetectionSnapshot,
+  buildMoeEnemyStatSearchView,
+  formatMoeEnemyStealthNote,
+  moeEnemyLiveHearingReach,
+} from "@/lib/moeEnemyStatSearch";
 
 const WINDOW_W = 168;
 
@@ -10,14 +15,28 @@ const WINDOW_W = 168;
  *   enemy?: object|null,
  *   open?: boolean,
  *   onClose?: () => void,
+ *   playerPosRef?: import("react").RefObject<{ x: number, y: number }>,
+ *   enemyFacingYawRef?: import("react").RefObject<number>,
+ *   enemyChaseRuntimeRef?: import("react").RefObject<Record<number, object>>,
+ *   enemyFieldSyncRef?: import("react").RefObject<Record<number, { x: number, y: number, idleFacingYaw?: number }>>,
+ *   enemyDetectionOptsRef?: import("react").RefObject<object>,
  * }} props
  */
 export default function MoeEnemyStatSearchPanel({
   enemy,
   open = false,
   onClose,
+  playerPosRef,
+  enemyFacingYawRef,
+  enemyChaseRuntimeRef,
+  enemyFieldSyncRef,
+  enemyDetectionOptsRef,
 }) {
   const [pos, setPos] = useState({ x: 8, y: 120 });
+  const [liveDetection, setLiveDetection] = useState(null);
+  const [liveChaseAggro, setLiveChaseAggro] = useState(false);
+  const [liveStealthNote, setLiveStealthNote] = useState(null);
+  const [liveHearingReach, setLiveHearingReach] = useState(null);
   const sizeRef = useRef({ w: WINDOW_W, h: 120 });
   const view = buildMoeEnemyStatSearchView(enemy);
 
@@ -36,6 +55,66 @@ export default function MoeEnemyStatSearchPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || !enemy) {
+      setLiveDetection(null);
+      setLiveChaseAggro(false);
+      setLiveStealthNote(null);
+      setLiveHearingReach(null);
+      return;
+    }
+    let frame = 0;
+    let lastKey = "";
+    const tick = () => {
+      const playerPos = playerPosRef?.current;
+      const sync = enemyFieldSyncRef?.current?.[enemy.id];
+      const chaseRt = enemyChaseRuntimeRef?.current?.[enemy.id];
+      const chasing = Boolean(chaseRt?.aggro);
+      const facingYaw = chasing
+        ? chaseRt.facingYaw
+        : (sync?.idleFacingYaw ?? enemyFacingYawRef?.current ?? 0);
+      const enemyForDetect = chasing
+        ? { ...enemy, x: chaseRt.x, y: chaseRt.y }
+        : sync
+          ? { ...enemy, x: sync.x, y: sync.y }
+          : enemy;
+      const detectOpts = enemyDetectionOptsRef?.current ?? {};
+      const stealthNote = formatMoeEnemyStealthNote(detectOpts);
+      const hearingReach = moeEnemyLiveHearingReach(
+        view?.detection,
+        detectOpts
+      );
+      if (playerPos) {
+        const snap = buildMoeEnemyLiveDetectionSnapshot(
+          enemyForDetect,
+          playerPos,
+          facingYaw,
+          detectOpts
+        );
+        const key = snap
+          ? `${chasing}:${stealthNote?.tone ?? ""}:${hearingReach ?? ""}:${snap.detected}:${snap.viaLabels.join(",")}`
+          : `${chasing}:${stealthNote?.tone ?? ""}:${hearingReach ?? ""}:`;
+        if (key !== lastKey) {
+          lastKey = key;
+          setLiveDetection(snap);
+          setLiveChaseAggro(chasing);
+          setLiveStealthNote(stealthNote);
+          setLiveHearingReach(hearingReach);
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [
+    open,
+    enemy,
+    playerPosRef,
+    enemyFacingYawRef,
+    enemyChaseRuntimeRef,
+    enemyDetectionOptsRef,
+  ]);
 
   const clampPos = useCallback((x, y) => {
     const { w, h } = sizeRef.current;
@@ -156,6 +235,104 @@ export default function MoeEnemyStatSearchPanel({
               }
             />
           </div>
+          {view.detectionUi ? (
+            <div className="mt-1 rounded border border-cyan-500/35 bg-cyan-950/40 px-1 py-0.5">
+              <p className="text-[7px] font-bold text-cyan-200">索敵（{view.detectionUi.targetLabel}）</p>
+              <div className="mt-0.5 space-y-0.5 text-[6px] leading-snug text-cyan-50/95">
+                {view.detectionUi.usesVision ? (
+                  <p>
+                    <span className="text-cyan-300/85">視野 </span>
+                    {view.detectionUi.visionLabel}
+                  </p>
+                ) : null}
+                {view.detectionUi.usesHearing ? (
+                  <p>
+                    <span className="text-cyan-300/85">足音 </span>
+                    {liveHearingReach != null &&
+                    liveHearingReach !== view.detection.hearingRange
+                      ? `現在約${liveHearingReach}m（通常${view.detection.hearingRange}m）`
+                      : view.detectionUi.hearingLabel}
+                  </p>
+                ) : (
+                  <p className="text-cyan-200/65">
+                    <span className="text-cyan-300/85">足音 </span>
+                    なし（横から近づけます）
+                  </p>
+                )}
+                <p>
+                  <span className="text-cyan-300/85">性格 </span>
+                  <span
+                    className={
+                      view.fieldActive ? "text-amber-200" : "text-lime-200"
+                    }
+                  >
+                    {view.fieldActiveLabel}
+                  </span>
+                  <span className="text-cyan-200/70">
+                    {" "}
+                    — {view.fieldActiveHint}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-cyan-300/85">タイプ </span>
+                  {view.detectionUi.searchTypeLabel}
+                  <span className="text-cyan-200/70">
+                    （{view.detectionUi.searchHint}）
+                  </span>
+                </p>
+                {view.chaseMaxRange != null ? (
+                  <p className="text-cyan-200/80">
+                    <span className="text-cyan-300/85">逃げ幅 </span>
+                    湧きから約{view.chaseMaxRange}m（索敵射程×2）
+                  </p>
+                ) : null}
+                {liveStealthNote ? (
+                  <p
+                    className={
+                      liveStealthNote.tone === "stealth"
+                        ? "font-bold text-violet-200"
+                        : "font-bold text-sky-200"
+                    }
+                  >
+                    <span className="text-cyan-300/85">ステルス </span>
+                    {liveStealthNote.label}
+                    <span className="font-normal text-cyan-100/80">
+                      {" "}
+                      — {liveStealthNote.detail}
+                    </span>
+                  </p>
+                ) : null}
+                {liveChaseAggro ? (
+                  <p className="font-bold text-orange-300">
+                    <span className="text-cyan-300/85">行動 </span>
+                    追跡中
+                    <span className="font-normal text-orange-100/85">
+                      {" "}
+                      — プレイヤーへ接近
+                    </span>
+                  </p>
+                ) : null}
+                {liveDetection ? (
+                  <p
+                    className={
+                      liveDetection.tone === "alert"
+                        ? "font-bold text-red-300"
+                        : liveDetection.tone === "passive"
+                          ? "font-bold text-lime-300"
+                          : "font-bold text-emerald-300"
+                    }
+                  >
+                    <span className="text-cyan-300/85">状態 </span>
+                    {liveDetection.statusLabel}
+                    <span className="font-normal text-cyan-100/80">
+                      {" "}
+                      — {liveDetection.detail}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <p className="mt-1 text-[7px] font-bold text-violet-200">スキル</p>
           <ul className="mt-0.5 max-h-16 space-y-0.5 overflow-y-auto text-[6px] leading-snug text-zinc-200">
             {view.skills.map((skill) => (

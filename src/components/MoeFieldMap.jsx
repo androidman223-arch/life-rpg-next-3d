@@ -93,8 +93,26 @@ import {
   moe3dMonsterFieldMapSlotIds,
   moe3dIsMapSlotFieldEnemy,
   moe3dMonsterFieldSpawnWorld,
+  moeEnemyFieldIdleFacingYaw,
 } from "@/lib/moe3dMonsterMapSpawns";
 import { moeMonsterFieldBase } from "@/data/moeMonsterFieldRegistry";
+import {
+  buildMoePetBuffStrip,
+  buildMoePlayerBuffStrip,
+} from "@/lib/moeBuffUi";
+import {
+  clearMoeEnemyChaseRuntime,
+  tickMoeEnemyFieldChaseBatch,
+} from "@/lib/moeEnemyFieldChase";
+import {
+  activateMoeKakuremino,
+  buildMoeEnemyDetectionOpts,
+  dropMoeEnemyFieldAggro,
+  isMoeKakureminoActive,
+  MOE_KAKUREMINO_DURATION_SEC,
+  moeKakureminoActiveRemainSec,
+  moeKakureminoCooldownRemainSec,
+} from "@/lib/moePlayerStealth";
 import MoeField3DBattleOverlay from "@/components/MoeField3DBattleOverlay";
 import MoeField3DTreasureOverlay from "@/components/MoeField3DTreasureOverlay";
 import MoeTargetWindow from "@/components/MoeTargetWindow";
@@ -1070,6 +1088,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** 3D: 戦闘距離計算用（ペット・敵モデルの正面オフセット実測） */
   const moe3dCombatExtentsRef = useRef({ pet: null, enemies: {} });
   const targetEnemyIdRef = useRef(null);
+  /** 3D: ターゲット敵の向き（敵ステサーチの索敵判定用） */
+  const targetEnemyFacingYawRef = useRef(0);
+  /** 3D: 敵追跡ランタイム id → { aggro, x, y, facingYaw, spawnX, spawnY } */
+  const enemyChaseRuntimeRef = useRef({});
+  /** 3D canvas が毎フレーム書く敵の実座標・待機向き（索敵と追跡の一致用） */
+  const enemyFieldSyncRef = useRef({});
+  const enemyDetectionOptsRef = useRef({
+    playerMoving: false,
+    soundMult: 1,
+    stealthFull: false,
+  });
+  const lastChaseUiSyncRef = useRef(0);
+  const lastTargetChaseAggroRef = useRef(false);
+  const [targetEnemyChaseAggro, setTargetEnemyChaseAggro] = useState(false);
   const scheduleTargetEnemyIdRef = useRef((id) => {
     targetEnemyIdRef.current = id;
     startTransition(() => setTargetEnemyId(id));
@@ -1101,6 +1133,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const dashBoost3xRef = useRef(false);
   const [shinobiashiOn, setShinobiashiOn] = useState(false);
   const shinobiashiOnRef = useRef(false);
+  const kakureminoUntilRef = useRef(0);
+  const kakureminoCooldownUntilRef = useRef(0);
+  const [kakureminoActive, setKakureminoActive] = useState(false);
+  const [kakureminoRemainSec, setKakureminoRemainSec] = useState(0);
+  const [kakureminoCooldownSec, setKakureminoCooldownSec] = useState(0);
+  const [buffUiNow, setBuffUiNow] = useState(() => Date.now());
   useEffect(() => {
     battleSpeedMultRef.current = battleSpeed2x ? MOE_BATTLE_SPEED_FAST_MULT : 1;
   }, [battleSpeed2x]);
@@ -1122,6 +1160,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     []
   );
   const endActiveDuel = useCallback(() => {
+    const endedId = duelRef.current?.enemyId;
+    if (endedId != null) {
+      clearMoeEnemyChaseRuntime(endedId, enemyChaseRuntimeRef.current);
+    }
     approachChargeScheduledRef.current = false;
     duelCombatSessionRef.current += 1;
     moeSkillComboGenRef.current += 1;
@@ -2383,11 +2425,58 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return;
     }
     if (skill.id === "ninja_kakuremino") {
-      setToast(formatMoePetSkillDescription(skill));
+      const now = performance.now();
+      if (isMoeKakureminoActive(kakureminoUntilRef.current, now)) return;
+      if (
+        moeKakureminoCooldownRemainSec(
+          kakureminoCooldownUntilRef.current,
+          now,
+          kakureminoUntilRef.current
+        ) > 0
+      ) {
+        return;
+      }
+      const { untilMs, cooldownUntilMs } = activateMoeKakuremino(now);
+      kakureminoUntilRef.current = untilMs;
+      kakureminoCooldownUntilRef.current = cooldownUntilMs;
+      setKakureminoActive(true);
+      setKakureminoCooldownSec(
+        moeKakureminoCooldownRemainSec(cooldownUntilMs, now, untilMs)
+      );
+      if (duelRef.current?.phase === "approach") {
+        endActiveDuel();
+      }
+      const aggroDropped = dropMoeEnemyFieldAggro(
+        enemyChaseRuntimeRef.current,
+        enemiesRef.current,
+        (enemy) =>
+          moeEnemyFieldIdleFacingYaw(
+            enemy,
+            worldRef.current?.tileWidth,
+            worldRef.current?.tileDepth
+          )
+      );
+      if (aggroDropped) {
+        startTransition(() => {
+          setEnemies((prev) =>
+            prev.map((en) => {
+              const rt = enemyChaseRuntimeRef.current[en.id];
+              if (!rt) return en;
+              return { ...en, x: rt.x, y: rt.y };
+            })
+          );
+        });
+      }
+      setToast(
+        `🫥 ${skill.name} — 約${MOE_KAKUREMINO_DURATION_SEC}秒、敵に気付かれない`
+      );
+      window.setTimeout(() => {
+        setKakureminoActive(false);
+      }, MOE_KAKUREMINO_DURATION_SEC * 1000);
       return;
     }
     setToast(formatMoePetSkillDescription(skill));
-  }, []);
+  }, [endActiveDuel]);
 
   const applyPhoenixPlayerChantEffect = useCallback(
     (skill) => {
@@ -2884,6 +2973,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         miniMapH: initMiniMapH,
       });
       setEnemies(newEnemies);
+      enemyChaseRuntimeRef.current = {};
       approachChargeScheduledRef.current = false;
       duelRef.current = null;
       setDuel(null);
@@ -3484,20 +3574,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           jump.vy = Math.max(0, jump.vy);
         }
 
+        const fieldTw = worldRef.current?.tileWidth;
+        const fieldTd = worldRef.current?.tileDepth;
         if (map3dReadyRef.current) {
           let nx = playerPosRef.current.x + dx;
           let ny = playerPosRef.current.y + dy;
           const px = playerPosRef.current.x;
           const py = playerPosRef.current.y;
-          const tw = worldRef.current?.tileWidth;
-          const td = worldRef.current?.tileDepth;
-          if (tw && td) {
+          if (fieldTw && fieldTd) {
             const resolved = moe3dClampMoveAgainstColumnColliders(
               px,
               py,
               nx,
               ny,
-              moe3dMacro3WorldCollidersAt(px, py, tw, td)
+              moe3dMacro3WorldCollidersAt(px, py, fieldTw, fieldTd)
             );
             nx = resolved.x;
             ny = resolved.z;
@@ -3561,8 +3651,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             startTransition(() => setNearMonsterShowcase(nearMonsterSpot));
           }
           const nearbyAltar =
-            tw && td
-              ? moe3dFindNearbyAltar(nx, ny, tw, td, {
+            fieldTw && fieldTd
+              ? moe3dFindNearbyAltar(nx, ny, fieldTw, fieldTd, {
                   halfW: worldRef.current?.halfW,
                   halfD: worldRef.current?.halfD,
                 })
@@ -3573,6 +3663,102 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             startTransition(() => setNearAltar(nearbyAltar));
           }
         }
+        enemyDetectionOptsRef.current = buildMoeEnemyDetectionOpts({
+          playerMoving: moving,
+          shinobiashiOn: shinobiashiOnRef.current,
+          kakureminoUntilMs: kakureminoUntilRef.current,
+        });
+        const chaseResult = tickMoeEnemyFieldChaseBatch({
+          enemies: enemiesRef.current,
+          runtimeById: enemyChaseRuntimeRef.current,
+          playerPos: playerPosRef.current,
+          playerMoving: moving,
+          dt,
+          duel: duelRef.current,
+          detectionOpts: enemyDetectionOptsRef.current,
+          resolveIdleFacingYaw: (enemy) =>
+            moeEnemyFieldIdleFacingYaw(enemy, fieldTw, fieldTd),
+          resolveFieldSync: (enemy) =>
+            enemyFieldSyncRef.current[enemy.id] ?? null,
+          resolveMove: (fromX, fromZ, toX, toZ) => {
+            const tw = worldRef.current?.tileWidth;
+            const td = worldRef.current?.tileDepth;
+            let nx = toX;
+            let nz = toZ;
+            if (tw && td) {
+              const resolved = moe3dClampMoveAgainstColumnColliders(
+                fromX,
+                fromZ,
+                toX,
+                toZ,
+                moe3dMacro3WorldCollidersAt(fromX, fromZ, tw, td)
+              );
+              nx = resolved.x;
+              nz = resolved.z;
+            }
+            const clamped = moe3dClampToPlayBounds(
+              nx,
+              nz,
+              worldRef.current,
+              1.2
+            );
+            return { x: clamped.x, z: clamped.y };
+          },
+        });
+        if (chaseResult.newAggroEnemyId != null) {
+          const aggroEnemy = enemiesRef.current.find(
+            (e) => e.id === chaseResult.newAggroEnemyId
+          );
+          if (aggroEnemy) {
+            scheduleTargetEnemyIdRef.current(chaseResult.newAggroEnemyId);
+            startTransition(() => {
+              setTargetEnemyId(chaseResult.newAggroEnemyId);
+              setToast(`👁 ${aggroEnemy.name}に気付かれた！`);
+            });
+          }
+        }
+        if (chaseResult.leashBrokenEnemyId != null) {
+          const broke = enemiesRef.current.find(
+            (e) => e.id === chaseResult.leashBrokenEnemyId
+          );
+          if (broke) {
+            startTransition(() => {
+              setToast(`💨 ${broke.name}は追跡をやめた`);
+            });
+          }
+        }
+        if (
+          chaseResult.engageEnemyId != null &&
+          duelRef.current == null
+        ) {
+          startDuelWithEnemyRef.current(chaseResult.engageEnemyId);
+        }
+        if (
+          chaseResult.anyChasing &&
+          now - lastChaseUiSyncRef.current >= 90
+        ) {
+          lastChaseUiSyncRef.current = now;
+          startTransition(() => {
+            setEnemies((prev) =>
+              prev.map((en) => {
+                const rt = enemyChaseRuntimeRef.current[en.id];
+                if (!rt?.aggro) return en;
+                if (en.x === rt.x && en.y === rt.y) return en;
+                return { ...en, x: rt.x, y: rt.y };
+              })
+            );
+          });
+        }
+        const chasingTarget =
+          targetEnemyIdRef.current != null &&
+          Boolean(
+            enemyChaseRuntimeRef.current[targetEnemyIdRef.current]?.aggro
+          );
+        if (chasingTarget !== lastTargetChaseAggroRef.current) {
+          lastTargetChaseAggroRef.current = chasingTarget;
+          startTransition(() => setTargetEnemyChaseAggro(chasingTarget));
+        }
+
         tickPet3d(petSpeed, dt, now);
       } else {
         playerSprintRef.current = false;
@@ -4282,6 +4468,29 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   useEffect(() => {
+    const tick = () => {
+      const now = performance.now();
+      const active = isMoeKakureminoActive(kakureminoUntilRef.current, now);
+      if (active !== kakureminoActive) setKakureminoActive(active);
+      const remain = moeKakureminoActiveRemainSec(
+        kakureminoUntilRef.current,
+        now
+      );
+      if (remain !== kakureminoRemainSec) setKakureminoRemainSec(remain);
+      const cd = moeKakureminoCooldownRemainSec(
+        kakureminoCooldownUntilRef.current,
+        now,
+        kakureminoUntilRef.current
+      );
+      if (cd !== kakureminoCooldownSec) setKakureminoCooldownSec(cd);
+      setBuffUiNow(now);
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [kakureminoActive, kakureminoRemainSec, kakureminoCooldownSec]);
+
+  useEffect(() => {
     if (!skillChant) return undefined;
     const tick = () => {
       const chant = skillChantRef.current;
@@ -4333,6 +4542,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       condenseMindMpCost: PLAYER_CONDENSE_MIND_MP_COST,
       condenseMindMpPerSec: PLAYER_CONDENSE_MIND_MP_PER_SEC,
       shinobiashiOn,
+      kakureminoActive,
+      kakureminoCooldownSec,
       dashBoost3x,
       playerSkillCooldownSec,
       ninjaById,
@@ -4384,6 +4595,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     playerVitals.mp,
     playerVitals.mpMax,
     shinobiashiOn,
+    kakureminoActive,
+    kakureminoCooldownSec,
     dashBoost3x,
     playerSkillCooldownSec,
     handleRegenToggle,
@@ -5464,6 +5677,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     >
       <MoeTargetWindow
         target={targetEnemy}
+        chaseAggro={targetEnemyChaseAggro}
         duelUi={targetDuelUi}
         allyTarget={allyTargetView}
         allyTargetMode={allyTarget}
@@ -5473,6 +5687,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         enemy={targetEnemy}
         open={enemyStatSearchOpen}
         onClose={() => setEnemyStatSearchOpen(false)}
+        playerPosRef={playerPosRef}
+        enemyFacingYawRef={targetEnemyFacingYawRef}
+        enemyChaseRuntimeRef={enemyChaseRuntimeRef}
+        enemyFieldSyncRef={enemyFieldSyncRef}
+        enemyDetectionOptsRef={enemyDetectionOptsRef}
       />
       <MoePlayerHpWindow
         name={trainerStatus.job ?? "勇者"}
@@ -5482,6 +5701,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         staminaMax={playerVitals.staminaMax}
         mp={playerVitals.mp}
         mpMax={playerVitals.mpMax}
+        buffSlots={buildMoePlayerBuffStrip(
+          {
+            bananaMilkActive,
+            shinobiashiOn,
+            kakureminoUntilMs: kakureminoUntilRef.current,
+            dashBoost3x,
+            playerCondenseMindRef,
+          },
+          buffUiNow
+        )}
         allySelected={allyTarget === "player"}
         onSelectAllyTarget={() => selectAllyTarget("player")}
       />
@@ -5492,6 +5721,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         hp={pet.hp}
         hpMax={pet.hpMax}
         duelUi={petDuelUi}
+        buffSlots={buildMoePetBuffStrip(
+          {
+            petRegenActive: regenActive,
+            petRegenHp: PET_REGEN_HP,
+            petRegenMp: PET_REGEN_MP,
+            petRegenIntervalSec: PET_REGEN_INTERVAL_SEC,
+            phoenixAnsleepRegenRef,
+            phoenixUltimateRegenRef,
+            atrumMpRegenRef,
+            atrumMagicBuffUntilRef,
+          },
+          buffUiNow
+        )}
         allySelected={allyTarget === "pet"}
         onSelectAllyTarget={() => selectAllyTarget("pet")}
       />
@@ -6929,6 +7171,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           onRhodaClick={handleRhodaShrineClick}
           onAltarClick={handleAltarClickById}
           targetEnemyId={targetEnemyId}
+          enemyStatSearchOpen={enemyStatSearchOpen}
+          targetEnemyFacingYawRef={targetEnemyFacingYawRef}
+          enemyChaseRuntimeRef={enemyChaseRuntimeRef}
+          enemyFieldSyncRef={enemyFieldSyncRef}
+          enemyDetectionOptsRef={enemyDetectionOptsRef}
+          playerKakureminoUntilRef={kakureminoUntilRef}
           petFocused={petFocused}
           petLabel={{
             emoji: currentPetDisplay.emoji,
@@ -7289,29 +7537,53 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     minimapEnemyVisible(en, minimap3d.x, minimap3d.y)
                 )
                 .map((en) => {
-                  const p = mini3Project(en.x, en.y);
+                  const chaseRt = enemyChaseRuntimeRef.current[en.id];
+                  const chasing = Boolean(chaseRt?.aggro);
+                  const sync = enemyFieldSyncRef.current[en.id];
+                  const worldX = chasing
+                    ? chaseRt.x
+                    : (sync?.x ?? en.x);
+                  const worldZ = chasing
+                    ? chaseRt.y
+                    : (sync?.y ?? en.y);
+                  const p = mini3Project(worldX, worldZ);
                   const isMid = en.midBoss;
                   const isSuper = en.superBoss;
                   const isGustav = en.fieldGustav;
                   const r = minimap3dEnemyDotRadius(en, mini3W);
-                  const fill = isSuper
-                    ? "#a78bfa"
-                    : isMid
-                      ? "#fbbf24"
-                      : isGustav
-                        ? "#22c55e"
-                        : "#ef4444";
+                  const fill = chasing
+                    ? "#fb923c"
+                    : isSuper
+                      ? "#a78bfa"
+                      : isMid
+                        ? "#fbbf24"
+                        : isGustav
+                          ? "#22c55e"
+                          : "#ef4444";
                   return (
                     <g key={`mini3-en-${en.id}`}>
+                      {chasing ? (
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={r + 2.2}
+                          fill="none"
+                          stroke="#fdba74"
+                          strokeWidth={1.1}
+                          opacity={0.88}
+                        />
+                      ) : null}
                       <circle
                         cx={p.x}
                         cy={p.y}
                         r={r}
                         fill={fill}
-                        opacity={minimap3dEnemyDotOpacity(en)}
-                        stroke={isMid || isSuper ? "#fff" : "none"}
-                        strokeWidth={isMid || isSuper ? 1 : 0}
-                        strokeOpacity={isMid || isSuper ? 0.75 : 0}
+                        opacity={
+                          chasing ? 0.84 : minimap3dEnemyDotOpacity(en)
+                        }
+                        stroke={isMid || isSuper ? "#fff" : chasing ? "#fff" : "none"}
+                        strokeWidth={isMid || isSuper || chasing ? 1 : 0}
+                        strokeOpacity={isMid || isSuper || chasing ? 0.75 : 0}
                       />
                       {isMid && (
                         <text

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import MoeBuffIconStrip from "@/components/MoeBuffIconStrip";
 import MoeNameWindowChargeRow from "@/components/MoeNameWindowChargeRow";
+import { MOE_PET_BUFF_COLUMNS } from "@/lib/moeBuffUi";
 
 const WINDOW_W = 130;
 const SIDE_CAP_W = 7;
@@ -41,6 +43,7 @@ export default function MoePetHpWindow({
   hp,
   hpMax,
   duelUi = null,
+  buffSlots = [],
   allySelected = false,
   onSelectAllyTarget,
 }) {
@@ -197,6 +200,12 @@ export default function MoePetHpWindow({
             ariaLabel={`${name} アタックチャージ`}
           />
         ) : null}
+        <div className="h-[3px] shrink-0 bg-black" aria-hidden />
+        <MoeBuffIconStrip
+          slots={buffSlots}
+          columns={MOE_PET_BUFF_COLUMNS}
+          rows={1}
+        />
         </div>
       </div>
     </div>

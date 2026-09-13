@@ -7,11 +7,12 @@
  */
 
 import { MOE_MONSTER_LINEUP } from "@/data/moeMonsterLineup";
-import { moeHatiilDesertActiveFieldEntries } from "@/data/moeHatiilDesertPlanned";
-import { moeAlbeezForestActiveFieldEntries } from "@/data/moeAlbeezForestPlanned";
-import { moeElanPalaceActiveFieldEntries } from "@/data/moeElanPalacePlanned";
-import { moeNeokuMountainActiveFieldEntries } from "@/data/moeNeokuMountainPlanned";
-import { moeSulfurMineActiveFieldEntries } from "@/data/moeSulfurMinePlanned";
+import { resolveMoeEnemyDetection } from "@/lib/moeEnemyDetection";
+import { moeHatiilDesertActiveFieldEntries } from "@/data/maps/moeHatiilDesertPlanned";
+import { moeAlbeezForestActiveFieldEntries } from "@/data/maps/moeAlbeezForestPlanned";
+import { moeElanPalaceActiveFieldEntries } from "@/data/maps/moeElanPalacePlanned";
+import { moeNeokuMountainActiveFieldEntries } from "@/data/maps/moeNeokuMountainPlanned";
+import { moeSulfurMineActiveFieldEntries } from "@/data/maps/moeSulfurMinePlanned";
 
 /** @param {{ mp: number, attack: number, defense: number, hit: number, magic?: number }} row */
 export function moeWikiFromAreaGuideRow(row) {
@@ -54,11 +55,12 @@ export function moeFieldPetDamageFromLevel(level) {
  *   hpMultiplier?: number,
  *   petDamage?: number,
  *   fieldBoss?: boolean,
+ *   detection?: import("@/lib/moeEnemyDetection").MoeEnemyDetection,
  * }} spec
  */
 function buildMonsterFieldEntry(spec) {
   const hpMult = spec.hpMultiplier ?? (spec.fieldBoss ? 2.5 : 1);
-  return {
+  const entry = {
     key: spec.key,
     familyId: spec.familyId,
     name: spec.name,
@@ -75,6 +77,13 @@ function buildMonsterFieldEntry(spec) {
     mapSlotId: spec.mapSlotId,
     modelFile: spec.modelFile,
     fieldBoss: spec.fieldBoss ?? false,
+  };
+  return {
+    ...entry,
+    detection: resolveMoeEnemyDetection({
+      ...entry,
+      detection: spec.detection,
+    }),
   };
 }
 

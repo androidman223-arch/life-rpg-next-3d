@@ -214,15 +214,26 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
   let cooldownSec = null;
   if (skill?.id === "ninja_shinobiashi") active = ctx.shinobiashiOn;
   if (skill?.id === "ninja_shinsoku") active = ctx.dashBoost3x;
+  if (skill?.id === "ninja_kakuremino") active = Boolean(ctx.kakureminoActive);
+  if (
+    skill?.id === "ninja_kakuremino" &&
+    !ctx.kakureminoActive &&
+    (ctx.kakureminoCooldownSec ?? 0) > 0
+  ) {
+    cooldownSec = ctx.kakureminoCooldownSec;
+  }
 
   const toggleNinja =
     skill?.id === "ninja_shinobiashi" || skill?.id === "ninja_shinsoku";
+  const kakureminoBusy =
+    skill?.id === "ninja_kakuremino" &&
+    (Boolean(ctx.kakureminoActive) || (ctx.kakureminoCooldownSec ?? 0) > 0);
 
   return {
     slotKey: key,
     label,
     icon: renderPlayerSlotIcon(key, skill),
-    disabled: !filled || (!toggleNinja && active),
+    disabled: !filled || (!toggleNinja && active) || kakureminoBusy,
     active: filled && active,
     cooldownSec: filled ? cooldownSec : null,
     title: skill

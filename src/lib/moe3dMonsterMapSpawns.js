@@ -8,17 +8,28 @@ import {
   MOE_3D_LEGACY_TILES_Z,
 } from "@/lib/moeField3DModels";
 import { moeMonsterFieldBase } from "@/data/moeMonsterFieldRegistry";
-import { moeHatiilDesertActiveSpawnSpecs } from "@/data/moeHatiilDesertPlanned";
-import { moeAlbeezForestActiveSpawnSpecs } from "@/data/moeAlbeezForestPlanned";
-import { moeElanPalaceActiveSpawnSpecs } from "@/data/moeElanPalacePlanned";
-import { moeNeokuMountainActiveSpawnSpecs } from "@/data/moeNeokuMountainPlanned";
-import { moeSulfurMineActiveSpawnSpecs } from "@/data/moeSulfurMinePlanned";
+import { moeHatiilDesertActiveSpawnSpecs } from "@/data/maps/moeHatiilDesertPlanned";
+import { moeAlbeezForestActiveSpawnSpecs } from "@/data/maps/moeAlbeezForestPlanned";
+import { moeElanPalaceActiveSpawnSpecs } from "@/data/maps/moeElanPalacePlanned";
+import { moeNeokuMountainActiveSpawnSpecs } from "@/data/maps/moeNeokuMountainPlanned";
+import { moeSulfurMineActiveSpawnSpecs } from "@/data/maps/moeSulfurMinePlanned";
 import { MOE_MACRO1_PHASE3_SPAWN_SPECS } from "@/data/moeMacro1Phase3Spawns";
 import {
   macro2L3PlayerClearDist,
   macro2L3RespawnMargin,
   macro2L3TunedSpawnCoords,
+  macro2L3Zone,
 } from "@/lib/moe3dMacro2L3Spawns";
+
+function moe3dYawFaceTargetLite(fromX, fromZ, toX, toZ) {
+  return Math.atan2(toX - fromX, toZ - fromZ);
+}
+
+/** glb 正面軸補正（索敵扇用 · moeField3DModels と同期） */
+function moe3dEnemyModelYawOffsetLite(enemyKey) {
+  if (enemyKey === "gustav_junior") return -Math.PI / 2;
+  return 0;
+}
 
 /**
  * マップ面内の初期湧き（正規化 tx/tz · 0..1）
@@ -231,6 +242,36 @@ export function moe3dMonsterFieldSpawnSpec(mapSlotId, key, slotInZone = 0) {
         (s.slotInZone ?? 0) === slotInZone
     ) ?? null
   );
+}
+
+/** @param {string} mapSlotId @param {number} tileW @param {number} tileD */
+export function moe3dMapSlotAltarWorldPos(mapSlotId, tileW, tileD) {
+  const rect = moe3dMapSlotWorldRect(mapSlotId, tileW, tileD);
+  if (!rect) return null;
+  const zone = macro2L3Zone(mapSlotId);
+  const w = rect.maxX - rect.minX;
+  const d = rect.maxZ - rect.minZ;
+  return {
+    x: rect.minX + w * zone.altarTx,
+    y: rect.minZ + d * zone.altarTz,
+  };
+}
+
+/**
+ * マップスロット湧き敵の待機向き — 祭壇中央を向く（索敵扇とモデル正面を一致）
+ * @param {object} enemy
+ * @param {number} tileW
+ * @param {number} tileD
+ */
+export function moeEnemyFieldIdleFacingYaw(enemy, tileW, tileD) {
+  const offset = moe3dEnemyModelYawOffsetLite(enemy?.key);
+  const slotId = enemy?.mapSlotId ?? enemy?.spawnArea;
+  if (!slotId || !tileW || !tileD) return offset;
+  const altar = moe3dMapSlotAltarWorldPos(slotId, tileW, tileD);
+  if (!altar) return offset;
+  const ex = enemy?.x ?? 0;
+  const ey = enemy?.y ?? 0;
+  return moe3dYawFaceTargetLite(ex, ey, altar.x, altar.y) + offset;
 }
 
 /** マップスロット湧き（ハティル等）— 試作 hills の mid/super 固定座標を使わない */

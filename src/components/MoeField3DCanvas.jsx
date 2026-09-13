@@ -90,6 +90,18 @@ import {
 } from "@/lib/moeField3DModels";
 import { createMoePhoenixTailFireEffect } from "@/lib/moePhoenixTailFireEffect";
 import {
+  checkMoeEnemyPlayerDetection,
+  moeEnemyUsesHearingSearch,
+  moeEnemyUsesVisionSearch,
+  resolveMoeEnemyDetection,
+  sampleMoeEnemyHearingCirclePoints,
+  sampleMoeEnemyVisionArcPoints,
+} from "@/lib/moeEnemyDetection";
+import {
+  isMoeKakureminoActive,
+  MOE_KAKUREMINO_PLAYER_OPACITY,
+} from "@/lib/moePlayerStealth";
+import {
   moe3dDesertPreviewTileIndex,
   MOE_3D_DESERT_SHOWCASE_FAMILIES,
   moe3dDesertMonsterShowcaseSpot,
@@ -116,7 +128,10 @@ import { buildMoe3dLegacyBufferTile } from "@/lib/moe3dLegacyBufferTile";
 import { buildMoe3dAltarVisual } from "@/lib/moe3dAltarVisual";
 import { MOE_ALTARS } from "@/data/moeAltarWarps";
 import { moe3dAltarWorldPos } from "@/lib/moe3dAltarWarp";
-import { moe3dIsMapSlotFieldEnemy } from "@/lib/moe3dMonsterMapSpawns";
+import {
+  moe3dIsMapSlotFieldEnemy,
+  moeEnemyFieldIdleFacingYaw,
+} from "@/lib/moe3dMonsterMapSpawns";
 import {
   MOE_MEERIM_MOUNTAIN_BISON_KEY,
   MOE_MEERIM_ROUGH_BISON_KEY,
@@ -769,6 +784,12 @@ export default function MoeField3DCanvas({
   onRhodaClick,
   onAltarClick,
   targetEnemyId,
+  enemyStatSearchOpen = false,
+  targetEnemyFacingYawRef,
+  enemyChaseRuntimeRef,
+  enemyFieldSyncRef,
+  enemyDetectionOptsRef,
+  playerKakureminoUntilRef,
   petFocused,
   petLabel,
   petId = "sun_spirit",
@@ -802,6 +823,7 @@ export default function MoeField3DCanvas({
     treasures,
     battlePopups,
     targetEnemyId,
+    enemyStatSearchOpen,
     petFocused,
     petLabel,
   });
@@ -835,12 +857,18 @@ export default function MoeField3DCanvas({
   const overlayProjectRefStable = useRef(overlayProjectRef);
   const enemyStrikeVariantRefStable = useRef(enemyStrikeVariantRef);
   const moe3dCombatExtentsRefStable = useRef(moe3dCombatExtentsRef);
+  const targetEnemyFacingYawRefStable = useRef(targetEnemyFacingYawRef);
+  const enemyChaseRuntimeRefStable = useRef(enemyChaseRuntimeRef);
+  const enemyFieldSyncRefStable = useRef(enemyFieldSyncRef);
+  const enemyDetectionOptsRefStable = useRef(enemyDetectionOptsRef);
+  const playerKakureminoUntilRefStable = useRef(playerKakureminoUntilRef);
 
   stateRef.current = {
     enemies,
     treasures,
     battlePopups,
     targetEnemyId,
+    enemyStatSearchOpen,
     petFocused,
     petLabel,
   };
@@ -873,6 +901,11 @@ export default function MoeField3DCanvas({
   overlayProjectRefStable.current = overlayProjectRef;
   enemyStrikeVariantRefStable.current = enemyStrikeVariantRef;
   moe3dCombatExtentsRefStable.current = moe3dCombatExtentsRef;
+  targetEnemyFacingYawRefStable.current = targetEnemyFacingYawRef;
+  enemyChaseRuntimeRefStable.current = enemyChaseRuntimeRef;
+  enemyFieldSyncRefStable.current = enemyFieldSyncRef;
+  enemyDetectionOptsRefStable.current = enemyDetectionOptsRef;
+  playerKakureminoUntilRefStable.current = playerKakureminoUntilRef;
 
   const petIdStable = useRef(petId);
   petIdStable.current = petId;
@@ -950,6 +983,7 @@ export default function MoeField3DCanvas({
     let lastPlayerY =
       playerPosRefStable.current?.current?.y ?? 0;
     let lastPlayerFootY = 0;
+    let lastKakureminoVisual = false;
 
     /** ペット ○（glb 読込前のプレースホルダ） */
     const petMesh = new THREE.Mesh(
@@ -1035,6 +1069,8 @@ export default function MoeField3DCanvas({
     const phoenixTailFire = createMoePhoenixTailFireEffect(scene);
 
     let targetMarker = null;
+    /** @type {{ group: THREE.Group, visionLine: THREE.Line, hearingLine: THREE.LineLoop, visionMat: THREE.LineBasicMaterial, hearingMat: THREE.LineBasicMaterial } | null} */
+    let detectionOverlay = null;
     const enemyUntargetMarkers = new Map();
     let targetHpSprite = null;
     let petLabelSprite = null;
@@ -1139,11 +1175,54 @@ export default function MoeField3DCanvas({
       return moe3dEnemyUiWorldYs(entry, en.key, gy);
     }
 
+    function chaseRuntimeForEnemy(en) {
+      return enemyChaseRuntimeRefStable.current?.current?.[en.id];
+    }
+
+    function applyPlayerStealthVisual(root, stealthActive) {
+      if (!root) return;
+      root.traverse((obj) => {
+        if (!obj.isMesh || !obj.material) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const mat of mats) {
+          if (stealthActive) {
+            mat.transparent = true;
+            mat.opacity = MOE_KAKUREMINO_PLAYER_OPACITY;
+            mat.depthWrite = false;
+          } else {
+            mat.opacity = 1;
+            mat.transparent = false;
+            mat.depthWrite = true;
+          }
+        }
+      });
+    }
+
+    function syncPlayerKakureminoVisual() {
+      const until = playerKakureminoUntilRefStable.current?.current ?? 0;
+      const stealthActive = isMoeKakureminoActive(until, performance.now());
+      if (stealthActive === lastKakureminoVisual) return;
+      lastKakureminoVisual = stealthActive;
+      applyPlayerStealthVisual(playerModel ?? playerPlaceholder, stealthActive);
+    }
+
     function enemyWorldPos(en, entry) {
+      const chaseRt = chaseRuntimeForEnemy(en);
+      if (chaseRt?.aggro) {
+        return { x: chaseRt.x, z: chaseRt.y };
+      }
       return {
         x: entry?.pickAnchor?.x ?? en.x,
         z: entry?.pickAnchor?.z ?? en.y,
       };
+    }
+
+    function enemyDetectionFacingYaw(en, chaseRt, entry) {
+      if (chaseRt?.aggro) return chaseRt.facingYaw;
+      if (fieldTileW > 0 && fieldTileD > 0) {
+        return moeEnemyFieldIdleFacingYaw(en, fieldTileW, fieldTileD);
+      }
+      return entry?.root?.rotation?.y ?? 0;
     }
 
     function syncEnemyNameLabels(enList, targetId) {
@@ -1153,10 +1232,11 @@ export default function MoeField3DCanvas({
         seen.add(en.id);
         const prefix = en.superBoss ? "◆ " : en.midBoss ? "★ " : "";
         const showLv = targetId != null && en.id === targetId;
+        const chasing = Boolean(chaseRuntimeForEnemy(en)?.aggro);
         const displayName = en.mapLabel ?? en.name ?? "";
         const line1 = `${prefix}${String(displayName)}${
-          showLv ? ` Lv.${formatEnemyLevelUi(en.level)}` : ""
-        }`;
+          chasing ? " ‼" : ""
+        }${showLv ? ` Lv.${formatEnemyLevelUi(en.level)}` : ""}`;
         let sprite = enemyNameSprites.get(en.id);
         if (!sprite) {
           const canvas2d = document.createElement("canvas");
@@ -1184,7 +1264,7 @@ export default function MoeField3DCanvas({
         ctx.lineWidth = 3;
         const textX = canvas2d.width / 2;
         ctx.strokeText(line1, textX, 20);
-        ctx.fillStyle = showLv ? "#bfdbfe" : "#ffffff";
+        ctx.fillStyle = chasing ? "#fca5a5" : showLv ? "#bfdbfe" : "#ffffff";
         ctx.fillText(line1, textX, 20);
         sprite.material.map.needsUpdate = true;
         const entry = enemyMeshes.get(en.id);
@@ -1419,6 +1499,149 @@ export default function MoeField3DCanvas({
       );
     }
 
+    function ensureDetectionOverlay() {
+      if (detectionOverlay) return detectionOverlay;
+      const group = new THREE.Group();
+      const visionMat = new THREE.LineBasicMaterial({
+        color: 0xfbbf24,
+        transparent: true,
+        opacity: 0.58,
+        depthTest: true,
+      });
+      const hearingMat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.42,
+        depthTest: true,
+      });
+      const visionLine = new THREE.Line(new THREE.BufferGeometry(), visionMat);
+      const hearingLine = new THREE.LineLoop(
+        new THREE.BufferGeometry(),
+        hearingMat
+      );
+      visionLine.frustumCulled = false;
+      hearingLine.frustumCulled = false;
+      group.add(visionLine, hearingLine);
+      scene.add(group);
+      detectionOverlay = {
+        group,
+        visionLine,
+        hearingLine,
+        visionMat,
+        hearingMat,
+      };
+      return detectionOverlay;
+    }
+
+    function syncTargetEnemyFacingYaw(enList, targetId) {
+      const yawOut = targetEnemyFacingYawRefStable.current;
+      if (!yawOut) return;
+      if (targetId == null) {
+        yawOut.current = 0;
+        return;
+      }
+      const en = enList.find((e) => e.id === targetId && e.hp > 0);
+      if (!en) {
+        yawOut.current = 0;
+        return;
+      }
+      const entry = enemyMeshes.get(en.id);
+      const chaseRt = chaseRuntimeForEnemy(en);
+      yawOut.current = enemyDetectionFacingYaw(en, chaseRt, entry);
+    }
+
+    function syncEnemyDetectionOverlay(enList, targetId, statSearchOpen, playerPos) {
+      if (!statSearchOpen || targetId == null) {
+        if (detectionOverlay) detectionOverlay.group.visible = false;
+        return;
+      }
+      const en = enList.find((e) => e.id === targetId && e.hp > 0);
+      if (!en) {
+        if (detectionOverlay) detectionOverlay.group.visible = false;
+        return;
+      }
+      const overlay = ensureDetectionOverlay();
+      overlay.group.visible = true;
+      const entry = enemyMeshes.get(en.id);
+      const { x, z } = enemyWorldPos(en, entry);
+      const gy = heightAt(x, z);
+      const y = gy + 0.14;
+      const chaseRt = chaseRuntimeForEnemy(en);
+      const facingYaw = enemyDetectionFacingYaw(en, chaseRt, entry);
+      const det = resolveMoeEnemyDetection(en);
+      const detectOpts =
+        enemyDetectionOptsRefStable.current?.current ?? {};
+      const detect = checkMoeEnemyPlayerDetection(
+        en,
+        playerPos,
+        { x, y: z },
+        facingYaw,
+        detectOpts
+      );
+      const chasing = Boolean(chaseRt?.aggro);
+      const soundMult = detectOpts.soundMult ?? 1;
+      const toVec3 = (p) => new THREE.Vector3(p.x, p.y, p.z);
+
+      const showVision = moeEnemyUsesVisionSearch(det);
+      if (showVision) {
+        const arcPts = sampleMoeEnemyVisionArcPoints({
+          cx: x,
+          cz: z,
+          facingYaw,
+          visionDeg: det.visionDeg,
+          visionRange: det.visionRange,
+          y,
+        }).map(toVec3);
+        overlay.visionLine.geometry.dispose();
+        overlay.visionLine.geometry = new THREE.BufferGeometry().setFromPoints(
+          arcPts
+        );
+        overlay.visionLine.visible = true;
+        if (chasing) {
+          overlay.visionMat.color.setHex(0xfb923c);
+          overlay.visionMat.opacity = 0.78;
+        } else {
+          const visionHit = detect.via.includes("visual");
+          overlay.visionMat.color.setHex(visionHit ? 0xf87171 : 0xfbbf24);
+          overlay.visionMat.opacity = visionHit ? 0.82 : 0.55;
+        }
+      } else {
+        overlay.visionLine.visible = false;
+      }
+
+      const showHearing = moeEnemyUsesHearingSearch(det);
+      if (showHearing) {
+        // 忍び足でも敵の基準足音射程は表示（判定のみ soundMult で短縮）
+        const hearingRange = det.hearingRange;
+        const circlePts = sampleMoeEnemyHearingCirclePoints({
+          cx: x,
+          cz: z,
+          hearingRange,
+          y,
+        }).map(toVec3);
+        overlay.hearingLine.geometry.dispose();
+        overlay.hearingLine.geometry = new THREE.BufferGeometry().setFromPoints(
+          circlePts
+        );
+        overlay.hearingLine.visible = true;
+        const hearingHit = detect.via.includes("hearing");
+        const quietFootsteps = soundMult <= 0;
+        if (chasing) {
+          overlay.hearingMat.color.setHex(0xfb923c);
+          overlay.hearingMat.opacity = 0.55;
+        } else {
+          overlay.hearingMat.color.setHex(hearingHit ? 0x22d3ee : 0x38bdf8);
+          overlay.hearingMat.opacity = hearingHit
+            ? 0.72
+            : quietFootsteps
+              ? 0.3
+              : 0.38;
+        }
+      } else {
+        overlay.hearingLine.visible = false;
+      }
+    }
+
     function createPetFocusMarker() {
       return createCrystalMarkerSprite();
     }
@@ -1495,6 +1718,8 @@ export default function MoeField3DCanvas({
     let lastPointerX = 0;
     let lastPointerY = 0;
     let mapReady = false;
+    let fieldTileW = 0;
+    let fieldTileD = 0;
     let midBossTerrainPos = null;
     let superBossTerrainPos = null;
     let mountainBisonTerrainPos = null;
@@ -1698,6 +1923,8 @@ export default function MoeField3DCanvas({
         const size = box.getSize(new THREE.Vector3());
         const tileWidth = Math.max(size.x, 0.1);
         const tileDepth = Math.max(size.z, 0.1);
+        fieldTileW = tileWidth;
+        fieldTileD = tileDepth;
         const layoutW = moe3dLayoutTileW(tileWidth);
         const layoutD = moe3dLayoutTileD(tileDepth);
 
@@ -2354,6 +2581,8 @@ export default function MoeField3DCanvas({
         enableShadows(playerModel);
         playerRoot.add(playerModel);
         playerPlaceholder.visible = false;
+        lastKakureminoVisual = false;
+        syncPlayerKakureminoVisual();
         playerMixer = new THREE.AnimationMixer(playerModel);
         playerAnimCtrl = createSnakeAnimController(playerMixer, gltf.animations, {
           attackLoop: false,
@@ -2588,8 +2817,9 @@ export default function MoeField3DCanvas({
           enemyMeshes.set(en.id, entry);
           enemyGroup.add(entry.root);
         }
-        let px = en.x;
-        let pz = en.y;
+        const chaseRt = chaseRuntimeForEnemy(en);
+        let px = chaseRt?.aggro ? chaseRt.x : en.x;
+        let pz = chaseRt?.aggro ? chaseRt.y : en.y;
         const legacyBossArena =
           (en.midBoss || en.superBoss) && !moe3dIsMapSlotFieldEnemy(en);
         if (en.superBoss && superBossTerrainPos && legacyBossArena) {
@@ -2668,11 +2898,23 @@ export default function MoeField3DCanvas({
             entry.postCombatPose = null;
             entry.postCombatYaw = null;
             entry.root.position.set(px, baseY, pz);
+            if (chaseRt?.aggro) {
+              entry.root.rotation.y =
+                chaseRt.facingYaw + moe3dEnemyModelYawOffset(en.key);
+            } else if (!postCombatSettling) {
+              entry.root.rotation.y = enemyDetectionFacingYaw(
+                en,
+                chaseRt,
+                entry
+              );
+            }
           }
         }
         const sc = moe3dEnemyDisplayScale(en);
+        // sc=1 は「fit 済みスケールを維持」。mountain/rough バイソンだけ sc が絶対高さ
         if (
           !entry.scaleLocked &&
+          sc !== 1 &&
           entry.lastDisplayScale !== sc
         ) {
           entry.root.scale.setScalar(sc);
@@ -2687,6 +2929,14 @@ export default function MoeField3DCanvas({
         });
         entry.root.visible = en.hp > 0;
         entry.pickAnchor = { x: px, groundY: baseY, z: pz };
+        const fieldSyncRef = enemyFieldSyncRefStable.current;
+        if (fieldSyncRef?.current && en.hp > 0) {
+          fieldSyncRef.current[en.id] = {
+            x: px,
+            y: pz,
+            idleFacingYaw: enemyDetectionFacingYaw(en, chaseRt, entry),
+          };
+        }
         const gustavIdle =
           en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY &&
           !lockCombat &&
@@ -2707,6 +2957,10 @@ export default function MoeField3DCanvas({
         if (!seen.has(id)) {
           removeEnemyEntry(id, entry);
           enemyMeshes.delete(id);
+          const fieldSyncRef = enemyFieldSyncRefStable.current;
+          if (fieldSyncRef?.current) {
+            delete fieldSyncRef.current[id];
+          }
         }
       }
       const extRef = moe3dCombatExtentsRefStable.current;
@@ -2798,9 +3052,11 @@ export default function MoeField3DCanvas({
           duel?.phase === "simultaneous_charge" && duel.enemyId === id;
 
         if (!isDuelEnemy) {
-          if (enemyAnimModes.get(id) !== "idle") {
-            entry.animCtrl.setMode("idle");
-            enemyAnimModes.set(id, "idle");
+          const chaseRt = chaseRuntimeForEnemy({ id });
+          const chaseMode = chaseRt?.aggro ? "run" : "idle";
+          if (enemyAnimModes.get(id) !== chaseMode) {
+            entry.animCtrl.setMode(chaseMode);
+            enemyAnimModes.set(id, chaseMode);
           }
           continue;
         }
@@ -3079,6 +3335,7 @@ export default function MoeField3DCanvas({
         treasures: trs,
         battlePopups: pops,
         targetEnemyId: targetId,
+        enemyStatSearchOpen: statSearchOpen,
         petFocused: petFocus,
         petLabel: petLbl,
       } = stateRef.current;
@@ -3108,6 +3365,8 @@ export default function MoeField3DCanvas({
       syncPetLabel(pt, petLbl, petFocus);
       syncUntargetMarkers(ens, targetId);
       syncTargetMarker(ens, targetId);
+      syncTargetEnemyFacingYaw(ens, targetId);
+      syncEnemyDetectionOverlay(ens, targetId, statSearchOpen, pl);
       syncPetAnimation(pt, dt);
       syncEnemyAnimations();
       syncDuelFacing(ens, pt, dt);
@@ -3143,6 +3402,7 @@ export default function MoeField3DCanvas({
       const jumpY = playerJumpRefStable.current?.current?.offset ?? 0;
       const playerYOffset = playerModel ? playerGroundLift : PLAYER_HEIGHT;
       playerRoot.position.set(pl.x, pgY + playerYOffset + jumpY, pl.y);
+      syncPlayerKakureminoVisual();
 
       const facingRef = playerFacingRefStable.current;
       if (facingRef) {

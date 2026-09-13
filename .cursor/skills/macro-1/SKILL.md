@@ -114,7 +114,7 @@ GLB 未実装の公式敵は **先にモデル化** → その後湧き。仮の
 ## 参照ファイル
 
 - レジストリ: `src/data/moeMonsterFieldRegistry.js`
-- 湧き: `src/lib/moe3dMonsterMapSpawns.js` · `src/data/moeHatiilDesertPlanned.js`
+- 湧き: `src/lib/moe3dMonsterMapSpawns.js` · `src/data/maps/*Planned.js`
 - 第3フェーズ Wiki メモ: `src/data/moeMacro1Phase3AreaWiki.js` · `src/data/moeMacro1Phase3Spawns.js`
 - ビルダー: `scripts/monsters/monsterTypeBuilders.mjs`
 - カタログ: `scripts/monsters/monsterVariantCatalog.mjs`

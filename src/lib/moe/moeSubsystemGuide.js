@@ -104,16 +104,106 @@ export const MOE_SUBSYSTEMS = {
   },
 
   skillPanels: {
-    purpose: "縦・横スキルパネル。player1 / player2 / pet モード切替とスロット表示。",
+    purpose:
+      "縦・横スキルパネル。player1（回復等） / player2（フェニックス） / player3（調査） / pet のモード切替。",
     layer: "ui",
     stateOwner: "各パネル (useMoeSkillPanelMode + useMoeDraggablePos)",
     files: [
       "src/lib/moeSkillPanelModeSettings.js",
       "src/components/MoeMergedSkillIconBar.jsx",
       "src/components/MoeMergedVerticalSkillPanel.jsx",
+      "src/components/MoeSkillPanelSwitcher.jsx",
       "src/lib/moePlayerSkillSlotUi.js",
+      "src/data/moePlayerSkillSlotOrder.js",
+      "src/data/moePlayerUtilitySkills.js",
     ],
     doNot: ["パネル内にスキル効果ロジックを書かない → lib + MoeFieldMap handler"],
+    related: ["enemyStatSearch", "playerUtilitySkills"],
+  },
+
+  playerUtilitySkills: {
+    purpose: "プレイヤー技③ — 調査・支援系スキル枠（敵ステサーチなど）。",
+    layer: "pure",
+    stateOwner: "moePlayerUtilitySkills.js + MoeFieldMap handler",
+    files: [
+      "src/data/moePlayerUtilitySkills.js",
+      "src/lib/moePlayerSkillSlotUi.js (buildPlayerUtilitySkillSlotEntry)",
+    ],
+    doNot: ["技①の10枠に詰め込まない → 技③専用"],
+    related: ["skillPanels", "enemyStatSearch"],
+  },
+
+  enemyStatSearch: {
+    purpose:
+      "敵ステサーチ — HP/MP/攻撃/スキル + 索敵（視野・聴覚・タイプ）。検知対象はプレイヤー。",
+    layer: "pure",
+    stateOwner: "MoeFieldMap (enemyStatSearchOpen) + buildMoeEnemyStatSearchView",
+    files: [
+      "src/lib/moeEnemyStatSearch.js",
+      "src/lib/moeEnemyDetection.js",
+      "src/lib/moeEnemyFieldActive.js",
+      "src/components/MoeEnemyStatSearchPanel.jsx",
+      "src/data/moePlayerUtilitySkills.js",
+    ],
+    doNot: [
+      "enemyTargeting と混同しない（ターゲット選択は先に必要）",
+      "表示ロジックを MoeField3DCanvas に書かない",
+      "第2段: 扇形表示・追跡は moeEnemyDetection + Canvas",
+    ],
+    related: ["enemyTargeting", "playerUtilitySkills", "skillPanels", "petCommands"],
+  },
+
+  enemyDetection: {
+    purpose:
+      "敵索敵 — 前方視野（扇形）+ 足音（聴覚）。追跡（aggro）。アクティブのみ先制追跡 · ノンアクティブは検知のみ。忍び足=足音抑制 · 隠れ蓑=完全ステルス+ヘイト解除。",
+    layer: "pure",
+    stateOwner: "moeEnemyDetection.js + moeEnemyFieldChase.js",
+    files: [
+      "src/lib/moeEnemyDetection.js",
+      "src/lib/moeEnemyFieldActive.js",
+      "src/lib/moeEnemyFieldChase.js",
+      "src/lib/moePlayerStealth.js",
+      "src/data/moeMonsterFieldRegistry.js",
+    ],
+    doNot: [
+      "ペット索敵と混同しない（MOE操作はプレイヤー主体）",
+      "ヘイト（戦闘優先度）と aggro（フィールド追跡）を混同しない",
+      "扇形描画を stat search パネルに書かない → MoeField3DCanvas",
+    ],
+    related: ["enemyStatSearch", "petCommands"],
+  },
+
+  petCommands: {
+    purpose:
+      "ペット命令（もどれ・待て・座れ・オート・攻撃）と SOS 脱出。戦闘キャンセル時の3Dロック解除。",
+    layer: "orchestrator",
+    stateOwner: "MoeFieldMap (petCommandRef / duelCombatSessionRef)",
+    files: [
+      "src/components/MoeFieldMap.jsx (handlePetComeBack / emergencyUnstuck3d)",
+      "src/components/MoeField3DCanvas.jsx (duelCombatSessionRef で戦闘ビジュアル解除)",
+    ],
+    doNot: [
+      "戻れ時に petCombatPosLock を残さない",
+      "SOS は 3D 専用（warpPlayer3d + snapPet3dNearPlayer）",
+    ],
+    related: ["fieldCanvas", "enemyTargeting"],
+  },
+
+  mapPlannedData: {
+    purpose: "マクロ１ — マップ別の公式敵・湧き座標（1マップ1ファイル）。",
+    layer: "pure",
+    stateOwner: "src/data/maps/*Planned.js",
+    files: [
+      "src/data/maps/moeAlbeezForestPlanned.js",
+      "src/data/maps/moeElanPalacePlanned.js",
+      "src/data/maps/moeHatiilDesertPlanned.js",
+      "src/data/maps/moeNeokuMountainPlanned.js",
+      "src/data/maps/moeSulfurMinePlanned.js",
+      "src/data/moeMonsterFieldRegistry.js",
+      "src/lib/moe3dMonsterMapSpawns.js",
+    ],
+    doNot: ["他マップの敵を流用しない → Wiki 湧き一覧どおり"],
+    related: ["macro3SimpleMountains"],
   },
 
   persistence: {

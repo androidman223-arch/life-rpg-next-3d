@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import MoeBuffIconStrip from "@/components/MoeBuffIconStrip";
 import {
   displayMoePlayerStamina,
   moeVitalBarPct,
 } from "@/lib/moePlayerVitals";
+import { MOE_PLAYER_BUFF_COLUMNS } from "@/lib/moeBuffUi";
 
 const WINDOW_W = 130;
 const SIDE_CAP_W = 7;
@@ -96,6 +98,7 @@ export default function MoePlayerHpWindow({
   staminaMax,
   mp,
   mpMax,
+  buffSlots = [],
   allySelected = false,
   onSelectAllyTarget,
 }) {
@@ -241,6 +244,12 @@ export default function MoePlayerHpWindow({
             displayText={`MP ${mp}/${mpMax}`}
           />
         </div>
+        <div className="h-[3px] shrink-0 bg-black" aria-hidden />
+        <MoeBuffIconStrip
+          slots={buffSlots}
+          columns={MOE_PLAYER_BUFF_COLUMNS}
+          rows={1}
+        />
       </div>
     </div>
   );
