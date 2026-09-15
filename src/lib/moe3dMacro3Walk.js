@@ -51,6 +51,7 @@ function raycastTerrain(raycaster, terrainGroup) {
  * @param {THREE.Intersection} hit
  */
 export function moe3dIsTerrainWallHit(hit) {
+  if (hit.object?.userData?.moeWalkDecor) return false;
   if (hit.object?.userData?.moeTerrainCollider) return true;
   const ny = hit.normal?.y ?? 1;
   return ny < 0.45;

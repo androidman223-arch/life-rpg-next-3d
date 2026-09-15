@@ -14,6 +14,65 @@ import {
   PLAYER_CONDENSE_MIND_MP_COST,
 } from "../../src/lib/moe/moeCondenseMindRules.js";
 import {
+  activateJirikiSeiran,
+  canUseJirikiSeiran,
+  JIRIKI_SEIRAN_BOOST_MP_PER_SEC,
+  JIRIKI_SEIRAN_MP_COST,
+  JIRIKI_SEIRAN_NORMAL_MP_PER_SEC,
+  JIRIKI_SEIRAN_TOTAL_SEC,
+  syncJirikiSeiranPhase,
+} from "../../src/lib/moePlayerJirikiSeiran.js";
+import { resolvePhoenixHabitAscensionSequence } from "../../src/lib/moePhoenixHabitAscension.js";
+import {
+  applyPlayerPreSkillExp,
+  awardPlayerPreSkillExpOnUse,
+  canUsePlayerPreSkill,
+  defaultPlayerPreSkillProgressMap,
+  MOE_PLAYER_SKILL_EXP_PER_TENTH,
+  moePlayerSkillExpGainAmount,
+  rollPlayerPreSkillExpOnUse,
+} from "../../src/lib/moePlayerPreSkillProgress.js";
+import { nextMoePlayerSummonFxRequest } from "../../src/lib/moePlayerSummonPrefetch.js";
+import { MOE_PLAYER_PRE_SKILLS } from "../../src/data/moePlayerPreSkills.js";
+import { MOE_PLAYER_SKILL2_ONLY_SKILLS } from "../../src/data/moePlayerSkill2Skills.js";
+import {
+  applyPlayerSkill2Exp,
+  canUsePlayerSkill2,
+  moePlayerSkill2ExpGainAmount,
+} from "../../src/lib/moePlayerSkill2Progress.js";
+import { resolvePlayerSkill2ExpProcRate } from "../../src/lib/moePlayerSkill2Talisman.js";
+import {
+  MOE_BGM_TRACK,
+  MOE_FIELD_COMBAT_BGM,
+  moeFieldBgmTrackForMapSlot,
+} from "../../src/lib/moeFieldBgmMap.js";
+import {
+  describeMoeExternalSavePlace,
+  formatMoeExternalSavePlaceStatus,
+} from "../../src/lib/moeExternalSaveLabels.js";
+import {
+  MOE_PLAYER_SUMMON_MODELS,
+  moePlayerSummonModelForSkill,
+} from "../../src/data/moePlayerSummonModels.js";
+import {
+  resolveJirikiKaihouSequence,
+  resolveJirikiSeiryuSequence,
+  validatePlayerSummonPreSkillCombat,
+} from "../../src/lib/moePlayerSummonSkills.js";
+import {
+  buildPlayerPreSkillActivation,
+  formatPlayerPreSkillCombatLine,
+} from "../../src/lib/moePlayerPreSkillActivate.js";
+import {
+  defaultPlayerUtilitySlotOrder,
+  MOE_PLAYER_UTILITY_SLOT_KEYS,
+} from "../../src/data/moePlayerUtilitySkills.js";
+import {
+  isMoeAmbientValidTrackId,
+  moeAmbientBgmPathForTrackId,
+} from "../../src/lib/moeAmbientBgmTracks.js";
+import { buildMoeExternalSaveFilename } from "../../src/lib/moeExternalSave.js";
+import {
   loadMoeAllyTarget,
   saveMoeAllyTarget,
   MOE_ALLY_TARGET_STORAGE_KEY,
@@ -34,6 +93,23 @@ import {
   moe3dClampMoveAgainstBoxColliders,
   moe3dCircleHitsBox,
 } from "../../src/lib/moe3dBoxColliderMath.js";
+import {
+  buildElanPalaceMazeSpec,
+  elanPalaceMazeActiveSpawnCoords,
+  elanPalaceMazeAltarNorm,
+  elanPalaceMazeBlocksPoint,
+  elanPalaceMazeSpawnPlan,
+  MOE_ELAN_PALACE_MAZE_CORRIDOR_PLAYER_COUNT,
+  MOE_ELAN_PALACE_MAZE_GAP_CORNER,
+} from "../../src/lib/moe3dElanPalaceMazeLayout.js";
+import {
+  buildSulfurMineMazeSpec,
+  sulfurMineMazeActiveSpawnCoords,
+  sulfurMineMazeAltarNorm,
+  sulfurMineMazeBlocksPoint,
+  sulfurMineMazeSpawnPlan,
+} from "../../src/lib/moe3dSulfurMineMazeLayout.js";
+import { moeMacro3MountainSpecsForSlot } from "../../src/lib/moe3dMacro3MountainRegistry.js";
 import {
   moe3dCircleHitsColumn,
   moe3dClampMoveAgainstColumnColliders,
@@ -69,6 +145,10 @@ import {
   moeMacro1OfficialSpawnIssues,
   moeMacro1RegistryIssues,
 } from "../../src/lib/moe/moeMacro1OfficialCheck.js";
+import {
+  moePetTrainingGuideSectionsFromEntries,
+  moePetTrainingLevelLabel,
+} from "../../src/lib/moePetTrainingGuideCore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -148,6 +228,18 @@ describe("skill panel mode", () => {
 });
 
 describe("player vitals", () => {
+  it("starts at 100 hp/mp max for trainer level 1", async () => {
+    const { moePlayerVitalsMaxForLevel, fullHealMoePlayerVitals } = await import(
+      "../../src/lib/moePlayerVitals.js"
+    );
+    const maxes = moePlayerVitalsMaxForLevel(1);
+    assert.equal(maxes.hpMax, 100);
+    assert.equal(maxes.mpMax, 100);
+    const healed = fullHealMoePlayerVitals(1);
+    assert.equal(healed.hp, 100);
+    assert.equal(healed.mp, 100);
+  });
+
   it("recovers hp stamina mp every tick when below max", () => {
     const base = {
       hp: 10,
@@ -258,6 +350,134 @@ describe("box colliders", () => {
   });
 });
 
+describe("elan palace maze", () => {
+  const tileW = 180;
+  const tileD = 90;
+
+  it("plans spiral spawn zones for all maze rings", () => {
+    const plan = elanPalaceMazeSpawnPlan(tileW, tileD);
+    assert.equal(plan.length, 17);
+    assert.equal(plan[0]?.key, "elan_knight_white");
+    assert.equal(plan[4]?.key, "giant_destroyer");
+    assert.equal(plan.at(-1)?.key, "dullahan");
+  });
+
+  it("builds a multi-ring spiral with wide corridors", () => {
+    const spec = buildElanPalaceMazeSpec(tileW, tileD);
+    assert.ok(spec.ringCount >= 4);
+    assert.ok(spec.walls.length >= 20);
+    assert.equal(
+      MOE_ELAN_PALACE_MAZE_CORRIDOR_PLAYER_COUNT,
+      15
+    );
+    assert.ok(spec.corridor > 0.02);
+  });
+
+  it("keeps sw altar corner, courtyard, and spawn pads walkable", () => {
+    const spec = buildElanPalaceMazeSpec(tileW, tileD);
+    const altar = elanPalaceMazeAltarNorm(tileW, tileD);
+    assert.equal(MOE_ELAN_PALACE_MAZE_GAP_CORNER, 3);
+    assert.equal(
+      elanPalaceMazeBlocksPoint(altar.altarTx, altar.altarTz, spec.walls, 0.02),
+      false
+    );
+    assert.equal(
+      elanPalaceMazeBlocksPoint(0.5, 0.5, spec.walls),
+      false
+    );
+    for (const spawn of elanPalaceMazeActiveSpawnCoords(tileW, tileD)) {
+      assert.equal(
+        elanPalaceMazeBlocksPoint(spawn.tx, spawn.tz, spec.walls, 0.012),
+        false,
+        `spawn blocked @ ${spawn.tx},${spawn.tz}`
+      );
+    }
+  });
+
+  it("blocks cutting through a maze wall segment", () => {
+    const spec = buildElanPalaceMazeSpec(tileW, tileD);
+    const wall = spec.walls[0];
+    const midTx = (wall.minTx + wall.maxTx) * 0.5;
+    const midTz = (wall.minTz + wall.maxTz) * 0.5;
+    assert.equal(elanPalaceMazeBlocksPoint(midTx, midTz, spec.walls), true);
+  });
+
+  it("blocks shortcut across inner hole plugs but keeps courtyard open", () => {
+    const spec = buildElanPalaceMazeSpec(tileW, tileD);
+    assert.equal(
+      elanPalaceMazeBlocksPoint(0.5, 0.75, spec.walls, 0.02),
+      true
+    );
+    assert.equal(elanPalaceMazeBlocksPoint(0.5, 0.5, spec.walls), false);
+  });
+
+  it("field collider helper slides on elan palace walls", () => {
+    const spec = buildElanPalaceMazeSpec(tileW, tileD);
+    const wall = spec.walls.find(
+      (w) => w.maxTx - w.minTx > w.maxTz - w.minTz
+    );
+    assert.ok(wall);
+    const frameMinX = -200;
+    const frameMinZ = -100;
+    const box = {
+      minX: frameMinX + tileW * 1.7 * wall.minTx,
+      maxX: frameMinX + tileW * 1.7 * wall.maxTx,
+      minZ: frameMinZ + tileD * 1.7 * wall.minTz,
+      maxZ: frameMinZ + tileD * 1.7 * wall.maxTz,
+    };
+    const beforeZ = (box.minZ + box.maxZ) * 0.5;
+    const next = moe3dClampMoveAgainstBoxColliders(
+      box.minX - 2,
+      beforeZ,
+      box.maxX + 2,
+      beforeZ,
+      [box],
+      0.55
+    );
+    assert.ok(next.x < box.minX);
+  });
+});
+
+describe("sulfur mine maze", () => {
+  const tileW = 180;
+  const tileD = 90;
+
+  it("plans fire temple spawn zones for bone knights and salamander", () => {
+    const plan = sulfurMineMazeSpawnPlan(tileW, tileD);
+    assert.equal(plan.length, 6);
+    assert.equal(plan[0]?.key, "elan_knight_white");
+    assert.equal(plan[2]?.key, "elan_knight_black");
+    assert.equal(plan[4]?.key, "salamander");
+    assert.equal(plan[4]?.center, true);
+  });
+
+  it("reuses elan palace spiral geometry with wide corridors", () => {
+    const spec = buildSulfurMineMazeSpec(tileW, tileD);
+    const elan = buildElanPalaceMazeSpec(tileW, tileD);
+    assert.equal(spec.ringCount, elan.ringCount);
+    assert.equal(spec.walls.length, elan.walls.length);
+    assert.equal(spec.corridor, elan.corridor);
+  });
+
+  it("keeps sw altar corner, courtyard, and spawn pads walkable", () => {
+    const spec = buildSulfurMineMazeSpec(tileW, tileD);
+    const altar = sulfurMineMazeAltarNorm(tileW, tileD);
+    assert.equal(
+      sulfurMineMazeBlocksPoint(altar.altarTx, altar.altarTz, spec.walls, 0.02),
+      false
+    );
+    assert.equal(sulfurMineMazeBlocksPoint(0.5, 0.5, spec.walls), false);
+    for (const spawn of sulfurMineMazeActiveSpawnCoords(tileW, tileD)) {
+      assert.equal(
+        sulfurMineMazeBlocksPoint(spawn.tx, spawn.tz, spec.walls, 0.012),
+        false,
+        `spawn blocked @ ${spawn.tx},${spawn.tz}`
+      );
+    }
+  });
+
+});
+
 describe("macro3 simple mountain", () => {
   it("names stem and dome blocks", () => {
     assert.equal(MOE_SIMPLE_MOUNTAIN_STEM_NAME, "macro3-simple-mountain-stem");
@@ -282,34 +502,20 @@ describe("macro3 simple mountain", () => {
     assert.equal(boneBlack?.climbTint, 0x44403c);
   });
 
-  it("keeps sulfur mine altar spawn outside green colliders", () => {
-    const spawnX = 0;
-    const spawnZ = 0.08;
-    const cols = moeGreenColliderSpecs(
-      MOE_SULFUR_MINE_MOUNTAINS,
-      MOE_GREEN_COLLIDER_OUTSET
-    );
-    for (const col of cols) {
-      const dx = (spawnX - col.cx) / col.rx;
-      const dz = (spawnZ - col.cz) / col.rz;
-      assert.ok(
-        Math.hypot(dx, dz) > 1.05,
-        "altar spawn must not sit inside a mountain collider"
-      );
-    }
+  it("no longer mounts sulfur mine on macro3 mountain colliders", () => {
+    assert.equal(moeMacro3MountainSpecsForSlot("sulfur_mine").length, 0);
   });
 
   it("builds climbable 3-tier peaks without green colliders", () => {
     const climbSpecs = [
       ...MOE_DESERT_PREVIEW_MOUNTAINS,
-      ...MOE_SULFUR_MINE_MOUNTAINS,
       ...MOE_HATIIL_DESERT_MOUNTAINS,
       ...MOE_NEOUKU_MOUNTAIN_MOUNTAINS,
       ...MOE_NEOUKU_PLATEAU_MOUNTAINS,
       ...MOE_DARIN_MOUNTAIN_MOUNTAINS,
       ...MOE_ELVIN_MOUNTAINS_MOUNTAINS,
     ].filter((s) => s.climbable);
-    assert.equal(climbSpecs.length, 9);
+    assert.equal(climbSpecs.length, 6);
     for (const spec of climbSpecs) {
       assert.equal(spec.climbTiers ?? MOE_CLIMB_TIER_COUNT, 3);
       assert.equal(spec.gentle, true);
@@ -442,26 +648,29 @@ describe("macro1 neoku mountain official check", () => {
 });
 
 describe("macro1 elan palace official check", () => {
-  const elanSpawns = [
-    { mapSlotId: "elan_palace", key: "elan_knight_white", modelVariantId: "elan_knight_white_a" },
-    { mapSlotId: "elan_palace", key: "elan_knight_black", modelVariantId: "elan_knight_black_a" },
-    { mapSlotId: "elan_palace", key: "elan_knight_white", modelVariantId: "elan_knight_white_b" },
-    { mapSlotId: "elan_palace", key: "elan_knight_black", modelVariantId: "elan_knight_black_b" },
-  ];
+  const elanSpawns = elanPalaceMazeSpawnPlan().map((entry) => ({
+    mapSlotId: "elan_palace",
+    key: entry.key,
+    modelVariantId: `${entry.key}_${entry.variant ?? "a"}`,
+  }));
   const elanRegistry = [
-    {
-      key: "elan_knight_white",
-      mapSlotId: "elan_palace",
-      modelFile: "ElanKnightWhiteA.glb",
-      skills: ["チャージドスラッシュ"],
-    },
-    {
-      key: "elan_knight_black",
-      mapSlotId: "elan_palace",
-      modelFile: "ElanKnightBlackA.glb",
-      skills: ["チャージドスラッシュ"],
-    },
-  ];
+    "elan_knight_white",
+    "elan_knight_black",
+    "giant_destroyer",
+    "frost_wolf",
+    "gargoyle_lord",
+    "gargoyle_lord_strong",
+    "lizardman_soldier",
+    "lizardman_mage",
+    "lizardman_captain",
+    "minotaur_boss",
+    "dullahan",
+  ].map((key) => ({
+    key,
+    mapSlotId: "elan_palace",
+    modelFile: "Placeholder.glb",
+    skills: ["placeholder"],
+  }));
 
   it("passes wiki spawn and registry official checks", () => {
     const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.elan_palace;
@@ -475,19 +684,16 @@ describe("macro1 elan palace official check", () => {
     const registryIssues = moeMacro1RegistryIssues(elanRegistry, "elan_palace");
     assert.deepEqual(spawnIssues, []);
     assert.deepEqual(registryIssues, []);
-    assert.equal(elanSpawns.length, 4);
+    assert.equal(elanSpawns.length, 17);
   });
 });
 
 describe("macro1 sulfur mine official check", () => {
-  const sulfurSpawns = [
-    { mapSlotId: "sulfur_mine", key: "elan_knight_white", modelVariantId: "elan_knight_white_a" },
-    { mapSlotId: "sulfur_mine", key: "elan_knight_black", modelVariantId: "elan_knight_black_a" },
-    { mapSlotId: "sulfur_mine", key: "salamander", modelVariantId: "salamander_a" },
-    { mapSlotId: "sulfur_mine", key: "elan_knight_white", modelVariantId: "elan_knight_white_b" },
-    { mapSlotId: "sulfur_mine", key: "elan_knight_black", modelVariantId: "elan_knight_black_b" },
-    { mapSlotId: "sulfur_mine", key: "salamander", modelVariantId: "salamander_b" },
-  ];
+  const sulfurSpawns = sulfurMineMazeSpawnPlan().map((entry) => ({
+    mapSlotId: "sulfur_mine",
+    key: entry.key,
+    modelVariantId: `${entry.key}_${entry.variant ?? "a"}`,
+  }));
   const sulfurRegistry = [
     {
       key: "elan_knight_white",
@@ -546,6 +752,258 @@ describe("macro1 sulfur mine official check", () => {
       assert.ok(fs.existsSync(full), `missing ${file}`);
       assert.ok(fs.statSync(full).size > 1000, `${file} too small`);
     }
+  });
+});
+
+describe("macro1 neoku plateau official check", () => {
+  const plateauSpawns = [
+    { mapSlotId: "neoku_plateau", key: "young_orvan", modelVariantId: "neoku_orvan_a" },
+    { mapSlotId: "neoku_plateau", key: "neoku_orvan_plateau", modelVariantId: "neoku_orvan_b" },
+    { mapSlotId: "neoku_plateau", key: "guard_nocker", modelVariantId: "nocker_a" },
+  ];
+  const plateauRegistry = [
+    { key: "young_orvan", mapSlotId: "neoku_plateau", modelFile: "NeokuOrvanA.glb", skills: ["タックル"] },
+    { key: "neoku_orvan_plateau", mapSlotId: "neoku_plateau", modelFile: "NeokuOrvanB.glb", skills: ["バイト"] },
+    { key: "guard_nocker", mapSlotId: "neoku_plateau", modelFile: "NockerA.glb", skills: ["スニークアタック"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.neoku_plateau;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("neoku_plateau", plateauSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(plateauRegistry, "neoku_plateau"), []);
+  });
+});
+
+describe("macro1 darin mountain official check", () => {
+  const darinSpawns = [
+    { mapSlotId: "darin_mountain", key: "dain_rat", modelVariantId: "meerim_rat_b" },
+    { mapSlotId: "darin_mountain", key: "dain_orc_guard", modelVariantId: "orc_gang_a" },
+    { mapSlotId: "darin_mountain", key: "dain_orc_elite", modelVariantId: "orc_gang_b" },
+  ];
+  const darinRegistry = [
+    { key: "dain_rat", mapSlotId: "darin_mountain", modelFile: "MeerimRatB.glb", skills: ["噛み付き"] },
+    { key: "dain_orc_guard", mapSlotId: "darin_mountain", modelFile: "OrcGangA.glb", skills: ["バーサーク"] },
+    { key: "dain_orc_elite", mapSlotId: "darin_mountain", modelFile: "OrcGangB.glb", skills: ["スニーク アタック"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.darin_mountain;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("darin_mountain", darinSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(darinRegistry, "darin_mountain"), []);
+  });
+});
+
+describe("macro1 eisis cave official check", () => {
+  const eisisSpawns = [
+    { mapSlotId: "eisis_cave", key: "eisis_rat", modelVariantId: "meerim_rat_b" },
+    { mapSlotId: "eisis_cave", key: "eisis_ixion", modelVariantId: "eisis_ixion_a" },
+    { mapSlotId: "eisis_cave", key: "great_tarantula", modelVariantId: "great_tarantula_a" },
+  ];
+  const eisisRegistry = [
+    { key: "eisis_rat", mapSlotId: "eisis_cave", modelFile: "MeerimRatB.glb", skills: ["噛み付き"] },
+    { key: "eisis_ixion", mapSlotId: "eisis_cave", modelFile: "StrayIxion.glb", skills: ["ウォーターガン"] },
+    { key: "great_tarantula", mapSlotId: "eisis_cave", modelFile: "ElvinSpiderA.glb", skills: ["通常攻撃"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.eisis_cave;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("eisis_cave", eisisSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(eisisRegistry, "eisis_cave"), []);
+  });
+});
+
+describe("macro1 elvin mountains official check", () => {
+  const mountainSpawns = [
+    { mapSlotId: "elvin_mountains", key: "elvin_mount_wolf", modelVariantId: "elvin_wolf_a" },
+    { mapSlotId: "elvin_mountains", key: "elvin_mount_bison", modelVariantId: "elvin_bison_a" },
+    { mapSlotId: "elvin_mountains", key: "pygmy_gryphon", modelVariantId: "pygmy_gryphon_a" },
+    { mapSlotId: "elvin_mountains", key: "soil_basilisk", modelVariantId: "soil_basilisk_a" },
+  ];
+  const mountainRegistry = [
+    { key: "elvin_mount_wolf", mapSlotId: "elvin_mountains", modelFile: "ElvinWolfA.glb", skills: ["噛み付き"] },
+    { key: "elvin_mount_bison", mapSlotId: "elvin_mountains", modelFile: "ElvinBisonA.glb", skills: ["ホーン チャージ"] },
+    { key: "pygmy_gryphon", mapSlotId: "elvin_mountains", modelFile: "PygmyGryphonA.glb", skills: ["噛み付き"] },
+    { key: "soil_basilisk", mapSlotId: "elvin_mountains", modelFile: "SoilBasiliskA.glb", skills: ["ポイズン テイル"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.elvin_mountains;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("elvin_mountains", mountainSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(mountainRegistry, "elvin_mountains"), []);
+  });
+});
+
+describe("macro1 dragon valley official check", () => {
+  const valleySpawns = [
+    { mapSlotId: "dragon_valley", key: "wild_orvan", modelVariantId: "wild_orvan_a" },
+    { mapSlotId: "dragon_valley", key: "ancient_treant", modelVariantId: "ancient_treant_a" },
+    { mapSlotId: "dragon_valley", key: "sky_dragon", modelVariantId: "sky_dragon_a" },
+  ];
+  const valleyRegistry = [
+    { key: "wild_orvan", mapSlotId: "dragon_valley", modelFile: "WildOrvanA.glb", skills: ["バイト"] },
+    { key: "ancient_treant", mapSlotId: "dragon_valley", modelFile: "AncientTreantA.glb", skills: ["アースクエイク"] },
+    { key: "sky_dragon", mapSlotId: "dragon_valley", modelFile: "SkyDragonA.glb", skills: ["ガスティ ウインド"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.dragon_valley;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("dragon_valley", valleySpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(valleyRegistry, "dragon_valley"), []);
+  });
+});
+
+describe("training guide house life burst chant", () => {
+  it("matches chant phrase and applies session hp bonus once", async () => {
+    const {
+      applyMoeTrainingGuideHpBonus,
+      moeApplyFlatPetHpBonus,
+      moeEnsureTrainingGuideHpBonus,
+      moeTrainingGuideChantMatches,
+      MOE_TRAINING_GUIDE_HP_BONUS,
+    } = await import("../../src/lib/moeTrainingGuideHouseBuff.js");
+
+    assert.equal(moeTrainingGuideChantMatches("生命爆神を実装します"), true);
+    assert.equal(moeTrainingGuideChantMatches(" 生命爆神を実装します "), true);
+    assert.equal(moeTrainingGuideChantMatches("生命爆神"), true);
+    assert.equal(moeTrainingGuideChantMatches("生命ばくしん"), false);
+
+    const base = { id: "sun_spirit", hp: 80, hpMax: 120 };
+    const first = applyMoeTrainingGuideHpBonus(base);
+    assert.equal(first.applied, true);
+    assert.equal(first.pet.hpMax, 120 + MOE_TRAINING_GUIDE_HP_BONUS);
+    assert.equal(first.pet.hp, 80 + MOE_TRAINING_GUIDE_HP_BONUS);
+    const second = applyMoeTrainingGuideHpBonus(first.pet);
+    assert.equal(second.applied, false);
+    assert.equal(second.reason, "already");
+
+    const stripped = {
+      ...first.pet,
+      id: "sun_spirit",
+      trainingGuideHpBonus: 0,
+      hpMax: 120,
+      hp: 120,
+    };
+    const restored = moeEnsureTrainingGuideHpBonus(stripped);
+    assert.equal(restored.hpMax, 120 + MOE_TRAINING_GUIDE_HP_BONUS);
+    assert.equal(restored.hp, 120 + MOE_TRAINING_GUIDE_HP_BONUS);
+
+    const full = { id: "sun_spirit", hp: 200, hpMax: 200 };
+    const healed = moeApplyFlatPetHpBonus(full, 100);
+    assert.equal(healed.hpMax, 300);
+    assert.equal(healed.hp, 300);
+  });
+
+  it("re-sync keeps combat damage on boosted pet", async () => {
+    const {
+      applyMoeTrainingGuideHpBonus,
+      moeEnsureTrainingGuideHpBonus,
+      MOE_TRAINING_GUIDE_HP_BONUS,
+    } = await import("../../src/lib/moeTrainingGuideHouseBuff.js");
+
+    const base = { id: "sun_spirit", hp: 80, hpMax: 120 };
+    const boosted = applyMoeTrainingGuideHpBonus(base).pet;
+    const damaged = { ...boosted, hp: boosted.hp - 30 };
+    const synced = moeEnsureTrainingGuideHpBonus(damaged);
+    assert.equal(synced.hpMax, 120 + MOE_TRAINING_GUIDE_HP_BONUS);
+    assert.equal(synced.hp, boosted.hp - 30);
+  });
+});
+
+describe("pet training guide by map", () => {
+  const mapSlots = [
+    { id: "dragon_valley", nameJa: "飛竜の谷" },
+    { id: "elvin_mountains", nameJa: "エルビン山脈" },
+  ];
+
+  it("groups enemies per map sorted by level", () => {
+    const sections = moePetTrainingGuideSectionsFromEntries(
+      [
+        {
+          key: "wild_orvan",
+          name: "ワイルド オルヴァン",
+          level: 71.1,
+          mapSlotId: "dragon_valley",
+          emoji: "🐲",
+        },
+        {
+          key: "ancient_treant",
+          name: "エンシェント トレント",
+          level: 65.5,
+          mapSlotId: "dragon_valley",
+          emoji: "🌳",
+        },
+        {
+          key: "sky_dragon",
+          name: "スカイドラゴン",
+          level: 71.9,
+          mapSlotId: "dragon_valley",
+          emoji: "🪽",
+        },
+        {
+          key: "pygmy_gryphon",
+          name: "ピグミー グリフォン",
+          level: 34.1,
+          mapSlotId: "elvin_mountains",
+          emoji: "🦅",
+        },
+      ],
+      mapSlots
+    );
+    const valley = sections.find((s) => s.mapSlotId === "dragon_valley");
+    assert.ok(valley);
+    assert.equal(valley.areaJa, "飛竜の谷");
+    assert.deepEqual(
+      valley.enemies.map((e) => e.name),
+      ["エンシェント トレント", "ワイルド オルヴァン", "スカイドラゴン"]
+    );
+    assert.equal(moePetTrainingLevelLabel(71.1), "Lv71.1");
+    const mountains = sections.find((s) => s.mapSlotId === "elvin_mountains");
+    assert.ok(mountains?.enemies.some((e) => e.key === "pygmy_gryphon"));
+  });
+});
+
+describe("macro1 mutum catacomb official check", () => {
+  const mutumSpawns = [
+    { mapSlotId: "mutum_catacomb", key: "mutum_zombie_rat", modelVariantId: "mutum_zombie_rat_a" },
+    { mapSlotId: "mutum_catacomb", key: "mutum_wraith_warrior", modelVariantId: "mutum_wraith_warrior_a" },
+    { mapSlotId: "mutum_catacomb", key: "mutum_rosso_fighter", modelVariantId: "mutum_rosso_fighter_a" },
+    { mapSlotId: "mutum_catacomb", key: "mutum_zombie_rat", modelVariantId: "mutum_zombie_rat_b" },
+    { mapSlotId: "mutum_catacomb", key: "mutum_wraith_warrior", modelVariantId: "mutum_wraith_warrior_b" },
+  ];
+  const mutumRegistry = [
+    { key: "mutum_zombie_rat", mapSlotId: "mutum_catacomb", modelFile: "MeerimRatB.glb", skills: ["噛み付き"] },
+    { key: "mutum_wraith_warrior", mapSlotId: "mutum_catacomb", modelFile: "ElanKnightWhiteA.glb", skills: ["通常攻撃", "ノンアクティブ"] },
+    { key: "mutum_rosso_fighter", mapSlotId: "mutum_catacomb", modelFile: "OrcGangA.glb", skills: ["スニーク アタック"] },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.mutum_catacomb;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("mutum_catacomb", mutumSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(mutumRegistry, "mutum_catacomb"), []);
   });
 });
 
@@ -1296,6 +1754,21 @@ describe("buff ui", () => {
   });
 });
 
+describe("phoenix player skill MP", () => {
+  it("spends player MP, not pet MP", async () => {
+    const {
+      canSpendPlayerMpForPhoenixSkill,
+      spendPlayerMpForPhoenixSkill,
+    } = await import("../../src/lib/moePhoenixPlayerSkill.js");
+    const skill = { id: "phoenix_ansleep_walk", mpCost: 8 };
+    const caster = { mp: 10, mpMax: 50 };
+    assert.equal(canSpendPlayerMpForPhoenixSkill(caster, skill), true);
+    const next = spendPlayerMpForPhoenixSkill(caster, skill);
+    assert.equal(next.mp, 2);
+    assert.equal(spendPlayerMpForPhoenixSkill({ mp: 5, mpMax: 50 }, skill), null);
+  });
+});
+
 describe("field invariants", () => {
   it("detects allyTarget state/ref mismatch", () => {
     const issues = collectMoeFieldInvariantIssues({
@@ -1313,5 +1786,400 @@ describe("field invariants", () => {
       playerCondenseMindRef: { current: null },
     });
     assert.ok(issues.length > 0);
+  });
+});
+
+describe("player pre-skill progress", () => {
+  it("allows dev-check skills before required level", () => {
+    const skill = MOE_PLAYER_PRE_SKILLS.find((s) => s.id === "jiriki_kaihou");
+    assert.equal(canUsePlayerPreSkill(skill, { level: 0, exp: 0 }).ok, true);
+    assert.equal(
+      canUsePlayerPreSkill(skill, { level: 0, exp: 0 }).devCheck,
+      true
+    );
+  });
+
+  it("levels up every 100 internal exp from MOE gain", () => {
+    const applied = applyPlayerPreSkillExp({ level: 9.9, exp: 90 }, 1.0);
+    assert.equal(applied.level, 10);
+    assert.ok(applied.exp < MOE_PLAYER_SKILL_EXP_PER_TENTH);
+    assert.equal(applied.levelUps.length, 1);
+  });
+
+  it("gains more exp when skill is near required level", () => {
+    let nearSum = 0;
+    let easySum = 0;
+    for (let i = 0; i < 24; i++) {
+      nearSum += moePlayerSkillExpGainAmount(9.8, 10);
+      easySum += moePlayerSkillExpGainAmount(50, 10);
+    }
+    assert.ok(nearSum > easySum);
+  });
+
+  it("awards exp on use with toast lines", () => {
+    const skill = MOE_PLAYER_PRE_SKILLS[1];
+    const map = defaultPlayerPreSkillProgressMap();
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    const award = awardPlayerPreSkillExpOnUse(map, skill);
+    Math.random = originalRandom;
+    assert.equal(award.gained, true);
+    assert.ok(award.toastLines.some((line) => line.includes("EXP +")));
+    assert.equal(award.progressMap[skill.id].exp, 1);
+  });
+});
+
+describe("player skill2 progress", () => {
+  it("registers jiriki seiran at Lv10 for skill bar", () => {
+    const skill = MOE_PLAYER_SKILL2_ONLY_SKILLS[0];
+    assert.equal(skill?.id, "jiriki_seiran");
+    assert.equal(skill?.level, 10);
+  });
+
+  it("allows dev-check before required skill2 level", () => {
+    const skill = { id: "phoenix_ansleep_walk", level: 20, name: "安眠導歩" };
+    assert.equal(canUsePlayerSkill2(skill, { level: 0, exp: 0 }).ok, true);
+  });
+
+  it("caps exp gain by skill2 level tier", () => {
+    for (let i = 0; i < 20; i++) {
+      const amount = moePlayerSkill2ExpGainAmount(5);
+      assert.ok(amount >= 0.1 && amount <= 1);
+    }
+    for (let i = 0; i < 20; i++) {
+      const amount = moePlayerSkill2ExpGainAmount(25);
+      assert.ok(amount >= 0.1 && amount <= 0.3);
+    }
+    assert.equal(moePlayerSkill2ExpGainAmount(45), 0.1);
+  });
+
+  it("levels up every 100 internal exp", () => {
+    const applied = applyPlayerSkill2Exp({ level: 9.9, exp: 90 }, 1.0);
+    assert.equal(applied.level, 10);
+    assert.equal(applied.levelUps.length, 1);
+  });
+
+  it("raises proc rate slightly with skill2 talisman", () => {
+    assert.equal(resolvePlayerSkill2ExpProcRate(false), 0.55);
+    assert.equal(resolvePlayerSkill2ExpProcRate(true), 0.67);
+  });
+});
+
+describe("jiriki seiran", () => {
+  it("requires MP13", () => {
+    assert.equal(canUseJirikiSeiran({ mp: 12 }).ok, false);
+    assert.equal(canUseJirikiSeiran({ mp: 13 }).ok, true);
+    assert.equal(JIRIKI_SEIRAN_MP_COST, 13);
+  });
+
+  it("activates two-phase buff", () => {
+    const now = 1_700_000_000_000;
+    const result = activateJirikiSeiran({ mp: 50, mpMax: 100 }, now);
+    assert.equal(result.ok, true);
+    assert.equal(result.casterVitals.mp, 37);
+    assert.equal(result.buff.mpPerSec, JIRIKI_SEIRAN_BOOST_MP_PER_SEC);
+    assert.equal(
+      result.buff.until - now,
+      JIRIKI_SEIRAN_TOTAL_SEC * 1000
+    );
+  });
+
+  it("builds opener plus six fire hits", () => {
+    const seq = resolvePhoenixHabitAscensionSequence({
+      combatOpenFixedDamage: 35,
+      combatFixedDamage: 25,
+      combatWaveHits: 6,
+      combatStepMs: 350,
+    });
+    assert.equal(seq.hits.length, 7);
+    assert.equal(seq.hits[0].opts.fixedDamage, 35);
+    assert.equal(seq.hits[6].opts.fixedDamage, 25);
+    assert.equal(seq.hits[6].opts.grantExp, true);
+  });
+
+  it("drops to normal condense rate after boost", () => {
+    const buff = {
+      until: 100_000,
+      boostUntil: 10_000,
+      mpPerSec: JIRIKI_SEIRAN_BOOST_MP_PER_SEC,
+      boostMpPerSec: JIRIKI_SEIRAN_BOOST_MP_PER_SEC,
+      normalMpPerSec: JIRIKI_SEIRAN_NORMAL_MP_PER_SEC,
+    };
+    syncJirikiSeiranPhase(buff, 9_999);
+    assert.equal(buff.mpPerSec, JIRIKI_SEIRAN_BOOST_MP_PER_SEC);
+    syncJirikiSeiranPhase(buff, 10_000);
+    assert.equal(buff.mpPerSec, JIRIKI_SEIRAN_NORMAL_MP_PER_SEC);
+  });
+});
+
+describe("ambient bgm tracks", () => {
+  it("resolves track paths for field and local ids", () => {
+    assert.ok(isMoeAmbientValidTrackId("local"));
+    assert.ok(isMoeAmbientValidTrackId("field"));
+    assert.ok(moeAmbientBgmPathForTrackId("local7").includes("ambient-bgm-7"));
+  });
+});
+
+describe("external save io", () => {
+  it("builds moe-save json filenames", () => {
+    const name = buildMoeExternalSaveFilename(
+      new Date("2026-09-15T12:00:00.000Z")
+    );
+    assert.match(name, /^moe-save-2026-09-15-/);
+    assert.ok(name.endsWith(".json"));
+  });
+});
+
+describe("player summon models", () => {
+  it("registers phoenix and seiryu glb paths", () => {
+    const phoenix = moePlayerSummonModelForSkill("jiriki_kaihou");
+    const dragon = moePlayerSummonModelForSkill("jiriki_seiryu");
+    assert.ok(phoenix?.url.includes("PlayerSummonPhoenix.glb"));
+    assert.ok(dragon?.url.includes("PlayerSummonDragon.glb"));
+    assert.equal(Object.keys(MOE_PLAYER_SUMMON_MODELS).length, 2);
+  });
+});
+
+describe("player summon pre-skills", () => {
+  it("builds kaihou opener + 6 fire hits", () => {
+    const seq = resolveJirikiKaihouSequence(MOE_PLAYER_PRE_SKILLS[0]);
+    assert.equal(seq.hits.length, 7);
+    assert.equal(seq.hits[0].opts.fixedDamage, 45);
+    assert.equal(seq.hits[6].opts.fixedDamage, 32);
+    assert.equal(seq.hits[6].opts.grantExp, true);
+  });
+
+  it("builds seiryu single heavy hit", () => {
+    const seq = resolveJirikiSeiryuSequence(MOE_PLAYER_PRE_SKILLS[1]);
+    assert.equal(seq.hits.length, 1);
+    assert.equal(seq.hits[0].opts.fixedDamage, 333);
+  });
+
+  it("requires duel for summon attacks", () => {
+    assert.equal(validatePlayerSummonPreSkillCombat(false).ok, false);
+    assert.equal(validatePlayerSummonPreSkillCombat(true).ok, true);
+  });
+
+  it("lists pre-skills on utility bar defaults", () => {
+    assert.ok(MOE_PLAYER_UTILITY_SLOT_KEYS.includes("jiriki_kaihou"));
+    assert.ok(MOE_PLAYER_UTILITY_SLOT_KEYS.includes("jiriki_seiryu"));
+    const order = defaultPlayerUtilitySlotOrder();
+    assert.equal(order[1], "jiriki_kaihou");
+    assert.equal(order[2], "jiriki_seiryu");
+  });
+
+  it("marks pre-skills done with dev-check usable", () => {
+    for (const skill of MOE_PLAYER_PRE_SKILLS) {
+      assert.equal(skill.status, "done");
+      assert.equal(canUsePlayerPreSkill(skill, { level: 0, exp: 0 }).ok, true);
+    }
+  });
+
+  it("formats combat damage lines for tooltips", () => {
+    assert.match(
+      formatPlayerPreSkillCombatLine(MOE_PLAYER_PRE_SKILLS[0]),
+      /開火45/
+    );
+    assert.equal(
+      formatPlayerPreSkillCombatLine(MOE_PLAYER_PRE_SKILLS[1]),
+      "単発333"
+    );
+  });
+
+  it("bumps summon fx seq for retrigger", () => {
+    assert.deepEqual(nextMoePlayerSummonFxRequest(null, "jiriki_kaihou"), {
+      skillId: "jiriki_kaihou",
+      seq: 1,
+    });
+    assert.deepEqual(
+      nextMoePlayerSummonFxRequest({ skillId: "jiriki_kaihou", seq: 3 }, "jiriki_seiryu"),
+      { skillId: "jiriki_seiryu", seq: 4 }
+    );
+  });
+
+  it("builds activation result in duel with enough mp", () => {
+    const skill = MOE_PLAYER_PRE_SKILLS[1];
+    const result = buildPlayerPreSkillActivation(skill, {
+      progress: { level: 0, exp: 0 },
+      casterVitals: { mp: 100, mpMax: 100 },
+      inDuel: true,
+      enemyId: 7,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.nextVitals?.mp, 50);
+    assert.equal(result.sequence?.hits[0].opts.fixedDamage, 333);
+  });
+});
+
+describe("external save labels", () => {
+  it("maps common folder names to place labels", () => {
+    assert.equal(describeMoeExternalSavePlace("Desktop"), "デスクトップ");
+    assert.equal(describeMoeExternalSavePlace("Downloads"), "ダウンロードフォルダ");
+    assert.equal(describeMoeExternalSavePlace("ダウンロード"), "ダウンロードフォルダ");
+    assert.equal(describeMoeExternalSavePlace("Library"), "ライブラリ");
+    assert.equal(describeMoeExternalSavePlace("life3d"), "life3d");
+    assert.equal(
+      formatMoeExternalSavePlaceStatus("Desktop"),
+      "現在の保存先は、デスクトップです。"
+    );
+  });
+});
+
+describe("field bgm mapping", () => {
+  it("maps training guide house rest camp to royalty field bgm", () => {
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("training_guide_house"),
+      MOE_BGM_TRACK.ROYALTY_FIELD
+    );
+  });
+
+  it("maps altar destinations to requested tracks", () => {
+    assert.equal(moeFieldBgmTrackForMapSlot("bisk"), MOE_BGM_TRACK.AMBIENT_7);
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("elan_palace"),
+      MOE_BGM_TRACK.AMBIENT_8_ELUAN
+    );
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("elvin_valley"),
+      MOE_BGM_TRACK.AMBIENT_3
+    );
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("elvin_mountains"),
+      MOE_BGM_TRACK.ROYALTY_CASTLE
+    );
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("slorim_plain"),
+      MOE_BGM_TRACK.AMBIENT_5
+    );
+    assert.equal(MOE_FIELD_COMBAT_BGM, MOE_BGM_TRACK.AMBIENT_4);
+  });
+});
+
+describe("macro session timer", () => {
+  it("formats countdown and parses minute presets", async () => {
+    const {
+      formatMacroTimerClock,
+      parseMacroTimerMinutes,
+      MOE_MACRO_TIMER_PRESET_MINUTES,
+    } = await import("../../src/lib/moeMacroSessionTimer.js");
+
+    assert.equal(formatMacroTimerClock(599), "9:59");
+    assert.equal(formatMacroTimerClock(60), "1:00");
+    assert.equal(formatMacroTimerClock(0), "0:00");
+    assert.equal(parseMacroTimerMinutes("10分"), 10);
+    assert.equal(parseMacroTimerMinutes("30m"), 30);
+    assert.deepEqual(MOE_MACRO_TIMER_PRESET_MINUTES, [10, 20, 30, 45, 60]);
+  });
+});
+
+describe("AGE continent maps", () => {
+  it("registers six AGE warp slots on dedicated row", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const { MOE_AGE_MAP_SLOT_IDS } = await import(
+      "../../src/lib/moe3dMacro2AgeConstants.js"
+    );
+    const layoutSrc = readFileSync(
+      join(root, "src/lib/moe3dWorldLayout.js"),
+      "utf8"
+    );
+
+    assert.equal(MOE_AGE_MAP_SLOT_IDS.size, 6);
+    assert.match(layoutSrc, /MOE_3D_AGE_ROW_IZ = 4/);
+    assert.match(layoutSrc, /!MOE_AGE_MAP_SLOT_IDS\.has\(s\.id\)/);
+    for (const id of MOE_AGE_MAP_SLOT_IDS) {
+      assert.match(layoutSrc, new RegExp(`id: "${id}"[\\s\\S]*?branch: "age"`));
+      assert.match(layoutSrc, new RegExp(`id: "${id}"[\\s\\S]*?warpOnly: true`));
+    }
+  });
+
+  it("lists AGE destinations in altar warp group", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const altarSrc = readFileSync(join(root, "src/data/moeAltarWarps.js"), "utf8");
+
+    assert.match(altarSrc, /id: "age", label: "AGE大陸（アルター転送）"/);
+    assert.match(altarSrc, /if \(slot\.branch === "age"\) return "age"/);
+    assert.match(altarSrc, /altar_yug_coast/);
+    assert.match(altarSrc, /yug_coast: "🌊"/);
+    assert.match(altarSrc, /mitoya_great_tree: "🌳"/);
+  });
+
+  it("places AGE hub house northwest of yug coast altar", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const houseSrc = readFileSync(
+      join(root, "src/lib/moe3dAgeHubHouse.js"),
+      "utf8"
+    );
+
+    assert.match(houseSrc, /altar_yug_coast/);
+    assert.match(houseSrc, /AGE_HOUSE_OFF_X = -8/);
+    assert.match(houseSrc, /AGE_HOUSE_OFF_Z = -7/);
+  });
+
+  it("registers soles valley AGE bath L2 L3 placeholders", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const l2Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL2Props.js"),
+      "utf8"
+    );
+    const l3Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL3Spawns.js"),
+      "utf8"
+    );
+    const tilesSrc = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeTiles.js"),
+      "utf8"
+    );
+
+    assert.match(l2Src, /propsSolesValley/);
+    assert.match(l2Src, /AGE湯/);
+    assert.match(l3Src, /soles_valley/);
+    assert.match(l3Src, /MACRO2_AGE_L3_PLACEHOLDERS/);
+    assert.match(tilesSrc, /appendMoe3dMacro2AgeL2Props/);
+    assert.match(tilesSrc, /appendMoe3dMacro2AgeL3SpawnPads/);
+    assert.match(tilesSrc, /AGE湯 · 渓谷の湯/);
+    assert.match(tilesSrc, /localSize\.w \* 0\.5/);
+  });
+
+  it("soles valley altar layout and AGE play clamp helpers", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const altarSrc = readFileSync(
+      join(root, "src/data/moeAltarWarps.js"),
+      "utf8"
+    );
+    const slotSrc = readFileSync(
+      join(root, "src/lib/moe3dMapSlotAtWorldPos.js"),
+      "utf8"
+    );
+    assert.match(altarSrc, /soles_valley:[\s\S]*spawnOffTz: 0\.14/);
+    assert.match(slotSrc, /moe3dClampFieldPlayPosition/);
+    assert.match(slotSrc, /MOE_AGE_MAP_SLOT_IDS/);
+  });
+
+  it("macro-4 skill documents 20s circle cooldown", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const skill = readFileSync(
+      join(root, ".cursor/skills/macro-4/SKILL.md"),
+      "utf8"
+    );
+    assert.match(skill, /20秒/);
+    assert.match(skill, /サークル間クールダウン/);
   });
 });

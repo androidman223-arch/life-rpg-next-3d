@@ -89,6 +89,36 @@ export const MOE_MAP_ALTAR_LAYOUTS = {
     kind: "warp",
     interactRadius: 7,
   },
+  elan_palace: {
+    id: "altar_elan_palace",
+    nameJa: "エルアン宮殿 · アルター",
+    altarTx: 0.052,
+    altarTz: 0.948,
+    spawnOffTx: 0.013,
+    spawnOffTz: -0.006,
+    kind: "warp",
+    interactRadius: 7,
+  },
+  yug_coast: {
+    id: "altar_yug_coast",
+    nameJa: "ユグ海岸 · アルター",
+    altarTx: 0.5,
+    altarTz: 0.5,
+    spawnOffTx: 0,
+    spawnOffTz: 0.08,
+    kind: "warp",
+    interactRadius: 7,
+  },
+  soles_valley: {
+    id: "altar_soles_valley",
+    nameJa: "ソレス渓谷 · アルター",
+    altarTx: 0.5,
+    altarTz: 0.46,
+    spawnOffTx: 0,
+    spawnOffTz: 0.14,
+    kind: "warp",
+    interactRadius: 7,
+  },
 };
 
 /** ビスク中央アルターから選べないスロット */
@@ -96,6 +126,11 @@ const WARP_DEST_SKIP = new Set(["bisk", "mainland_connector", "legacy_buffer"]);
 
 /** 歩行で通常到達できる扱い — （本来通行不可）を付けない */
 const WARP_NORMAL_FOOT_ACCESS = new Set(["legacy_prototype", "ips_canyon"]);
+
+/** アルター転送時のみ表示する旅のメモ（mapSlotId → 文言） */
+const WARP_DEST_TRAVEL_MEMO = {
+  elvin_mountains: "保存フォルダーへ保存をおすすめします。",
+};
 
 /** @type {Record<string, string>} */
 const WARP_DEST_EMOJI = {
@@ -116,11 +151,18 @@ const WARP_DEST_EMOJI = {
   sulfur_mine: "🌋",
   neoku_mountain: "🐉",
   neoku_plateau: "🌄",
+  dragon_valley: "🪽",
   elan_palace: "🏛",
   war_age: "⚔",
   slorim_plain: "🌾",
   mutum_catacomb: "💀",
   nubool_village: "🏘",
+  yug_coast: "🌊",
+  soles_valley: "🏔",
+  geo_abyss_ne: "🔥",
+  geo_abyss_s: "🌋",
+  geo_abyss_w: "🕳",
+  mitoya_great_tree: "🌳",
 };
 
 /**
@@ -128,6 +170,7 @@ const WARP_DEST_EMOJI = {
  */
 function warpDestGroupForSlot(slot) {
   if (slot.branch === "legacy") return "local";
+  if (slot.branch === "age") return "age";
   if (slot.warpOnly || slot.branch === "warp") return "dimension";
   return "mainline";
 }
@@ -196,12 +239,13 @@ function buildMoeAltarDefs() {
 /** @type {MoeAltarDef[]} */
 export const MOE_ALTARS = buildMoeAltarDefs();
 
-/** @typedef {{ id: string, altarIds: string[], group: string, mapSlotId: string, nameJa: string, subtitle?: string, available: boolean, normallyRestricted?: boolean, emoji?: string }} MoeAltarDestination */
+/** @typedef {{ id: string, altarIds: string[], group: string, mapSlotId: string, nameJa: string, subtitle?: string, travelMemo?: string, available: boolean, normallyRestricted?: boolean, emoji?: string }} MoeAltarDestination */
 
 /** @type {{ id: string, label: string }[]} */
 export const MOE_ALTAR_WARP_GROUPS = [
   { id: "local", label: "近隣 · 接続" },
   { id: "mainline", label: "西本線（フィールド）" },
+  { id: "age", label: "AGE大陸（アルター転送）" },
   { id: "dimension", label: "アルター転送" },
 ];
 
@@ -224,6 +268,7 @@ function buildMoeAltarDestinations() {
       mapSlotId: slot.id,
       nameJa: normallyRestricted ? `${baseName}（本来通行不可）` : baseName,
       subtitle: slot.note,
+      travelMemo: WARP_DEST_TRAVEL_MEMO[slot.id],
       emoji: WARP_DEST_EMOJI[slot.id] ?? "📍",
       available: true,
       normallyRestricted,
