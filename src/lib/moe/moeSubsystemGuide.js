@@ -68,7 +68,7 @@ export const MOE_SUBSYSTEMS = {
 
   condenseMind: {
     purpose:
-      "プレイヤー技コンデンスマインド（回復60）。消費MP34・MP残量条件なし。対象のMP自然回復バフ。",
+      "プレイヤー技コンデンスマインド（回復60）。消費MP17・MP残量条件なし。対象のMP自然回復バフ。",
     layer: "pure",
     stateOwner: "moePlayerCondenseMind.js（効果） + MoeFieldMap（ref/tick）",
     files: [
@@ -184,7 +184,7 @@ export const MOE_SUBSYSTEMS = {
     ],
     doNot: [
       "戻れ時に petCombatPosLock を残さない",
-      "SOS は 3D 専用（warpPlayer3d + snapPet3dNearPlayer）",
+      "SOS はペット即ワープ（moe3dPetStartNearPlayer · 戦闘解除）",
     ],
     related: ["fieldCanvas", "enemyTargeting"],
   },
@@ -203,15 +203,136 @@ export const MOE_SUBSYSTEMS = {
       "src/lib/moe3dMonsterMapSpawns.js",
     ],
     doNot: ["他マップの敵を流用しない → Wiki 湧き一覧どおり"],
-    related: ["macro3SimpleMountains"],
+    related: ["macro3SimpleMountains", "worldLayout3d"],
+  },
+
+  worldLayout3d: {
+    purpose:
+      "3D ワールドタイル登録・座標変換・アルター転送。MOE_3D_WORLD_MAP_REGISTRY は moe3dWorldLayout に集約。",
+    layer: "pure",
+    stateOwner: "moe3dWorldLayout.js + moeAltarWarps.js",
+    files: [
+      "src/lib/moe3dLayoutConstants.js",
+      "src/lib/moe3dWorldLayout.js",
+      "src/data/moeAltarWarps.js",
+      "src/lib/moe3dAltarWarp.js",
+      "src/lib/moe3dBiskHubLayout.js",
+      "src/lib/moe3dBiskTile.js",
+      "src/lib/moe3dBiskL4Fx.js",
+    ],
+    doNot: [
+      "湧き座標は転送スポーンから moe3dClearSpawnFromAltarPlayer で押し出す",
+      "moe3dWorldLayout / moeAltarWarps / moe3dMonsterMapSpawns から moeField3DModels を import しない",
+      "共有タイル定数は moe3dLayoutConstants.js だけ（依存ゼロ）",
+      "moe3dMonsterMapSpawns から moe3dDesertPreviewTile を import しない",
+    ],
+    related: ["mapPlannedData", "fieldPrefetch"],
   },
 
   persistence: {
     purpose: "localStorage / 外部セーブ。キーは moeStorageRegistry で一元管理。",
     layer: "persistence",
     stateOwner: "各 *Settings.js / moePetSave.js",
-    files: ["src/lib/moe/moeStorageRegistry.js"],
+    files: [
+      "src/lib/moe/moeStorageRegistry.js",
+      "src/lib/moePetSave.js",
+      "src/lib/moeExternalSaveLabels.js",
+    ],
     doNot: ["文字列キーを各ファイルに直書きで増やさない"],
+    related: ["externalSave"],
+  },
+
+  externalSave: {
+    purpose:
+      "ペット進行の JSON 外部保存。File System Access API + IndexedDB ハンドル + ダウンロード fallback。",
+    layer: "persistence",
+    stateOwner: "moePetSave.js（I/O） + MoeFieldMap 設定 UI",
+    files: [
+      "src/lib/moeExternalSave.js",
+      "src/lib/moePetSave.js",
+      "src/lib/moeExternalSaveLabels.js",
+    ],
+    doNot: [
+      "フォルダ名をフルパスと誤解しない（Desktop 等を直接選ぶと表示が分かりやすい）",
+      "読み込みは `<input type=\"file\">` 推奨（全ブラウザ）",
+      "showDirectoryPicker の id 定数を忘れない（MOE_SAVE_PICKER_ID）",
+    ],
+    related: ["persistence"],
+  },
+
+  fieldBgm: {
+    purpose:
+      "メニュー BGM とフィールド面／戦闘 BGM の自動切替。曲 ID は moeFieldBgmMap、再生は AmbientBgm。",
+    layer: "ui",
+    stateOwner: "AmbientBgm.jsx（fieldAutoRef / zone / combat）",
+    files: [
+      "src/components/AmbientBgm.jsx",
+      "src/lib/moeFieldBgm.js",
+      "src/lib/moeFieldBgmMap.js",
+    ],
+    doNot: [
+      "AmbientBgm に prefetch 等の無関係 import を足さない",
+      "フィールド入室イベントと pathname 効果で二重に曲切替しない",
+    ],
+    related: ["fieldOrchestrator"],
+  },
+
+  fieldPrefetch: {
+    purpose:
+      "MoeFieldMap チャンクの先読み。layout の MoeFieldPrefetchBoot が唯一の起動点。",
+    layer: "ui",
+    stateOwner: "moeFieldPrefetch.js",
+    files: [
+      "src/lib/moeFieldPrefetch.js",
+      "src/lib/moePlayerSummonPrefetch.js",
+      "src/components/MoeFieldPrefetchBoot.jsx",
+      "src/components/MoeFieldMapGate.jsx",
+    ],
+    doNot: [
+      "moeFieldPrefetch の import 時 auto-start を復活させない",
+      "副作用 import `import \"@/lib/moeFieldPrefetch\"` を散らさない",
+      "prefetch 失敗 + MOE_3D_WORLD_MAP_REGISTRY TDZ → worldLayout3d の循環 import を疑う",
+    ],
+    related: ["fieldOrchestrator", "playerSummon", "macro0", "worldLayout3d"],
+  },
+
+  playerSummon: {
+    purpose:
+      "プレイヤー召喚プレスキル（生活改鳳・自力整龍）。技③スロット · MP消費 · 3D GLB VFX · リボーンワンス。",
+    layer: "pure+ui",
+    stateOwner: "MoeFieldMap.jsx（activate） + moePlayerPreSkillActivate.js",
+    files: [
+      "src/data/moePlayerPreSkills.js",
+      "src/data/moePlayerSummonModels.js",
+      "src/lib/moePlayerPreSkillActivate.js",
+      "src/lib/moePlayerSummonSkills.js",
+      "src/lib/moePlayerSummonEffect.js",
+      "src/lib/moePlayerPreSkillUi.js",
+      "src/lib/moePhoenixRebirthOnce.js",
+    ],
+    doNot: [
+      "ペット技②の phoenix_habit_ascension（生活改鳳）と混同しない",
+      "攻撃2倍は phoenix_scorching_sky 側 — プレスキル生活改鳳には付けない",
+      "リボーンワンスはプレイヤー生活改鳳のみ — ペット生活改鳳には付けない",
+    ],
+    related: ["fieldOrchestrator", "fieldPrefetch"],
+  },
+
+  macro0: {
+    purpose:
+      "マクロ０ — 機能追加後の土台整備（サイクル0スキャン + 3サイクル）。新機能は足さない。",
+    layer: "pure",
+    stateOwner: ".cursor/skills/macro-0/SKILL.md",
+    files: [
+      ".cursor/skills/macro-0/SKILL.md",
+      ".cursor/skills/macro-0/BACKLOG.md",
+      "docs/moe-lessons.md",
+    ],
+    doNot: [
+      "MoeFieldMap 大分割 · スキル配線は BACKLOG に書いて別タスク",
+      "3ファイル以上触った日の終わりに走らせる（サイクル0）",
+    ],
+    related: ["persistence", "fieldBgm", "fieldPrefetch"],
   },
 
 };

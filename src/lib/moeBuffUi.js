@@ -47,7 +47,9 @@ export function padMoeBuffSlots(items, slotCount) {
  *   shinobiashiOn?: boolean,
  *   kakureminoUntilMs?: number,
  *   dashBoost3x?: boolean,
+ *   kintounOn?: boolean,
  *   playerCondenseMindRef?: { current: { until: number } | null },
+ *   playerJirikiSeiranRef?: { current: { until: number, boostUntil?: number } | null },
  * }} ctx
  * @param {number} [nowMs]
  */
@@ -70,6 +72,20 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
       icon: "💠",
       label: "コンデンスマインド — MP自然回復アップ",
       remainSec: moeBuffRemainSec(condense.until, nowMs),
+      tone: "buff",
+    });
+  }
+
+  const seiran = ctx.playerJirikiSeiranRef?.current;
+  if (seiran && nowMs < seiran.until) {
+    const inBoost = seiran.boostUntil != null && nowMs < seiran.boostUntil;
+    items.push({
+      id: "jiriki_seiran",
+      icon: "🧘",
+      label: inBoost
+        ? "自力整然 — MP回復2倍"
+        : "自力整然 — コンデンス",
+      remainSec: moeBuffRemainSec(seiran.until, nowMs),
       tone: "buff",
     });
   }
@@ -103,6 +119,15 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
     });
   }
 
+  if (ctx.kintounOn) {
+    items.push({
+      id: "kintoun",
+      icon: "☁️",
+      label: "筋斗雲 — 飛行 · 移動2倍",
+      tone: "toggle",
+    });
+  }
+
   return padMoeBuffSlots(items, MOE_PLAYER_BUFF_SLOT_COUNT);
 }
 
@@ -112,10 +137,14 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
  *   petRegenHp?: number,
  *   petRegenMp?: number,
  *   petRegenIntervalSec?: number,
+ *   petRegenTicksLeft?: number,
+ *   petRegenRemainSec?: number | null,
  *   phoenixAnsleepRegenRef?: { current: { until: number, hpPerTick?: number, intervalSec?: number } | null },
  *   phoenixUltimateRegenRef?: { current: { until: number, hpPerTick?: number, intervalSec?: number } | null },
+ *   phoenixHotSpringDefenseRef?: { current: { until: number, bonus?: number } | null },
  *   atrumMpRegenRef?: { current: { until: number } | null },
  *   atrumMagicBuffUntilRef?: { current: number },
+ *   rebirthOnceRef?: { current: { charges?: number, pendingUntilMs?: number } | null },
  * }} ctx
  * @param {number} [nowMs]
  */
@@ -123,14 +152,22 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
   const items = [];
 
   if (ctx.petRegenActive) {
-    const hp = ctx.petRegenHp ?? 20;
-    const mp = ctx.petRegenMp ?? 2;
-    const sec = ctx.petRegenIntervalSec ?? 2;
+    const hp = ctx.petRegenHp ?? 15;
+    const mp = ctx.petRegenMp ?? 0;
+    const sec = ctx.petRegenIntervalSec ?? 3;
+    const mpPart = mp > 0 ? ` MP+${mp}` : "";
+    const ticks =
+      ctx.petRegenTicksLeft != null ? `残${ctx.petRegenTicksLeft}回` : "";
+    const remain =
+      ctx.petRegenRemainSec != null && ctx.petRegenRemainSec > 0
+        ? ` · 約${ctx.petRegenRemainSec}秒`
+        : "";
     items.push({
       id: "pet_regen",
       icon: "🍃",
-      label: `リジェネ — ${sec}秒ごと HP+${hp} MP+${mp}`,
+      label: `リジェネ — ${sec}秒ごと HP+${hp}${mpPart}${ticks ? `（${ticks}${remain}）` : ""}`,
       tone: "toggle",
+      remainSec: ctx.petRegenRemainSec ?? null,
     });
   }
 
@@ -161,6 +198,17 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
     }
   }
 
+  const hotSpring = ctx.phoenixHotSpringDefenseRef?.current;
+  if (hotSpring && nowMs < hotSpring.until) {
+    items.push({
+      id: "phoenix_hot_spring_def",
+      icon: "♨",
+      label: `温泉調気 — 守り+${hotSpring.bonus ?? 50}`,
+      remainSec: moeBuffRemainSec(hotSpring.until, nowMs),
+      tone: "buff",
+    });
+  }
+
   const manaAmp = ctx.atrumMpRegenRef?.current;
   if (manaAmp && nowMs < manaAmp.until) {
     items.push({
@@ -180,6 +228,24 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
       icon: "✨",
       label: "温故知新 — 魔力上昇",
       remainSec: magicRemain,
+      tone: "buff",
+    });
+  }
+
+  const rebirth = ctx.rebirthOnceRef?.current;
+  if (rebirth?.charges) {
+    items.push({
+      id: "rebirth_once",
+      icon: "🪽",
+      label: "リボーンワンス — 倒れてから3秒で1回復活",
+      tone: "buff",
+    });
+  } else if (rebirth?.pendingUntilMs && nowMs < rebirth.pendingUntilMs) {
+    items.push({
+      id: "rebirth_once_pending",
+      icon: "🪽",
+      label: "リボーンワンス — 復活待ち",
+      remainSec: Math.ceil((rebirth.pendingUntilMs - nowMs) / 1000),
       tone: "buff",
     });
   }

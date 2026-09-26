@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   backupGameStatusToSlot,
   DEFAULT_GAME_STATUS,
@@ -12,13 +13,22 @@ import {
   saveGameStatus,
 } from "@/lib/gameStatus";
 import TrainingExpPanel from "@/components/TrainingExpPanel";
-import { requestMoeFieldBgm } from "@/lib/bgmControl";
+import DragonTrainingPanel from "@/components/DragonTrainingPanel";
+import MoeMacroSessionTimer from "@/components/MoeMacroSessionTimer";
+import { requestMoeFieldBgm } from "@/lib/moeFieldBgm";
+import {
+  prefetchMoeFieldMap,
+  subscribeMoeFieldPrefetch,
+} from "@/lib/moeFieldPrefetch";
 
 const EXP_GAIN = 280;
 
 export default function Home() {
+  const router = useRouter();
   // サーバーとクライアントの初回描画を同じにし、hydration mismatch を防ぐ（localStorage はマウント後のみ読む）
   const [status, setStatus] = useState(() => ({ ...DEFAULT_GAME_STATUS }));
+  /** idle | loading | ready | error */
+  const [moePrefetchState, setMoePrefetchState] = useState("idle");
 
   const [celebration, setCelebration] = useState(null);
 
@@ -26,11 +36,14 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
 
   const [trainingOpen, setTrainingOpen] = useState(false);
+  const [dragonTrainingOpen, setDragonTrainingOpen] = useState(false);
 
   useEffect(() => {
     setStatus(loadGameStatus());
     setStorageReady(true);
   }, []);
+
+  useEffect(() => subscribeMoeFieldPrefetch(setMoePrefetchState), []);
 
   useEffect(() => {
     if (!celebration) return;
@@ -43,6 +56,15 @@ export default function Home() {
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
   }, []);
+
+  const enterMoeField = useCallback(
+    (mode) => {
+      requestMoeFieldBgm();
+      prefetchMoeFieldMap().catch(() => {});
+      router.push(mode === "3d" ? "/moe/3d" : "/moe");
+    },
+    [router]
+  );
 
   const expPercent = Math.min(
     100,
@@ -120,6 +142,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-zinc-900 to-black p-4">
+      <MoeMacroSessionTimer
+        onFinished={() => setCelebration("⏱ マクロ４ 0:00 — お疲れさま！")}
+      />
       <div className="w-full max-w-md p-8 rounded-3xl shadow-lg bg-gradient-to-br from-gray-800 to-zinc-900 border border-gray-700 flex flex-col items-center">
         <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-wide mb-8 drop-shadow-lg">
           人生レベルアップRPG
@@ -219,12 +244,17 @@ export default function Home() {
 
         <button
           type="button"
-          onClick={() => setTrainingOpen((v) => !v)}
+          onClick={() => {
+            setDragonTrainingOpen(false);
+            setTrainingOpen((v) => !v);
+          }}
           disabled={!storageReady}
           aria-expanded={trainingOpen}
           className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-600 hover:to-cyan-700 border border-teal-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
         >
-          {trainingOpen ? "🧘 修行を閉じる" : "🧘 修行（タイマー・メモ・EXP）"}
+          {trainingOpen
+            ? "🪶 鳳凰の修行を閉じる"
+            : "🪶 鳳凰の修行①（知恵 · 整える · タイマー）"}
         </button>
 
         <TrainingExpPanel
@@ -235,6 +265,28 @@ export default function Home() {
           }}
         />
 
+        <button
+          type="button"
+          onClick={() => {
+            setTrainingOpen(false);
+            setDragonTrainingOpen((v) => !v);
+          }}
+          disabled={!storageReady}
+          aria-expanded={dragonTrainingOpen}
+          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-amber-700 to-orange-900 hover:from-amber-600 hover:to-orange-800 border border-amber-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
+        >
+          {dragonTrainingOpen
+            ? "🐉 龍の武練を閉じる"
+            : "🐉 龍神の修行②（実践 · 体験 · 行動ログ）"}
+        </button>
+
+        <DragonTrainingPanel
+          open={dragonTrainingOpen && storageReady}
+          onDragonExpGranted={(lines) => {
+            setCelebration(lines.join("\n"));
+          }}
+        />
+
         <Link
           href="/field"
           className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
@@ -242,21 +294,34 @@ export default function Home() {
           フィールドへ移動
         </Link>
 
-        <Link
-          href="/moe"
-          onClick={() => requestMoeFieldBgm()}
-          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 border border-sky-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
+        <button
+          type="button"
+          onMouseEnter={() => prefetchMoeFieldMap().catch(() => {})}
+          onFocus={() => prefetchMoeFieldMap().catch(() => {})}
+          onClick={() => enterMoeField("moe")}
+          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 border border-sky-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center"
         >
           MOEのフィールドへ行く (ミーリム海岸)
-        </Link>
+        </button>
 
-        <Link
-          href="/moe/3d"
-          onClick={() => requestMoeFieldBgm()}
-          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
+        <button
+          type="button"
+          onMouseEnter={() => prefetchMoeFieldMap().catch(() => {})}
+          onFocus={() => prefetchMoeFieldMap().catch(() => {})}
+          onClick={() => enterMoeField("3d")}
+          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center"
         >
           MOEのフィールドへいく（3D版）
-        </Link>
+        </button>
+        <p className="mt-1 text-center text-[10px] leading-snug text-violet-200/75">
+          {moePrefetchState === "loading"
+            ? "3Dフィールドをバックグラウンドで読み込み中…（ボタンを押さなくても進みます）"
+            : moePrefetchState === "ready"
+              ? "3D版は先読み済み — ボタンでほぼすぐ入れます"
+              : moePrefetchState === "error"
+                ? "先読みに失敗 — ボタン押下で再試行します"
+                : "3Dフィールドの先読みを開始しています…"}
+        </p>
 
         <div className="mt-8 w-full space-y-2">
           <p className="text-center text-[11px] font-semibold text-zinc-500">

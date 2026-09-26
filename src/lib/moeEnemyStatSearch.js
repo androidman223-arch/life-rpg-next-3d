@@ -2,6 +2,10 @@
  * 敵ステサーチ — ターゲット敵のステータス表示用
  */
 
+/** 敵ステサーチパネルのドラッグ位置（localStorage） */
+export const MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY =
+  "life-rpg-moe-enemy-stat-search-pos";
+
 import {
   checkMoeEnemyPlayerDetection,
   formatMoeEnemyDetectionForSearch,

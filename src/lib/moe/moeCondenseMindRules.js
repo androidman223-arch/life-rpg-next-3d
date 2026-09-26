@@ -5,7 +5,8 @@
  * ペットのマナ増幅法は別（moeAtrumPetSkills）— MP5割以下。
  */
 
-export const PLAYER_CONDENSE_MIND_MP_COST = 34;
+/** Wiki 公式34の半分（プレイヤー技の調整値） */
+export const PLAYER_CONDENSE_MIND_MP_COST = 17;
 
 /** @param {{ mp?: number }} casterVitals */
 export function canUsePlayerCondenseMind(casterVitals) {

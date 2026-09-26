@@ -86,6 +86,8 @@ import {
 } from "../../src/lib/moeSkillPanelModeSettings.js";
 import { collectMoeFieldInvariantIssues } from "../../src/lib/moe/moeFieldInvariants.js";
 import {
+  moe3dPickFloorTerrainY,
+  moe3dPickLowestFloorTerrainY,
   moe3dPickWalkableTerrainY,
   MOE_PLAYER_TERRAIN_MAX_CLIMB,
 } from "../../src/lib/moe3dMacro3Walk.js";
@@ -227,6 +229,191 @@ describe("skill panel mode", () => {
   });
 });
 
+describe("vertical skill panel layout", () => {
+  it("clamps width and slot height", async () => {
+    const {
+      clampMoeVerticalSkillPanelLayout,
+      moeVerticalSkillDefaultLayout,
+      MOE_VERTICAL_SKILL_MIN_WIDTH,
+      MOE_VERTICAL_SKILL_MIN_SLOT_HEIGHT,
+    } = await import("../../src/lib/moeVerticalSkillPanelLayout.js");
+
+    const def = moeVerticalSkillDefaultLayout();
+    assert.ok(def.width >= MOE_VERTICAL_SKILL_MIN_WIDTH);
+    assert.ok(def.slotHeight >= MOE_VERTICAL_SKILL_MIN_SLOT_HEIGHT);
+
+    const clamped = clampMoeVerticalSkillPanelLayout({
+      width: 20,
+      slotHeight: 4,
+    });
+    assert.equal(clamped.width, MOE_VERTICAL_SKILL_MIN_WIDTH);
+    assert.equal(clamped.slotHeight, MOE_VERTICAL_SKILL_MIN_SLOT_HEIGHT);
+
+    const { moeVerticalSkillLabelFontPx } = await import(
+      "../../src/lib/moeVerticalSkillPanelLayout.js"
+    );
+    assert.ok(moeVerticalSkillLabelFontPx(20) > moeVerticalSkillLabelFontPx(20, true));
+    assert.ok(moeVerticalSkillLabelFontPx(24) >= 16);
+
+    const { loadMoeVerticalSkillPanelInitialLayout } = await import(
+      "../../src/lib/moeVerticalSkillPanelLayout.js"
+    );
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.window = { localStorage: mockStorage };
+    globalThis.localStorage = mockStorage;
+    mockStorage.setItem(
+      "life-rpg-moe-merged-skill-panel-a-layout",
+      JSON.stringify({ width: 64, slotHeight: 14 })
+    );
+    const inherited = loadMoeVerticalSkillPanelInitialLayout(
+      "life-rpg-moe-phoenix-training-skill-panel",
+      ["life-rpg-moe-merged-skill-panel-a", "life-rpg-moe-merged-skill-panel-b"]
+    );
+    assert.equal(inherited.width, 64);
+    assert.equal(inherited.slotHeight, 14);
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  });
+
+  it("builds phoenix and dragon training vertical skill slots", async () => {
+    const {
+      buildPhoenixTrainingVerticalSlots,
+      buildDragonTrainingVerticalSlots,
+      isTrainingSkillUnlocked,
+    } = await import("../../src/lib/moeTrainingSkillVerticalUi.js");
+
+    const { MOE_TRAINING_SKILL_MODE_LEARNED } = await import(
+      "../../src/lib/moeTrainingSkillSettings.js"
+    );
+    const onActivate = () => {};
+    const phoenix = buildPhoenixTrainingVerticalSlots(
+      35,
+      onActivate,
+      MOE_TRAINING_SKILL_MODE_LEARNED
+    );
+    const dragon = buildDragonTrainingVerticalSlots(
+      45,
+      onActivate,
+      MOE_TRAINING_SKILL_MODE_LEARNED
+    );
+
+    assert.equal(phoenix.length, 9);
+    assert.equal(dragon.length, 9);
+    assert.equal(phoenix[0].label, "鳳凰の呼吸");
+    assert.equal(phoenix[3].label, "フライングフェザー");
+    assert.equal(dragon[0].label, "龍神の呼吸");
+    assert.equal(dragon[3].label, "神速");
+
+    assert.equal(isTrainingSkillUnlocked({ level: 30 }, 35), true);
+    assert.equal(isTrainingSkillUnlocked({ level: 40 }, 35), false);
+    assert.equal(phoenix[2].disabled, false);
+    assert.equal(phoenix[2].unusable, false);
+    assert.equal(phoenix[3].disabled, false);
+    assert.equal(phoenix[3].unusable, true);
+    assert.equal(phoenix[3].active, false);
+    assert.equal(typeof phoenix[3].onClick, "function");
+
+    const phoenix40 = buildPhoenixTrainingVerticalSlots(
+      40,
+      onActivate,
+      MOE_TRAINING_SKILL_MODE_LEARNED
+    );
+    assert.equal(phoenix40[3].disabled, false);
+    assert.equal(phoenix40[3].unusable, false);
+    assert.equal(phoenix40[3].active, true);
+
+    assert.equal(dragon[7].label, "筋斗雲");
+    assert.equal(
+      buildDragonTrainingVerticalSlots(80, onActivate, MOE_TRAINING_SKILL_MODE_LEARNED)[7]
+        .active,
+      true
+    );
+    const phoenixAll = buildPhoenixTrainingVerticalSlots(
+      35,
+      onActivate,
+      "all"
+    );
+    assert.equal(phoenixAll[3].unusable, false);
+    assert.equal(phoenixAll[3].active, true);
+  });
+
+  it("persists training skill mode setting", async () => {
+    const {
+      loadMoeTrainingSkillMode,
+      saveMoeTrainingSkillMode,
+      MOE_TRAINING_SKILL_MODE_LEARNED,
+      moeTrainingSkillModeLabel,
+    } = await import("../../src/lib/moeTrainingSkillSettings.js");
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.window = { localStorage: mockStorage };
+    globalThis.localStorage = mockStorage;
+
+    assert.equal(loadMoeTrainingSkillMode(), "all");
+    saveMoeTrainingSkillMode(MOE_TRAINING_SKILL_MODE_LEARNED);
+    assert.equal(loadMoeTrainingSkillMode(), MOE_TRAINING_SKILL_MODE_LEARNED);
+    assert.equal(
+      moeTrainingSkillModeLabel(MOE_TRAINING_SKILL_MODE_LEARNED),
+      "習得済みのみ"
+    );
+
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  });
+
+  it("maps training skill buttons to field implementation keys", async () => {
+    const {
+      getTrainingSkillBridgeAction,
+      hasTrainingSkillBridgeAction,
+    } = await import("../../src/lib/moeTrainingSkillBridgeMap.js");
+
+    assert.equal(getTrainingSkillBridgeAction("phoenix", 40)?.kind, "skill1");
+    assert.equal(
+      getTrainingSkillBridgeAction("phoenix", 40)?.key,
+      "teleport"
+    );
+    assert.equal(
+      getTrainingSkillBridgeAction("phoenix", 10)?.skillId,
+      "jiriki_seiran"
+    );
+    assert.equal(
+      getTrainingSkillBridgeAction("dragon", 80)?.skillId,
+      "dragon_kintoun"
+    );
+    assert.equal(hasTrainingSkillBridgeAction("dragon", 30), false);
+    assert.equal(hasTrainingSkillBridgeAction("phoenix", 90), true);
+  });
+
+  it("places meerim bison bosses on elvin maps", async () => {
+    const { MOE_MEERIM_SPECIAL_BOSS_SPAWNS } = await import(
+      "../../src/data/moeMeerimEnemies.js"
+    );
+    assert.equal(MOE_MEERIM_SPECIAL_BOSS_SPAWNS.superBoss.mapSlotId, "elvin_mountains");
+    assert.equal(MOE_MEERIM_SPECIAL_BOSS_SPAWNS.mountainBison.mapSlotId, "elvin_valley");
+    assert.equal(MOE_MEERIM_SPECIAL_BOSS_SPAWNS.roughBison.mapSlotId, "elvin_valley");
+    assert.notEqual(
+      MOE_MEERIM_SPECIAL_BOSS_SPAWNS.roughBison.tx,
+      MOE_MEERIM_SPECIAL_BOSS_SPAWNS.mountainBison.tx
+    );
+  });
+});
+
 describe("player vitals", () => {
   it("starts at 100 hp/mp max for trainer level 1", async () => {
     const { moePlayerVitalsMaxForLevel, fullHealMoePlayerVitals } = await import(
@@ -323,6 +510,26 @@ describe("terrain ground snap", () => {
     const hits = [{ point: { y: 1.2 } }, { point: { y: 0.5 } }];
     const y = moe3dPickWalkableTerrainY(hits, 0.5, MOE_PLAYER_TERRAIN_MAX_CLIMB);
     assert.equal(y, 1.2);
+  });
+
+  it("picks walkable floor and ignores ceiling hits", () => {
+    const hits = [
+      { point: { y: 11 }, normal: { y: -1 } },
+      { point: { y: 1.2 }, normal: { y: 1 } },
+      { point: { y: 0.4 }, normal: { y: 1 } },
+    ];
+    const y = moe3dPickFloorTerrainY(hits, 4.5);
+    assert.equal(y, 1.2);
+  });
+
+  it("picks lowest interior floor for warp snap", () => {
+    const hits = [
+      { point: { y: 11 }, normal: { y: 1 } },
+      { point: { y: 1.05 }, normal: { y: 1 } },
+      { point: { y: 0.8 }, normal: { y: 1 } },
+    ];
+    const y = moe3dPickLowestFloorTerrainY(hits, -0.5, 3.5);
+    assert.equal(y, 0.8);
   });
 });
 
@@ -753,6 +960,274 @@ describe("macro1 sulfur mine official check", () => {
       assert.ok(fs.statSync(full).size > 1000, `${file} too small`);
     }
   });
+
+  it("wires elan palace knight GLB for 3D field", () => {
+    const modelsSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moeField3DModels.js"),
+      "utf8"
+    );
+    const canvasSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    assert.match(modelsSrc, /isElanKnightEnemyKey/);
+    assert.match(modelsSrc, /MOE_ELAN_KNIGHT_WHITE_A_MODEL_URL/);
+    assert.match(canvasSrc, /isElanKnightEnemyKey/);
+  });
+
+  it("uses official MOE heal skill delay timers", async () => {
+    const healSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moePlayerHealSkills.js"),
+      "utf8"
+    );
+    const fieldSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const slotUiSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moePlayerSkillSlotUi.js"),
+      "utf8"
+    );
+    const {
+      MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC,
+      MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC,
+      MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC,
+      MOE_PLAYER_HEAL_LIGHT_DELAY_FRAMES,
+      MOE_PLAYER_HEAL_HEALING_DELAY_FRAMES,
+      MOE_PLAYER_HEAL_ALL_DELAY_FRAMES,
+    } = await import("../../src/lib/moePlayerHealSkills.js");
+
+    assert.match(healSrc, /MOE_PLAYER_HEAL_LIGHT_DELAY_FRAMES = 246/);
+    assert.match(healSrc, /MOE_PLAYER_HEAL_HEALING_DELAY_FRAMES = 290/);
+    assert.match(healSrc, /MOE_PLAYER_HEAL_ALL_DELAY_FRAMES = 378/);
+    assert.equal(MOE_PLAYER_HEAL_LIGHT_DELAY_FRAMES, 246);
+    assert.equal(MOE_PLAYER_HEAL_HEALING_DELAY_FRAMES, 290);
+    assert.equal(MOE_PLAYER_HEAL_ALL_DELAY_FRAMES, 378);
+    assert.equal(MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC, 4);
+    assert.equal(MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC, 5);
+    assert.equal(MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC, 6);
+    assert.match(fieldSrc, /healCdSec\.light/);
+    assert.match(fieldSrc, /moePlayerHealCooldownLabel/);
+    assert.match(fieldSrc, /pushWorldHealPopup/);
+    assert.match(fieldSrc, /moePlayerHealSkillTitle/);
+    assert.match(slotUiSrc, /cooldownSec: cd > 0 \? cd : null/);
+    assert.match(slotUiSrc, /moePlayerHealSkillTitle/);
+
+    const { formatWorldHealPopupAmount } = await import(
+      "../../src/lib/moeWorldHealPopup.js"
+    );
+    assert.equal(formatWorldHealPopupAmount(30), "30");
+    assert.equal(formatWorldHealPopupAmount(45), "45");
+    assert.equal(formatWorldHealPopupAmount(20, 15), null);
+
+    const {
+      MOE_PLAYER_REGEN_TICK_COUNT,
+      MOE_PLAYER_REGEN_TICK_INTERVAL_SEC,
+      MOE_PLAYER_REGEN_HP_PER_TICK,
+      MOE_PLAYER_REGEN_DELAY_FRAMES,
+      MOE_PLAYER_REGEN_EFFECT_DURATION_SEC,
+      MOE_PLAYER_REGEN_COOLDOWN_SEC,
+    } = await import("../../src/lib/moePlayerRegenSkill.js");
+    assert.equal(MOE_PLAYER_REGEN_TICK_COUNT, 15);
+    assert.equal(MOE_PLAYER_REGEN_TICK_INTERVAL_SEC, 3);
+    assert.equal(MOE_PLAYER_REGEN_HP_PER_TICK, 15);
+    assert.equal(MOE_PLAYER_REGEN_DELAY_FRAMES, 334);
+    assert.equal(MOE_PLAYER_REGEN_EFFECT_DURATION_SEC, 42);
+    assert.equal(MOE_PLAYER_REGEN_COOLDOWN_SEC, 6);
+  });
+
+  it("spawns tyrant gryphon on elvin keikoku summit", () => {
+    const plannedSrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/maps/moeElvinKeikokuPlanned.js"),
+      "utf8"
+    );
+    const spawnSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dMonsterMapSpawns.js"),
+      "utf8"
+    );
+    const elvinGlbSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dElvinValleyGlb.js"),
+      "utf8"
+    );
+    const registrySrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/moeMonsterFieldRegistry.js"),
+      "utf8"
+    );
+    const lineupSrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/moeMonsterLineup.js"),
+      "utf8"
+    );
+
+    assert.match(plannedSrc, /key: "tyrant_gryphon"/);
+    assert.match(plannedSrc, /areaHp: 4934\.3/);
+    assert.match(plannedSrc, /superBoss: true/);
+    assert.match(plannedSrc, /mapSlotId: "elvin_keikoku"/);
+    assert.match(plannedSrc, /tz: 0\.308/);
+    assert.match(spawnSrc, /moeElvinKeikokuActiveSpawnSpecs/);
+    assert.match(spawnSrc, /moe3dElvinKeikokuTyrantSpawnWorld/);
+    assert.match(elvinGlbSrc, /x: -1488/);
+    assert.match(elvinGlbSrc, /z: 324/);
+    assert.match(elvinGlbSrc, /MOE_ELVIN_KEIKOKU_TYRANT_SPAWN_GROUND_Y = 21/);
+    assert.match(
+      registrySrc,
+      /moeElvinKeikokuActiveFieldEntries\(\)\.find\(\(e\) => e\.key === key\)/
+    );
+    assert.match(lineupSrc, /tyrant_gryphon_a/);
+  });
+
+  it("wires elvin keikoku glb on warp row new map slot", () => {
+    const elvinGlb = path.join(
+      repoRoot,
+      "public/assets/map/3D_MoeElvinkeikoku.glb"
+    );
+    assert.ok(fs.existsSync(elvinGlb));
+    assert.ok(fs.statSync(elvinGlb).size > 100_000);
+
+    const elvinSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dElvinValleyGlb.js"),
+      "utf8"
+    );
+    const canvasSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const slotSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dMapSlotAtWorldPos.js"),
+      "utf8"
+    );
+    const colliderSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dFieldColliders.js"),
+      "utf8"
+    );
+    const warpSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dAltarWarp.js"),
+      "utf8"
+    );
+    const altarSrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/moeAltarWarps.js"),
+      "utf8"
+    );
+    const worldSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dWorldLayout.js"),
+      "utf8"
+    );
+
+    assert.match(elvinSrc, /MOE_ELVIN_KEIKOKU_MAP_SLOT_ID = "elvin_keikoku"/);
+    assert.match(elvinSrc, /MOE_ELVIN_VALLEY_GLB_URL/);
+    assert.match(elvinSrc, /moe3dElvinKeikokuTerrainGroundY/);
+    assert.match(elvinSrc, /moe3dElvinKeikokuSpawnWorld/);
+    assert.match(elvinSrc, /MOE_ELVIN_KEIKOKU_FLOOR_MIN_Y/);
+    assert.match(elvinSrc, /MOE_ELVIN_KEIKOKU_SPAWN_GROUND_Y = 1\.5/);
+    assert.match(elvinSrc, /preferLowest: false/);
+    assert.match(canvasSrc, /attachMoe3dElvinValleyGlb/);
+    assert.match(canvasSrc, /reserved-map-\$\{MOE_ELVIN_KEIKOKU_MAP_SLOT_ID\}/);
+    assert.match(canvasSrc, /moe3dElvinKeikokuTerrainGroundY/);
+    assert.match(slotSrc, /moe3dIsOnElvinKeikokuField/);
+    assert.match(colliderSrc, /moe3dIsOnElvinKeikokuField/);
+    assert.match(warpSrc, /moe3dElvinKeikokuSpawnWorld/);
+    assert.match(altarSrc, /to_elvin_keikoku/);
+    assert.match(altarSrc, /【新】エルビン渓谷/);
+    assert.match(worldSrc, /id: "elvin_keikoku"/);
+    assert.match(worldSrc, /新エルビン渓谷/);
+  });
+
+  it("wires sulfur kazan temple glb and warp spawn layout", () => {
+    const kazanGlb = path.join(repoRoot, "public/assets/map/3D_MoeKazan1map.glb");
+    assert.ok(fs.existsSync(kazanGlb));
+    assert.ok(fs.statSync(kazanGlb).size > 100_000);
+
+    const kazanSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dSulfurKazanTemple.js"),
+      "utf8"
+    );
+    const reservedSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dReservedMapTile.js"),
+      "utf8"
+    );
+    const canvasSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const altarSrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/moeAltarWarps.js"),
+      "utf8"
+    );
+    const warpSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dAltarWarp.js"),
+      "utf8"
+    );
+
+    assert.match(kazanSrc, /MOE_SULFUR_KAZAN_MAP_SLOT_ID = "sulfur_kazan_temple"/);
+    assert.match(kazanSrc, /MOE_SULFUR_KAZAN_INDOOR_SPAWN_GROUND_Y = 1/);
+    assert.doesNotMatch(kazanSrc, /MOE_SULFUR_KAZAN_TEMPLE_MESH_Y_OFFSET/);
+    assert.match(kazanSrc, /moe3dSlotSpawnWorld\([\s\S]*MOE_SULFUR_KAZAN_MAP_SLOT_ID/);
+    assert.match(kazanSrc, /moe3dSulfurKazanTerrainGroundY/);
+    assert.match(kazanSrc, /moe3dSulfurKazanWalkWorldRect/);
+    assert.match(kazanSrc, /moe3dClampSulfurKazanWalkPosition/);
+    assert.match(kazanSrc, /preferLowest: teleportSnap/);
+    assert.match(canvasSrc, /moe3dSulfurKazanTerrainGroundY/);
+    assert.match(reservedSrc, /MOE_SULFUR_KAZAN_MAP_SLOT_ID/);
+    assert.match(reservedSrc, /appendSulfurMineMazeMeshes/);
+    assert.match(reservedSrc, /moe3dInvalidateTerrainRaycastCache/);
+    assert.match(canvasSrc, /attachMoe3dSulfurKazanTemple/);
+    assert.match(canvasSrc, /moe3dInvalidateTerrainRaycastCache/);
+    assert.match(altarSrc, /【新】スルト鉱山 · 火山神殿/);
+    assert.match(altarSrc, /スルト鉱山 · アルター/);
+    assert.match(warpSrc, /moe3dSulfurKazanIndoorSpawnWorld/);
+    assert.match(warpSrc, /MOE_SULFUR_KAZAN_MAP_SLOT_ID/);
+
+    const worldSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dWorldLayout.js"),
+      "utf8"
+    );
+    assert.match(worldSrc, /id: "sulfur_kazan_temple"/);
+    assert.match(worldSrc, /新スルト鉱山（火山神殿）/);
+
+    const altarWarpSrc = fs.readFileSync(
+      path.join(repoRoot, "src/data/moeAltarWarps.js"),
+      "utf8"
+    );
+    const compassSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeField3DCompassHud.jsx"),
+      "utf8"
+    );
+    assert.match(altarWarpSrc, /id: "newmap", label: "新マップ"/);
+    assert.match(altarWarpSrc, /group: "newmap"/);
+    assert.match(compassSrc, /formatMoe3dCoordLabel\(x, y, groundZ\)/);
+    assert.match(compassSrc, /z\$\{formatMoe3dCoordAxis\(groundZ\)\}/);
+  });
+});
+
+describe("altar warp spawn placement", () => {
+  it("clamps sulfur kazan warp spawn to map slot rect", () => {
+    const fieldSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const slotSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dMapSlotAtWorldPos.js"),
+      "utf8"
+    );
+    assert.match(fieldSrc, /MOE_SULFUR_KAZAN_MAP_SLOT_ID[\s\S]*moe3dClampToMapSlotRect/);
+    assert.match(slotSrc, /moe3dIsOnSulfurKazanField/);
+    assert.match(slotSrc, /全体 terrain bbox/);
+  });
+
+  it("clamps AGE warp destinations to map slot rect", () => {
+    const fieldSrc = fs.readFileSync(
+      path.join(repoRoot, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const slotSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moe3dMapSlotAtWorldPos.js"),
+      "utf8"
+    );
+    assert.match(fieldSrc, /moe3dWarpDestSpawnWorld\(dest, tw, td/);
+    assert.match(fieldSrc, /moe3dClampToPlayBounds\(spawn\.x, spawn\.y, bounds/);
+    assert.match(fieldSrc, /MOE_AGE_MAP_SLOT_IDS\.has\(dest\.mapSlotId\)/);
+    assert.doesNotMatch(fieldSrc, /moe3dWarpDestPlayerPosition/);
+    assert.match(slotSrc, /MOE_AGE_MAP_SLOT_IDS\.has\(slotId\)/);
+  });
 });
 
 describe("macro1 neoku plateau official check", () => {
@@ -822,6 +1297,148 @@ describe("macro1 eisis cave official check", () => {
     );
     assert.deepEqual(moeMacro1RegistryIssues(eisisRegistry, "eisis_cave"), []);
   });
+
+  it("has eisis spider GLB assets wired for 3D field", () => {
+    const glbDir = path.join(repoRoot, "public/assets/models/monster");
+    for (const file of ["ElvinSpiderA.glb", "ElvinSpiderB.glb"]) {
+      const full = path.join(glbDir, file);
+      assert.ok(fs.existsSync(full), `missing ${file}`);
+      assert.ok(fs.statSync(full).size > 1000, `${file} too small`);
+    }
+    const modelsSrc = fs.readFileSync(
+      path.join(repoRoot, "src/lib/moeField3DModels.js"),
+      "utf8"
+    );
+    assert.match(modelsSrc, /isSpiderEnemyKey/);
+    assert.match(modelsSrc, /great_tarantula/);
+    const variantB = MOE_MONSTER_LINEUP.find((v) => v.id === "great_tarantula_b");
+    assert.equal(variantB?.file, "ElvinSpiderB.glb");
+  });
+});
+
+describe("macro1 bisk official check", () => {
+  const biskSpawns = [
+    { mapSlotId: "bisk", key: "bisk_ixion_water", modelVariantId: "bisk_ixion_water_a" },
+    { mapSlotId: "bisk", key: "bisk_ixion_water", modelVariantId: "bisk_ixion_water_b" },
+  ];
+  const biskRegistry = [
+    {
+      key: "bisk_ixion_water",
+      mapSlotId: "bisk",
+      modelFile: "StrayIxion.glb",
+      skills: ["ウォーターガン", "パンチ"],
+    },
+  ];
+
+  it("passes wiki spawn and registry official checks", () => {
+    const wiki = MOE_MACRO1_PHASE3_AREA_WIKI.bisk;
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("bisk", biskSpawns, wiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(biskRegistry, "bisk"), []);
+  });
+
+  it("keeps bisk ixion spawns clear of altar warp spawn", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const spawnSrc = readFileSync(
+      join(root, "src/data/maps/moeBiskPlanned.js"),
+      "utf8"
+    );
+    const mapSpawnsSrc = readFileSync(
+      join(root, "src/lib/moe3dMonsterMapSpawns.js"),
+      "utf8"
+    );
+    const warpSrc = readFileSync(join(root, "src/lib/moe3dAltarWarp.js"), "utf8");
+
+    assert.match(mapSpawnsSrc, /moe3dClearSpawnFromAltarPlayer/);
+    assert.match(warpSrc, /MOE_ALTAR_SPAWN_CLEAR_NORM = 0\.28/);
+    assert.match(warpSrc, /moe3dClearSpawnFromAltarPlayer/);
+    assert.match(spawnSrc, /tz: 0\.66/);
+    assert.match(spawnSrc, /tz: 0\.62/);
+
+    const minClear = 0.28;
+    const spawnTx = 0.5;
+    const spawnTz = 0.54;
+    const specs = [
+      { tx: 0.34, tz: 0.66 },
+      { tx: 0.66, tz: 0.62 },
+    ];
+    for (const spec of specs) {
+      const dx = spec.tx - spawnTx;
+      const dz = spec.tz - spawnTz;
+      const dist = Math.hypot(dx, dz);
+      const cleared =
+        dist >= minClear
+          ? spec
+          : dist < 0.001
+            ? { tx: spawnTx + minClear * 0.55, tz: spawnTz + minClear * 0.85 }
+            : {
+                tx: spawnTx + (dx * minClear) / dist,
+                tz: spawnTz + (dz * minClear) / dist,
+              };
+      assert.ok(
+        Math.hypot(cleared.tx - spawnTx, cleared.tz - spawnTz) >= minClear - 0.001
+      );
+    }
+  });
+});
+
+describe("macro1 yug coast official check", () => {
+  const yugSpawns = [
+    { mapSlotId: "yug_coast", key: "yug_sea_snake", modelVariantId: "sea_snake_a" },
+    { mapSlotId: "yug_coast", key: "yug_sea_snake", modelVariantId: "sea_snake_a" },
+  ];
+  const yugRegistry = [
+    {
+      key: "yug_sea_snake",
+      mapSlotId: "yug_coast",
+      modelFile: "SeaSnakeA.glb",
+      skills: ["同族リンク"],
+    },
+  ];
+  const yugWiki = { officialEnemies: ["海ヘビ"] };
+
+  it("passes wiki spawn and registry official checks", () => {
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("yug_coast", yugSpawns, yugWiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(yugRegistry, "yug_coast"), []);
+  });
+});
+
+describe("macro1 soles valley official check", () => {
+  const solesSpawns = [
+    {
+      mapSlotId: "soles_valley",
+      key: "soles_rescue_hound",
+      modelVariantId: "rescue_hound_a",
+    },
+  ];
+  const solesRegistry = [
+    {
+      key: "soles_rescue_hound",
+      mapSlotId: "soles_valley",
+      modelFile: "RescueHoundA.glb",
+      skills: ["噛み付き"],
+    },
+  ];
+  const solesWiki = { officialEnemies: ["レスクール ハウンド"] };
+
+  it("passes wiki spawn and registry official checks", () => {
+    const variantIds = new Set(MOE_MONSTER_LINEUP.map((v) => v.id));
+    assert.deepEqual(
+      moeMacro1OfficialSpawnIssues("soles_valley", solesSpawns, solesWiki, variantIds),
+      []
+    );
+    assert.deepEqual(moeMacro1RegistryIssues(solesRegistry, "soles_valley"), []);
+  });
 });
 
 describe("macro1 elvin mountains official check", () => {
@@ -830,12 +1447,14 @@ describe("macro1 elvin mountains official check", () => {
     { mapSlotId: "elvin_mountains", key: "elvin_mount_bison", modelVariantId: "elvin_bison_a" },
     { mapSlotId: "elvin_mountains", key: "pygmy_gryphon", modelVariantId: "pygmy_gryphon_a" },
     { mapSlotId: "elvin_mountains", key: "soil_basilisk", modelVariantId: "soil_basilisk_a" },
+    { mapSlotId: "elvin_mountains", key: "auzun_bura" },
   ];
   const mountainRegistry = [
     { key: "elvin_mount_wolf", mapSlotId: "elvin_mountains", modelFile: "ElvinWolfA.glb", skills: ["噛み付き"] },
     { key: "elvin_mount_bison", mapSlotId: "elvin_mountains", modelFile: "ElvinBisonA.glb", skills: ["ホーン チャージ"] },
     { key: "pygmy_gryphon", mapSlotId: "elvin_mountains", modelFile: "PygmyGryphonA.glb", skills: ["噛み付き"] },
     { key: "soil_basilisk", mapSlotId: "elvin_mountains", modelFile: "SoilBasiliskA.glb", skills: ["ポイズン テイル"] },
+    { key: "auzun_bura", mapSlotId: "elvin_mountains", modelFile: "Bison01.glb", skills: ["ホーン チャージ"] },
   ];
 
   it("passes wiki spawn and registry official checks", () => {
@@ -979,6 +1598,25 @@ describe("pet training guide by map", () => {
     assert.equal(moePetTrainingLevelLabel(71.1), "Lv71.1");
     const mountains = sections.find((s) => s.mapSlotId === "elvin_mountains");
     assert.ok(mountains?.enemies.some((e) => e.key === "pygmy_gryphon"));
+  });
+
+  it("shows empty AGE map headings when includeEmptyAgeSections", () => {
+    const ageIds = new Set(["yug_coast", "geo_abyss_ne"]);
+    const sections = moePetTrainingGuideSectionsFromEntries(
+      [],
+      [
+        { id: "yug_coast", nameJa: "ユグ海岸" },
+        { id: "geo_abyss_ne", nameJa: "ゲオ深淵（北東）" },
+        { id: "bisk", nameJa: "城下町ビスク" },
+      ],
+      { includeEmptyAgeSections: true, ageMapSlotIds: ageIds }
+    );
+    const yug = sections.find((s) => s.mapSlotId === "yug_coast");
+    assert.ok(yug);
+    assert.equal(yug.empty, true);
+    assert.equal(yug.areaJa, "ユグ海岸");
+    assert.ok(sections.find((s) => s.mapSlotId === "geo_abyss_ne"));
+    assert.equal(sections.some((s) => s.mapSlotId === "bisk"), false);
   });
 });
 
@@ -1745,12 +2383,14 @@ describe("buff ui", () => {
     assert.equal(off.find((s) => s?.id === "pet_regen"), undefined);
     const on = buildMoePetBuffStrip({
       petRegenActive: true,
-      petRegenHp: 20,
-      petRegenMp: 2,
-      petRegenIntervalSec: 2,
+      petRegenHp: 15,
+      petRegenMp: 0,
+      petRegenIntervalSec: 3,
     });
     assert.equal(on[0]?.id, "pet_regen");
     assert.equal(on[0]?.icon, "🍃");
+    assert.match(on[0]?.label, /3秒ごと HP\+15/);
+    assert.doesNotMatch(on[0]?.label ?? "", /MP\+/);
   });
 });
 
@@ -1766,6 +2406,71 @@ describe("phoenix player skill MP", () => {
     const next = spendPlayerMpForPhoenixSkill(caster, skill);
     assert.equal(next.mp, 2);
     assert.equal(spendPlayerMpForPhoenixSkill({ mp: 5, mpMax: 50 }, skill), null);
+  });
+});
+
+describe("player status ui", () => {
+  it("builds trainer vitals and skill2 view", async () => {
+    const { buildMoePlayerStatusView, moePlayerSkillExpBarPct } = await import(
+      "../../src/lib/moePlayerStatusUi.js"
+    );
+    const view = buildMoePlayerStatusView({
+      trainerStatus: { level: 3, job: "勇者", exp: 120, nextExp: 1000 },
+      playerVitals: {
+        hp: 80,
+        hpMax: 124,
+        mp: 50,
+        mpMax: 112,
+        stamina: 90,
+        staminaMax: 100,
+      },
+      playerSkill2Progress: { level: 12.3, exp: 45 },
+      playerPreSkillProgress: { jiriki_kaihou: { level: 0, exp: 0 } },
+      playerBuffStrip: [],
+      skill2Catalog: [
+        { id: "jiriki_seiran", name: "自力整然", level: 10 },
+        { id: "phoenix_deep_sleep", name: "深睡眠眠", level: 80 },
+      ],
+    });
+    assert.equal(view.trainerLevel, 3);
+    assert.equal(view.skill2.level, 12.3);
+    assert.equal(view.skill2.expMax, 100);
+    assert.equal(view.phoenixSkills.length, 2);
+    assert.ok(view.preSkills.length > 0);
+    assert.equal(moePlayerSkillExpBarPct(45), 45);
+    assert.ok(view.tips.length >= 3);
+  });
+});
+
+describe("phoenix deep sleep", () => {
+  it("chants 5 seconds and restores pet MP ratio", async () => {
+    const {
+      MOE_PHOENIX_DEEP_SLEEP_CHANT_SEC,
+      applyMoePhoenixDeepSleepMp,
+      isMoePhoenixDeepSleepChant,
+    } = await import("../../src/lib/moePhoenixDeepSleep.js");
+    const { moePhoenixPlayerChantSec } = await import(
+      "../../src/lib/moePhoenixPlayerSkill.js"
+    );
+    const skill = { id: "phoenix_deep_sleep", mpRestoreRatio: 0.45 };
+    assert.equal(MOE_PHOENIX_DEEP_SLEEP_CHANT_SEC, 5);
+    assert.equal(moePhoenixPlayerChantSec(skill), 5);
+    assert.equal(moePhoenixPlayerChantSec({ id: "phoenix_ansleep_walk" }), 3);
+    const { pet, gain } = applyMoePhoenixDeepSleepMp({ mp: 10, mpMax: 100 });
+    assert.equal(gain, 45);
+    assert.equal(pet.mp, 55);
+    assert.equal(
+      isMoePhoenixDeepSleepChant({
+        skillId: "phoenix_deep_sleep",
+        kind: "phoenix",
+      }),
+      true
+    );
+    assert.equal(
+      isMoePhoenixDeepSleepChant({ kind: "pet_deep_sleep" }),
+      true
+    );
+    assert.equal(isMoePhoenixDeepSleepChant(null), false);
   });
 });
 
@@ -1865,6 +2570,184 @@ describe("player skill2 progress", () => {
   });
 });
 
+describe("player skill success rate", () => {
+  it("matches MOE-style anchors at required 40", async () => {
+    const { moeSkillSuccessRate } = await import(
+      "../../src/lib/moePlayerSkillSuccessRate.js"
+    );
+    assert.equal(moeSkillSuccessRate(46, 40), 0.8);
+    assert.equal(moeSkillSuccessRate(48, 40), 0.99);
+    assert.equal(moeSkillSuccessRate(40, 40), 0.5);
+  });
+});
+
+describe("phoenix training memos", () => {
+  it("ships rest guide, forbidden rules, and reflection kinds", async () => {
+    const {
+      getMoePhoenixTrainingDefaultMemos,
+      MOE_PHOENIX_BUTTON_SUB_HINT,
+      MOE_PHOENIX_REFLECTION_KINDS,
+      MOE_PHOENIX_REST_SUB_HINT,
+    } = await import("../../src/lib/moePhoenixTrainingMemos.js");
+    const memos = getMoePhoenixTrainingDefaultMemos();
+    assert.ok(memos.forbidden.includes("YouTube"));
+    assert.ok(memos.forbidden.includes("夜の学び"));
+    assert.ok(memos.rest.includes("がんばりすぎない"));
+    assert.ok(MOE_PHOENIX_REST_SUB_HINT.includes("体を壊"));
+    assert.ok(MOE_PHOENIX_BUTTON_SUB_HINT.includes("ALL OK"));
+    assert.ok(MOE_PHOENIX_REFLECTION_KINDS.includes("phoenix"));
+  });
+});
+
+describe("altar tomorrow memo", () => {
+  it("supports free-form entries and migrates legacy slots", async () => {
+    const {
+      normalizeTomorrowMemoState,
+      countTomorrowMemoDone,
+      appendTomorrowMemoEntry,
+    } = await import("../../src/lib/moeTomorrowMemo.js");
+    const state = normalizeTomorrowMemoState({
+      panelOpen: true,
+      slots: [
+        { text: "a", done: true },
+        { text: "b", done: false },
+      ],
+    });
+    assert.ok(state.entries.length >= 2);
+    assert.equal(countTomorrowMemoDone(state), 1);
+    assert.equal(state.entries[0].text, "a");
+    const added = appendTomorrowMemoEntry(state, "new");
+    assert.equal(added.entries.length, state.entries.length + 1);
+  });
+});
+
+describe("dragon kintoun skill", () => {
+  it("doubles walk speed and quadruples dash without shinsoku", async () => {
+    const {
+      MOE_KINTOUN_DASH_EXTRA_MULT,
+      MOE_KINTOUN_WALK_SPEED_MULT,
+      moeKintounMoveSpeedMult,
+      tickKintounFlyOffset,
+    } = await import("../../src/lib/moeDragonKintoun.js");
+    assert.equal(moeKintounMoveSpeedMult(false, false), 1);
+    assert.equal(moeKintounMoveSpeedMult(false, true), MOE_KINTOUN_WALK_SPEED_MULT);
+    assert.equal(
+      moeKintounMoveSpeedMult(true, true),
+      MOE_KINTOUN_WALK_SPEED_MULT * MOE_KINTOUN_DASH_EXTRA_MULT
+    );
+    assert.ok(tickKintounFlyOffset(0, true, 1) > 0);
+    assert.equal(tickKintounFlyOffset(14, false, 1), 0);
+  });
+
+  it("unlocks kintoun at dragon practice Lv80", async () => {
+    const { buildPlayerDragonSkillById } = await import(
+      "../../src/data/moePlayerDragonSkills.js"
+    );
+    assert.equal(buildPlayerDragonSkillById(79).dragon_kintoun, undefined);
+    assert.equal(buildPlayerDragonSkillById(80).dragon_kintoun?.name, "筋斗雲");
+  });
+
+  it("lists nine dragon skill get entries", async () => {
+    const { MOE_DRAGON_SKILL_GET_CATALOG } = await import(
+      "../../src/data/moeDragonSkillGetCatalog.js"
+    );
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG.length, 9);
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[0].name, "龍神の呼吸");
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[3].name, "神速");
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[7].name, "筋斗雲");
+  });
+});
+
+describe("phoenix skill get catalog", () => {
+  it("lists nine phoenix skill get entries", async () => {
+    const { MOE_PHOENIX_SKILL_GET_CATALOG } = await import(
+      "../../src/data/moePhoenixSkillGetCatalog.js"
+    );
+    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG.length, 9);
+    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[0].name, "鳳凰の呼吸");
+    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[3].name, "フライングフェザー");
+    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[8].name, "フェニックス");
+  });
+});
+
+describe("dragon training", () => {
+  it("awards dragon exp on session complete", async () => {
+    const {
+      completeDragonTrainingSession,
+      defaultDragonTrainingState,
+      formatDragonTrainingDuration,
+    } = await import("../../src/lib/moeDragonTraining.js");
+    assert.equal(formatDragonTrainingDuration(125), "2分5秒");
+    const base = {
+      ...defaultDragonTrainingState(),
+      accumulatedSec: 120,
+      checked: { hunt: true, challenge: true },
+    };
+    const result = completeDragonTrainingSession(base, 1_700_000_000_000);
+    assert.ok(result.gainAmount > 0);
+    assert.ok(result.toastLines.some((l) => l.includes("龍修行EXP")));
+    assert.equal(result.state.dragonTotalSec, 120);
+  });
+
+  it("toggles unified dragon timer", async () => {
+    const {
+      MOE_DRAGON_BUTTON_SUB_HINT,
+      defaultDragonTrainingState,
+      toggleDragonTrainingTimer,
+    } = await import("../../src/lib/moeDragonTraining.js");
+    assert.ok(MOE_DRAGON_BUTTON_SUB_HINT.includes("運動する"));
+    const started = toggleDragonTrainingTimer(defaultDragonTrainingState(), 1000);
+    assert.equal(started.timerRunning, true);
+    const stopped = toggleDragonTrainingTimer(started, 7000);
+    assert.equal(stopped.timerRunning, false);
+    assert.ok(stopped.accumulatedSec >= 6);
+  });
+
+  it("grants live dragon exp every 6 seconds", async () => {
+    const {
+      MOE_DRAGON_EXP_PER_TICK,
+      calcDragonSessionExpGain,
+      defaultDragonTrainingState,
+      formatDragonBonusRemain,
+      formatDragonCurrentSec,
+      startDragonTrainingTimer,
+      tickDragonSessionExp,
+    } = await import("../../src/lib/moeDragonTraining.js");
+    const started = startDragonTrainingTimer(defaultDragonTrainingState(), 1000);
+    const ticked = tickDragonSessionExp(started, 7000);
+    assert.equal(ticked.gainAmount, MOE_DRAGON_EXP_PER_TICK);
+    assert.equal(ticked.state.sessionExpTicksClaimed, 1);
+    assert.equal(calcDragonSessionExpGain(12), 0.2);
+    assert.equal(formatDragonCurrentSec(0), "0秒");
+    assert.equal(formatDragonBonusRemain(defaultDragonTrainingState()), "ボーナスまで60分");
+  });
+});
+
+describe("player experience storage", () => {
+  it("normalizes proficiency tracks", async () => {
+    const {
+      defaultPlayerExperience,
+      normalizePlayerExperience,
+      awardHealProficiencyOnUse,
+    } = await import("../../src/lib/moePlayerExperience.js");
+    const base = defaultPlayerExperience();
+    assert.equal(base.phoenix.level, 0);
+    assert.ok(base.preSkills.jiriki_kaihou);
+    const normalized = normalizePlayerExperience({
+      phoenix: { level: 12.3, exp: 45 },
+      heal: { level: 5, exp: 20 },
+    });
+    assert.equal(normalized.phoenix.level, 12.3);
+    assert.equal(normalized.heal.exp, 20);
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    const award = awardHealProficiencyOnUse({ level: 0, exp: 0 }, 40);
+    Math.random = originalRandom;
+    assert.equal(award.gained, true);
+    assert.ok(award.progress.exp > 0 || award.progress.level > 0);
+  });
+});
+
 describe("jiriki seiran", () => {
   it("requires MP13", () => {
     assert.equal(canUseJirikiSeiran({ mp: 12 }).ok, false);
@@ -1884,17 +2767,18 @@ describe("jiriki seiran", () => {
     );
   });
 
-  it("builds opener plus six fire hits", () => {
+  it("builds habit ascension 5x7 then 3x3 fire hits", () => {
     const seq = resolvePhoenixHabitAscensionSequence({
-      combatOpenFixedDamage: 35,
-      combatFixedDamage: 25,
-      combatWaveHits: 6,
+      combatPhase1Damage: 7,
+      combatPhase1Hits: 5,
+      combatPhase2Damage: 3,
+      combatPhase2Hits: 3,
       combatStepMs: 350,
     });
-    assert.equal(seq.hits.length, 7);
-    assert.equal(seq.hits[0].opts.fixedDamage, 35);
-    assert.equal(seq.hits[6].opts.fixedDamage, 25);
-    assert.equal(seq.hits[6].opts.grantExp, true);
+    assert.equal(seq.hits.length, 8);
+    assert.equal(seq.hits[0].opts.fixedDamage, 7);
+    assert.equal(seq.hits[7].opts.fixedDamage, 3);
+    assert.equal(seq.hits[7].opts.grantExp, true);
   });
 
   it("drops to normal condense rate after boost", () => {
@@ -1941,12 +2825,14 @@ describe("player summon models", () => {
 });
 
 describe("player summon pre-skills", () => {
-  it("builds kaihou opener + 6 fire hits", () => {
+  it("builds kaihou 5x7 then 3x3 fire hits", () => {
     const seq = resolveJirikiKaihouSequence(MOE_PLAYER_PRE_SKILLS[0]);
-    assert.equal(seq.hits.length, 7);
-    assert.equal(seq.hits[0].opts.fixedDamage, 45);
-    assert.equal(seq.hits[6].opts.fixedDamage, 32);
-    assert.equal(seq.hits[6].opts.grantExp, true);
+    assert.equal(seq.hits.length, 8);
+    assert.equal(seq.hits[0].opts.fixedDamage, 7);
+    assert.equal(seq.hits[4].opts.fixedDamage, 7);
+    assert.equal(seq.hits[5].opts.fixedDamage, 3);
+    assert.equal(seq.hits[7].opts.fixedDamage, 3);
+    assert.equal(seq.hits[7].opts.grantExp, true);
   });
 
   it("builds seiryu single heavy hit", () => {
@@ -1978,7 +2864,7 @@ describe("player summon pre-skills", () => {
   it("formats combat damage lines for tooltips", () => {
     assert.match(
       formatPlayerPreSkillCombatLine(MOE_PLAYER_PRE_SKILLS[0]),
-      /開火45/
+      /炎5×7＋炎3×3/
     );
     assert.equal(
       formatPlayerPreSkillCombatLine(MOE_PLAYER_PRE_SKILLS[1]),
@@ -2051,7 +2937,48 @@ describe("field bgm mapping", () => {
       moeFieldBgmTrackForMapSlot("slorim_plain"),
       MOE_BGM_TRACK.AMBIENT_5
     );
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("yug_coast"),
+      MOE_BGM_TRACK.AMBIENT_5
+    );
+    assert.equal(
+      moeFieldBgmTrackForMapSlot("soles_valley"),
+      MOE_BGM_TRACK.AMBIENT_3
+    );
     assert.equal(MOE_FIELD_COMBAT_BGM, MOE_BGM_TRACK.AMBIENT_4);
+  });
+});
+
+describe("field prefetch boot", () => {
+  it("starts prefetch only from boot component", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const prefetchSrc = readFileSync(
+      join(root, "src/lib/moeFieldPrefetch.js"),
+      "utf8"
+    );
+    const bootSrc = readFileSync(
+      join(root, "src/components/MoeFieldPrefetchBoot.jsx"),
+      "utf8"
+    );
+    const gateSrc = readFileSync(
+      join(root, "src/components/MoeFieldMapGate.jsx"),
+      "utf8"
+    );
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+
+    assert.doesNotMatch(prefetchSrc, /\nstartMoeFieldPrefetch\(\)/);
+    assert.doesNotMatch(prefetchSrc, /\nprefetchMoeFieldMap\(\)/);
+    assert.match(bootSrc, /startMoeFieldPrefetch\(\)/);
+    assert.match(gateSrc, /getMoeFieldPrefetchState/);
+    assert.doesNotMatch(gateSrc, /startMoeFieldPrefetch/);
+    assert.match(canvasSrc, /triggerGeoAbyssLavaRipple/);
+    assert.match(canvasSrc, /moeGeoLavaClickFromObject/);
   });
 });
 
@@ -2066,9 +2993,10 @@ describe("macro session timer", () => {
     assert.equal(formatMacroTimerClock(599), "9:59");
     assert.equal(formatMacroTimerClock(60), "1:00");
     assert.equal(formatMacroTimerClock(0), "0:00");
+    assert.equal(parseMacroTimerMinutes("5分"), 5);
     assert.equal(parseMacroTimerMinutes("10分"), 10);
     assert.equal(parseMacroTimerMinutes("30m"), 30);
-    assert.deepEqual(MOE_MACRO_TIMER_PRESET_MINUTES, [10, 20, 30, 45, 60]);
+    assert.deepEqual(MOE_MACRO_TIMER_PRESET_MINUTES, [5, 10, 20, 30, 45, 60]);
   });
 });
 
@@ -2109,7 +3037,129 @@ describe("AGE continent maps", () => {
     assert.match(altarSrc, /mitoya_great_tree: "🌳"/);
   });
 
-  it("places AGE hub house northwest of yug coast altar", async () => {
+  it("treats yug to mitoya as age home row without field enemies", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const ageConst = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeConstants.js"),
+      "utf8"
+    );
+    const yugSrc = readFileSync(
+      join(root, "src/data/maps/moeYugCoastPlanned.js"),
+      "utf8"
+    );
+    const mitoyaSrc = readFileSync(
+      join(root, "src/data/maps/moeMitoyaGreatTreePlanned.js"),
+      "utf8"
+    );
+    const l2Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL2Props.js"),
+      "utf8"
+    );
+    const l4Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL4Fx.js"),
+      "utf8"
+    );
+
+    assert.match(ageConst, /MOE_AGE_HOME_ROW_SLOT_IDS/);
+    assert.match(yugSrc, /MOE_YUG_COAST_FIELD_ENABLED = false/);
+    assert.match(mitoyaSrc, /MOE_MITOYA_FIELD_ENABLED = false/);
+    assert.match(l2Src, /家AGE入口/);
+    assert.match(l4Src, /slotId === "yug_coast"/);
+    assert.match(l4Src, /fireflies/);
+    const homeSrc = readFileSync(
+      join(root, "src/lib/moe3dAgeHomeProps.js"),
+      "utf8"
+    );
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const mitoyaL1 = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeTiles.js"),
+      "utf8"
+    );
+    const pathSrc = readFileSync(
+      join(root, "src/lib/moe3dYugCoastHomePath.js"),
+      "utf8"
+    );
+    assert.match(pathSrc, /MOE_YUG_COAST_SHOW_FIELD_HOMES = false/);
+    assert.match(pathSrc, /MOE_YUG_COAST_SHOW_HUB_HOUSE = true/);
+    assert.match(homeSrc, /MOE_YUG_COAST_SHOW_FIELD_HOMES/);
+    assert.match(canvasSrc, /MOE_YUG_COAST_SHOW_FIELD_HOMES/);
+    assert.match(canvasSrc, /MOE_YUG_COAST_SHOW_HUB_HOUSE/);
+    assert.match(mitoyaL1, /moe3dYugCoastPathLocalX/);
+    assert.match(mitoyaL1, /trunkH = 22/);
+    assert.match(mitoyaL1, /SphereGeometry\(10/);
+  });
+
+  it("adds travel memos for bisk hub and phase3 field maps", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const altarSrc = readFileSync(join(root, "src/data/moeAltarWarps.js"), "utf8");
+
+    assert.match(altarSrc, /bisk: "中央広場 — 転送ハブ/);
+    assert.match(altarSrc, /eisis_cave: "洞窟 — スパイダー/);
+    assert.match(altarSrc, /dragon_valley: "飛竜の谷/);
+    assert.match(altarSrc, /travelMemo: WARP_DEST_TRAVEL_MEMO\.bisk/);
+  });
+
+  it("campfire rest fades scene and stops field bgm", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const restSrc = readFileSync(
+      join(root, "src/lib/moeCampfireRestCore.js"),
+      "utf8"
+    );
+    const bgmSrc = readFileSync(join(root, "src/lib/moeFieldBgm.js"), "utf8");
+    const bgmMapSrc = readFileSync(
+      join(root, "src/lib/moeFieldBgmMap.js"),
+      "utf8"
+    );
+    const ambientSrc = readFileSync(
+      join(root, "src/components/AmbientBgm.jsx"),
+      "utf8"
+    );
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+
+    assert.match(restSrc, /休みますか/);
+    assert.match(restSrc, /moeCampfireRestBlendStep/);
+    assert.match(bgmSrc, /MOE_FIELD_BGM_REST_EVENT/);
+    assert.match(bgmSrc, /requestMoeFieldBgmRest/);
+    assert.match(bgmMapSrc, /MOE_BGM_REST_STOP_MS = 0/);
+    assert.match(ambientSrc, /pauseBgmImmediate/);
+    assert.match(ambientSrc, /fieldRestRef\.current\) return/);
+    assert.doesNotMatch(
+      ambientSrc,
+      /fieldRestRef\.current = active;\s*if \(!fieldAutoRef\.current\) return/
+    );
+    assert.match(
+      fieldSrc,
+      /requestMoeFieldBgmRest\(true\);\s*\n\s*void startMoeCampfireCrackle/
+    );
+    const crackleSrc = readFileSync(
+      join(root, "src/lib/moeCampfireCrackle.js"),
+      "utf8"
+    );
+    const crackleOgg = readFileSync(
+      join(root, "public/assets/sfx/campfire-crackle.ogg")
+    );
+    assert.match(crackleSrc, /MOE_CAMPFIRE_CRACKLE_URL/);
+    assert.match(crackleSrc, /campfire-crackle\.ogg/);
+    assert.match(crackleSrc, /opengameart\.org\/content\/fire-crackling/);
+    assert.ok(crackleOgg.length > 10_000);
+  });
+
+  it("places AGE hub house and campfire at yug coast", async () => {
     const { readFileSync } = await import("node:fs");
     const { join, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
@@ -2118,10 +3168,162 @@ describe("AGE continent maps", () => {
       join(root, "src/lib/moe3dAgeHubHouse.js"),
       "utf8"
     );
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
 
     assert.match(houseSrc, /altar_yug_coast/);
-    assert.match(houseSrc, /AGE_HOUSE_OFF_X = -8/);
-    assert.match(houseSrc, /AGE_HOUSE_OFF_Z = -7/);
+    assert.match(houseSrc, /AGE_HOUSE_OFF_X = -14/);
+    assert.match(houseSrc, /moe3dAgeHubCampfireWorldPos/);
+    assert.match(houseSrc, /AGE_HOUSE_DOOR_LOCAL_Z/);
+    assert.match(houseSrc, /AGE_CAMPFIRE_DOOR_GAP/);
+    assert.match(houseSrc, /MOE_AGE_TILE_FLOOR_Y = 0\.28/);
+    assert.match(canvasSrc, /moe3dAgeHubHousePosition/);
+    assert.match(canvasSrc, /moe3dAgeHubCampfireWorldPos/);
+    assert.match(canvasSrc, /MOE_YUG_COAST_SHOW_FIELD_HOMES/);
+    assert.match(canvasSrc, /MOE_YUG_COAST_SHOW_HUB_HOUSE/);
+    assert.match(canvasSrc, /MOE_AGE_HUB_HOUSE/);
+    assert.match(fieldSrc, /MoeAgeHubHousePanel/);
+    assert.match(fieldSrc, /handleAgeHubChantSubmit/);
+    assert.match(fieldSrc, /onChantSubmit=\{handleAgeHubChantSubmit\}/);
+    const panelSrc = readFileSync(
+      join(root, "src/components/MoeAgeHubHousePanel.jsx"),
+      "utf8"
+    );
+    assert.match(panelSrc, /生命爆神/);
+    assert.match(panelSrc, /moePetTrainingGuideForAgeHub/);
+    const altarSrc = readFileSync(join(root, "src/data/moeAltarWarps.js"), "utf8");
+    assert.match(altarSrc, /yug_coast:[\s\S]*家AGE番地の入口/);
+    assert.match(altarSrc, /mitoya_great_tree:[\s\S]*巨木の上に本家/);
+  });
+
+  it("applies weak pet regen inside AGE hub house", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const regenSrc = readFileSync(
+      join(root, "src/lib/moeAgeHubHouseRegen.js"),
+      "utf8"
+    );
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const panelSrc = readFileSync(
+      join(root, "src/components/MoeAgeHubHousePanel.jsx"),
+      "utf8"
+    );
+
+    assert.match(regenSrc, /hp: 5/);
+    assert.match(regenSrc, /intervalSec: 3/);
+    assert.match(regenSrc, /室内のみの弱リジェネ/);
+    assert.match(fieldSrc, /tickAgeHubHousePetRegen/);
+    assert.match(fieldSrc, /nearAgeHubHouseRef\.current/);
+    assert.match(fieldSrc, /!nearCampfireRef\.current/);
+    assert.match(panelSrc, /MOE_AGE_HUB_HOUSE_PET_REGEN/);
+  });
+
+  it("places soles valley AGE rest campfire and save field labels", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const campsSrc = readFileSync(
+      join(root, "src/lib/moe3dAgeRestCamps.js"),
+      "utf8"
+    );
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const labelsSrc = readFileSync(
+      join(root, "src/lib/moeExternalSaveLabels.js"),
+      "utf8"
+    );
+
+    assert.match(campsSrc, /altar_soles_valley/);
+    assert.match(campsSrc, /moe3dSolesValleyCampfireWorldPos/);
+    assert.match(campsSrc, /moe3dIsNearAgeRestCampfire/);
+    assert.match(canvasSrc, /moe3dSolesValleyCampfireWorldPos/);
+    assert.match(canvasSrc, /age-rest-camps/);
+    assert.match(fieldSrc, /moe3dIsNearAgeRestCampfire/);
+    assert.match(fieldSrc, /formatMoeExternalSaveFieldHint/);
+    assert.match(labelsSrc, /soles_valley: "ソレス渓谷"/);
+    assert.match(labelsSrc, /yug_coast: "ユグ海岸"/);
+  });
+
+  it("snaps bisk hub altar to map tile floor not macro overhang", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const warpSrc = readFileSync(join(root, "src/lib/moe3dAltarWarp.js"), "utf8");
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const altarSrc = readFileSync(join(root, "src/data/moeAltarWarps.js"), "utf8");
+
+    assert.match(warpSrc, /moe3dAltarGroundY/);
+    assert.match(warpSrc, /mapSlotId === "bisk"\) return 0\.3/);
+    assert.match(warpSrc, /MOE_3D_ALTAR_GROUND_SINK = 0\.15/);
+    assert.match(canvasSrc, /moe3dAltarGroundY/);
+    assert.match(canvasSrc, /mapTileRootY/);
+    assert.match(altarSrc, /altarTz: 0\.46/);
+  });
+
+  it("places cash shop away from bisk central altar", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const hubSrc = readFileSync(
+      join(root, "src/lib/moe3dBiskHubLayout.js"),
+      "utf8"
+    );
+
+    assert.match(hubSrc, /CASH_SHOP_OFF_X = -17/);
+    assert.match(hubSrc, /循環参照防止/);
+    assert.match(hubSrc, /CASH_SHOP_OFF_Z = 13/);
+  });
+
+  it("wires bisk altar pool water sparkle L4 fx", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    const fxSrc = readFileSync(join(root, "src/lib/moe3dBiskL4Fx.js"), "utf8");
+
+    assert.match(canvasSrc, /appendMoe3dBiskL4Fx/);
+    assert.match(canvasSrc, /updateMoe3dBiskL4Fx/);
+    assert.match(fxSrc, /bisk-l4-fx/);
+    assert.match(fxSrc, /appendMoe3dBiskL4Fx/);
+  });
+
+  it("places bisk plaza street lanterns as L2 props", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const tileSrc = readFileSync(join(root, "src/lib/moe3dBiskTile.js"), "utf8");
+
+    assert.match(tileSrc, /lanternSpecs/);
+    assert.match(tileSrc, /emissive: 0xf59e0b/);
+    assert.match(tileSrc, /tileD \* 0\.2/);
   });
 
   it("registers soles valley AGE bath L2 L3 placeholders", async () => {
@@ -2144,12 +3346,108 @@ describe("AGE continent maps", () => {
 
     assert.match(l2Src, /propsSolesValley/);
     assert.match(l2Src, /AGE湯/);
+    assert.match(l2Src, /propsYugCoast/);
+    assert.match(l2Src, /propsMitoyaGreatTree/);
+    assert.match(l2Src, /mitoya_great_tree: propsMitoyaGreatTree/);
+    assert.match(l2Src, /propsGeoAbyssNe/);
+    assert.match(l2Src, /geo_abyss_ne: propsGeoAbyssNe/);
+    const l4Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL4Fx.js"),
+      "utf8"
+    );
+    assert.match(l4Src, /mitoya_great_tree/);
+    assert.match(l4Src, /fde68a/);
+    assert.match(l4Src, /appendGeoAbyssLavaFx/);
+    const geoSrc = readFileSync(
+      join(root, "src/lib/moe3dGeoAbyssLavaFx.js"),
+      "utf8"
+    );
+    assert.match(geoSrc, /geo_abyss_ne/);
+    assert.match(geoSrc, /moeGeoLavaClick/);
+    assert.match(geoSrc, /triggerGeoAbyssLavaRipple/);
+    assert.match(l3Src, /yug_coast:[\s\S]*0\.55, tz: 0\.34/);
     assert.match(l3Src, /soles_valley/);
     assert.match(l3Src, /MACRO2_AGE_L3_PLACEHOLDERS/);
     assert.match(tilesSrc, /appendMoe3dMacro2AgeL2Props/);
     assert.match(tilesSrc, /appendMoe3dMacro2AgeL3SpawnPads/);
     assert.match(tilesSrc, /AGE湯 · 渓谷の湯/);
     assert.match(tilesSrc, /localSize\.w \* 0\.5/);
+    assert.match(tilesSrc, /const baseY = 0/);
+    assert.match(tilesSrc, /frustumCulled = false/);
+  });
+
+  it("MoeField3DCanvas wires AGE terrain tiles", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const canvasSrc = readFileSync(
+      join(root, "src/components/MoeField3DCanvas.jsx"),
+      "utf8"
+    );
+    assert.match(canvasSrc, /addMoe3dMacro2AgeTiles/);
+    assert.match(canvasSrc, /updateMoe3dMacro2AgeL4Fx/);
+  });
+
+  it("mitoya altar sits east of the great tree away from geo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const altarSrc = readFileSync(
+      join(root, "src/data/moeAltarWarps.js"),
+      "utf8"
+    );
+    const l3Src = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeL3Spawns.js"),
+      "utf8"
+    );
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    assert.match(
+      altarSrc,
+      /mitoya_great_tree:[\s\S]*altarTx: 0\.58[\s\S]*altarTz: 0\.5/
+    );
+    assert.match(l3Src, /mitoya_great_tree:[\s\S]*altarTx: 0\.58/);
+    assert.match(fieldSrc, /fieldBgmWarpLockRef/);
+    const slotSrc = readFileSync(
+      join(root, "src/lib/moe3dMapSlotAtWorldPos.js"),
+      "utf8"
+    );
+    const ageConstSrc = readFileSync(
+      join(root, "src/lib/moe3dMacro2AgeConstants.js"),
+      "utf8"
+    );
+    assert.match(ageConstSrc, /MOE_AGE_ROW_SLOT_ORDER_EAST_FIRST/);
+    assert.match(ageConstSrc, /"mitoya_great_tree"/);
+    assert.match(slotSrc, /MOE_AGE_MAP_SLOT_IDS\.has\(slotId\)/);
+    const mitoyaLayoutSrc = readFileSync(
+      join(root, "src/lib/moe3dMitoyaGreatTreeLayout.js"),
+      "utf8"
+    );
+    assert.match(mitoyaLayoutSrc, /MOE_MITOYA_TREE_TX = 0\.38/);
+    assert.match(fieldSrc, /MOE_MITOYA_TREE_TX/);
+  });
+
+  it("lists elvin bison bosses on training guide maps", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const registrySrc = readFileSync(
+      join(root, "src/data/moeMonsterFieldRegistry.js"),
+      "utf8"
+    );
+    const mountainsSrc = readFileSync(
+      join(root, "src/data/maps/moeElvinMountainsPlanned.js"),
+      "utf8"
+    );
+    assert.match(mountainsSrc, /key: "auzun_bura"/);
+    assert.match(registrySrc, /key: "mountain_bison"[\s\S]*mapSlotId: "elvin_valley"/);
+    assert.match(registrySrc, /key: "rough_bison"[\s\S]*mapSlotId: "elvin_valley"/);
+    assert.match(registrySrc, /moeElvinMountainsActiveFieldEntries/);
   });
 
   it("soles valley altar layout and AGE play clamp helpers", async () => {
@@ -2167,10 +3465,10 @@ describe("AGE continent maps", () => {
     );
     assert.match(altarSrc, /soles_valley:[\s\S]*spawnOffTz: 0\.14/);
     assert.match(slotSrc, /moe3dClampFieldPlayPosition/);
-    assert.match(slotSrc, /MOE_AGE_MAP_SLOT_IDS/);
+    assert.match(slotSrc, /MOE_AGE_MAP_SLOT_IDS\.has\(slotId\)/);
   });
 
-  it("macro-4 skill documents 20s circle cooldown", async () => {
+  it("macro-4 skill documents circle count and 20s cooldown", async () => {
     const { readFileSync } = await import("node:fs");
     const { join, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
@@ -2181,5 +3479,243 @@ describe("AGE continent maps", () => {
     );
     assert.match(skill, /20秒/);
     assert.match(skill, /サークル間クールダウン/);
+    assert.match(skill, /残り: N サークル/);
+    assert.match(skill, /デフォルト \*\*3サークル\*\*/);
+    assert.match(skill, /実装完遂まで延長/);
+    assert.match(skill, /時間制は使わない/);
+  });
+});
+
+describe("battle log", () => {
+  it("formats dq10-style damage lines and batches multi-hit", async () => {
+    const {
+      createMoeBattleLogState,
+      formatMoeBattleDamageLine,
+      formatMoeBattleEnemyAttackLine,
+      pushMoeBattleLogEntry,
+      queueMoeBattleDamageLog,
+      flushMoeBattleDamageBatch,
+      MOE_BATTLE_LOG_MAX_HISTORY,
+    } = await import("../../src/lib/moeBattleLog.js");
+
+    assert.equal(
+      formatMoeBattleDamageLine("カルゴーチェ", "狂獣の牙", "スライム", [12, 34]),
+      "カルゴーチェの 狂獣の牙 >> スライムに 12，34ダメ"
+    );
+    assert.equal(
+      formatMoeBattleEnemyAttackLine("オーク兵", "太陽の精霊", 18),
+      "オーク兵の 攻撃 >> 太陽の精霊に 18ダメ"
+    );
+
+    const state = createMoeBattleLogState();
+    queueMoeBattleDamageLog(state, {
+      key: "a\0b\0c",
+      attacker: "ペット",
+      skill: "アタック",
+      target: "敵",
+      amount: 5,
+    });
+    queueMoeBattleDamageLog(state, {
+      key: "a\0b\0c",
+      attacker: "ペット",
+      skill: "アタック",
+      target: "敵",
+      amount: 7,
+    });
+    flushMoeBattleDamageBatch(state);
+    assert.equal(state.entries.length, 1);
+    assert.match(state.entries[0].msg, /5，7ダメ/);
+
+    for (let i = 0; i < MOE_BATTLE_LOG_MAX_HISTORY + 5; i++) {
+      pushMoeBattleLogEntry(state, { msg: `line-${i}` });
+    }
+    assert.equal(state.entries.length, MOE_BATTLE_LOG_MAX_HISTORY);
+  });
+
+  it("wires battle log panel in field map", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const fieldSrc = readFileSync(
+      join(root, "src/components/MoeFieldMap.jsx"),
+      "utf8"
+    );
+    const panelSrc = readFileSync(
+      join(root, "src/components/MoeBattleLogPanel.jsx"),
+      "utf8"
+    );
+    assert.match(fieldSrc, /MoeBattleLogPanel/);
+    assert.match(fieldSrc, /createMoeBattleLogApi/);
+    assert.match(fieldSrc, /showBattleLog = is3d/);
+    assert.match(panelSrc, /バトルログ/);
+    assert.match(panelSrc, /#00ff00/);
+    assert.match(panelSrc, /useMoeBattleLogPanelLayout/);
+    assert.match(panelSrc, /onResizeWidthPointerDown/);
+    const layoutSrc = readFileSync(
+      join(root, "src/lib/moeBattleLogLayout.js"),
+      "utf8"
+    );
+    assert.match(layoutSrc, /MOE_BATTLE_LOG_LAYOUT_STORAGE_KEY/);
+    assert.match(layoutSrc, /clampMoeBattleLogLayout/);
+  });
+
+  it("snaps battle log to minimap right edge", async () => {
+    const {
+      trySnapMoePanelDockRight,
+      isNearMoePanelDockRight,
+      moeDockedChildPosition,
+      MOE_PANEL_DOCK_SNAP_X,
+    } = await import("../../src/lib/moePanelDock.js");
+
+    const parent = { x: 40, y: 120, width: 280, height: 200 };
+    const near = trySnapMoePanelDockRight(
+      { x: parent.x + parent.width + 8, y: parent.y + 10 },
+      parent
+    );
+    assert.ok(near);
+    assert.equal(near.x, parent.x + parent.width);
+    assert.equal(near.y, parent.y);
+
+    const far = trySnapMoePanelDockRight(
+      { x: parent.x + parent.width + MOE_PANEL_DOCK_SNAP_X + 20, y: parent.y },
+      parent
+    );
+    assert.equal(far, null);
+
+    const child = moeDockedChildPosition({ x: parent.x, y: parent.y }, parent.width);
+    assert.equal(child.x, 320);
+    assert.equal(child.y, 120);
+
+    assert.equal(
+      isNearMoePanelDockRight(
+        { x: parent.x + parent.width + 4, y: parent.y + 5 },
+        parent
+      ),
+      true
+    );
+  });
+
+  it("clamps duel time bar layout", async () => {
+    const {
+      clampMoeDuelTimeBarLayout,
+      MOE_DUEL_TIME_BAR_MIN_WIDTH,
+      MOE_DUEL_TIME_BAR_DEFAULT_WIDTH,
+    } = await import("../../src/lib/moeDuelTimeBarLayout.js");
+
+    const clamped = clampMoeDuelTimeBarLayout({
+      x: -50,
+      y: -50,
+      width: 80,
+    });
+    assert.equal(clamped.width, MOE_DUEL_TIME_BAR_MIN_WIDTH);
+    assert.ok(clamped.x >= 4);
+    assert.ok(clamped.y >= 4);
+
+    const panelSrc = (await import("node:fs")).readFileSync(
+      new URL("../../src/components/MoeDuelTimeBarWindow.jsx", import.meta.url),
+      "utf8"
+    );
+    assert.match(panelSrc, /useMoeDuelTimeBarLayout/);
+    assert.match(panelSrc, /onResizePointerDown/);
+    assert.match(panelSrc, /MOE_DUEL_TIME_BAR_DEFAULT_WIDTH/);
+    assert.equal(MOE_DUEL_TIME_BAR_DEFAULT_WIDTH, 352);
+  });
+
+  it("clamps battle log panel layout", async () => {
+    const {
+      clampMoeBattleLogLayout,
+      moeBattleLogDefaultLayout,
+      MOE_BATTLE_LOG_MIN_WIDTH,
+      MOE_BATTLE_LOG_MIN_HEIGHT,
+    } = await import("../../src/lib/moeBattleLogLayout.js");
+
+    const def = moeBattleLogDefaultLayout();
+    assert.ok(def.width >= MOE_BATTLE_LOG_MIN_WIDTH);
+    assert.ok(def.height >= MOE_BATTLE_LOG_MIN_HEIGHT);
+
+    const clamped = clampMoeBattleLogLayout({
+      x: -100,
+      y: -100,
+      width: 40,
+      height: 30,
+    });
+    assert.equal(clamped.width, MOE_BATTLE_LOG_MIN_WIDTH);
+    assert.equal(clamped.height, MOE_BATTLE_LOG_MIN_HEIGHT);
+    assert.ok(clamped.x >= 4);
+    assert.ok(clamped.y >= 4);
+  });
+});
+
+describe("phoenix rebirth once", () => {
+  it("grants one charge and revives after 3 seconds", async () => {
+    const {
+      grantMoeRebirthOnceCharge,
+      moeRebirthOnceHasCharge,
+      moeRebirthOnceBeginPending,
+      moeRebirthOnceIsPending,
+      moeRebirthOnceReviveHp,
+      MOE_REBIRTH_ONCE_DELAY_MS,
+    } = await import("../../src/lib/moePhoenixRebirthOnce.js");
+
+    const granted = grantMoeRebirthOnceCharge();
+    assert.equal(granted.charges, 1);
+    assert.ok(moeRebirthOnceHasCharge(granted));
+
+    const pending = moeRebirthOnceBeginPending(1000, MOE_REBIRTH_ONCE_DELAY_MS);
+    assert.ok(moeRebirthOnceIsPending(pending, 2000));
+    assert.equal(moeRebirthOnceReviveHp(250), 250);
+  });
+
+  it("flags jiriki kaihou pre-skill for rebirth grant", async () => {
+    const { buildPlayerPreSkillActivation } = await import(
+      "../../src/lib/moePlayerPreSkillActivate.js"
+    );
+    const { getMoePlayerPreSkillById } = await import(
+      "../../src/data/moePlayerPreSkills.js"
+    );
+    const skill = getMoePlayerPreSkillById("jiriki_kaihou");
+    const result = buildPlayerPreSkillActivation(skill, {
+      progress: { level: 100, exp: 0 },
+      casterVitals: { mp: 100, mpMax: 100 },
+      inDuel: true,
+      enemyId: 1,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.grantRebirthOnce, true);
+  });
+});
+
+describe("item box layout", () => {
+  it("reflows 5x4 grid to 7x3 with one blank when shortened vertically", async () => {
+    const {
+      moeItemBoxColsFromResize,
+      moeItemBoxRowsForCols,
+      moeItemBoxCellCount,
+      MOE_ITEM_BOX_DEFAULT_COLS,
+      MOE_ITEM_BOX_RESIZE_STEP_PX,
+    } = await import("../../src/lib/moeItemBoxLayout.js");
+
+    assert.equal(MOE_ITEM_BOX_DEFAULT_COLS, 5);
+    assert.equal(moeItemBoxRowsForCols(5), 4);
+    const cols = moeItemBoxColsFromResize(
+      5,
+      0,
+      -MOE_ITEM_BOX_RESIZE_STEP_PX
+    );
+    assert.equal(cols, 7);
+    assert.equal(moeItemBoxRowsForCols(cols), 3);
+    assert.equal(moeItemBoxCellCount(cols), 21);
+  });
+
+  it("wires item box resize hook in component", async () => {
+    const { readFileSync } = await import("node:fs");
+    const panelSrc = readFileSync(
+      new URL("../../src/components/MoeItemBox.jsx", import.meta.url),
+      "utf8"
+    );
+    assert.match(panelSrc, /useMoeItemBoxLayout/);
+    assert.match(panelSrc, /onResizePointerDown/);
+    assert.match(panelSrc, /MOE_ITEM_BOX_SLOT_PX/);
   });
 });

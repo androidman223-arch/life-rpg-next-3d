@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { MOE_DRAGON_LINEUP } from "@/data/moeDragonVariants";
-import { MOE_MONSTER_LINEUP } from "@/data/moeMonsterLineup";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -31,10 +29,15 @@ import {
   isOrcModelUrl,
   isIxionModelUrl,
   isLionModelUrl,
+  isElanKnightModelUrl,
   isGustavModelUrl,
+  isSpiderEnemyKey,
+  isSpiderModelUrl,
+  isElanKnightEnemyKey,
   moe3dApplyIxionDisplayScale,
   moe3dApplyLionDisplayScale,
   moe3dApplyGustavDisplayScale,
+  moe3dSuperBossSpawnPosition,
   moe3dMountainBisonSpawnPosition,
   moe3dRoughBisonSpawnPosition,
   moe3dGustavJuniorSpawnPosition,
@@ -76,11 +79,6 @@ import {
   moe3dBossAreaLayout,
   moe3dPetHousePosition,
   moe3dRhodaPosition,
-  moe3dDragonShowcaseLayout,
-  moe3dDragonShowcaseCenter,
-  moe3dMonsterShowcaseLayout,
-  moe3dMonsterShowcaseCenter,
-  moe3dMonsterShowcaseTargetHeight,
   moe3dMeasureModelFrontExtent,
   moe3dEnemyUiWorldYs,
   MOE_3D_ENEMY_UI_NAME_TARGET_EXTRA,
@@ -89,6 +87,7 @@ import {
   MOE_3D_ENEMY_UI_HP_CANVAS_SHIFT_X,
 } from "@/lib/moeField3DModels";
 import { createMoePhoenixTailFireEffect } from "@/lib/moePhoenixTailFireEffect";
+import { createMoePlayerSummonEffect } from "@/lib/moePlayerSummonEffect";
 import {
   checkMoeEnemyPlayerDetection,
   moeEnemyUsesHearingSearch,
@@ -101,33 +100,58 @@ import {
   isMoeKakureminoActive,
   MOE_KAKUREMINO_PLAYER_OPACITY,
 } from "@/lib/moePlayerStealth";
-import {
-  moe3dDesertPreviewTileIndex,
-  MOE_3D_DESERT_SHOWCASE_FAMILIES,
-  moe3dDesertMonsterShowcaseSpot,
-} from "@/lib/moe3dDesertPreviewTile";
-import {
-  MOE_3D_IPS_CANYON_SHOWCASE_FAMILIES,
-  moe3dIpsCanyonMonsterShowcaseSpot,
-} from "@/lib/moe3dIpsCanyonTile";
 import { addMoe3dMacro2L1Tiles } from "@/lib/moe3dMacro2L1Tiles";
+import { addMoe3dMacro2AgeTiles } from "@/lib/moe3dMacro2AgeTiles";
 import { updateMoe3dMacro2L4Fx } from "@/lib/moe3dMacro2L4Fx";
+import { updateMoe3dMacro2AgeL4Fx } from "@/lib/moe3dMacro2AgeL4Fx";
+import {
+  appendMoe3dBiskL4Fx,
+  updateMoe3dBiskL4Fx,
+} from "@/lib/moe3dBiskL4Fx";
+import {
+  moeGeoLavaClickFromObject,
+  triggerGeoAbyssLavaRipple,
+} from "@/lib/moe3dGeoAbyssLavaFx";
 import { updateMoe3dMacro3L4Fx } from "@/lib/moe3dMacro3L4Fx";
+import { updateElanPalaceMazeFx } from "@/lib/moe3dElanPalaceMaze";
+import { updateSulfurMineMazeFx } from "@/lib/moe3dSulfurMineMaze";
 import {
   moe3dApplyMapTileScale,
   moe3dTileLocalOrigin,
   moe3dTileLocalSize,
   moe3dMapSlotById,
-  moe3dPrototypeFieldStart,
   moe3dReservedMapSlots,
   moe3dTerrainGroupOffset,
 } from "@/lib/moe3dWorldLayout";
+import {
+  moe3dBiskHubAnchor,
+  moe3dCashShopNpcPosition,
+} from "@/lib/moe3dBiskHubLayout";
 import { addMoe3dReservedMapTiles } from "@/lib/moe3dReservedMapTile";
 import { buildMoe3dBiskTile } from "@/lib/moe3dBiskTile";
 import { buildMoe3dLegacyBufferTile } from "@/lib/moe3dLegacyBufferTile";
 import { buildMoe3dAltarVisual } from "@/lib/moe3dAltarVisual";
-import { MOE_ALTARS } from "@/data/moeAltarWarps";
-import { moe3dAltarWorldPos } from "@/lib/moe3dAltarWarp";
+import { MOE_ALTARS, moeAltarDefById } from "@/data/moeAltarWarps";
+import { moe3dAltarGroundY, moe3dAltarWorldPos } from "@/lib/moe3dAltarWarp";
+import { buildMoe3dTrainingGuideRestCamp } from "@/lib/moe3dTrainingGuideCamp";
+import { attachMoe3dCampfireRestFx } from "@/lib/moe3dCampfireRestFx";
+import {
+  moeCampfireRestBlendStep,
+  moeCampfireRestSceneColors,
+} from "@/lib/moeCampfireRestCore";
+import {
+  moe3dAgeHubCampfireWorldPos,
+  moe3dAgeHubHousePosition,
+  MOE_AGE_HUB_HOUSE,
+  MOE_AGE_TILE_FLOOR_Y,
+} from "@/lib/moe3dAgeHubHouse";
+import { moe3dPlaceYugAgeHomeRow } from "@/lib/moe3dAgeHomeProps";
+import {
+  MOE_YUG_COAST_SHOW_FIELD_HOMES,
+  MOE_YUG_COAST_SHOW_HUB_HOUSE,
+} from "@/lib/moe3dYugCoastHomePath";
+import { moe3dSolesValleyCampfireWorldPos } from "@/lib/moe3dAgeRestCamps";
+import { MOE_AGE_MAP_SLOT_IDS } from "@/lib/moe3dMacro2AgeConstants";
 import {
   moe3dIsMapSlotFieldEnemy,
   moeEnemyFieldIdleFacingYaw,
@@ -139,7 +163,23 @@ import {
   formatEnemyLevelUi,
 } from "@/data/moeMeerimEnemies";
 import { MOE_PET_TENTH_LEVEL_UP_LABEL } from "@/data/moePetExpTable";
-import { moe3dWalkableGroundY } from "@/lib/moe3dMacro3Walk";
+import {
+  moe3dInvalidateTerrainRaycastCache,
+  moe3dWalkableGroundY,
+} from "@/lib/moe3dMacro3Walk";
+import {
+  MOE_ELVIN_KEIKOKU_MAP_SLOT_ID,
+  MOE_ELVIN_VALLEY_GLB_ROOT_NAME,
+  MOE_ELVIN_VALLEY_GLB_URL,
+  attachMoe3dElvinValleyGlb,
+  moe3dElvinKeikokuTerrainGroundY,
+} from "@/lib/moe3dElvinValleyGlb";
+import {
+  MOE_SULFUR_KAZAN_GLB_URL,
+  MOE_SULFUR_KAZAN_MAP_SLOT_ID,
+  moe3dSulfurKazanTerrainGroundY,
+  attachMoe3dSulfurKazanTemple,
+} from "@/lib/moe3dSulfurKazanTemple";
 
 const MAP_URL = "/assets/map/3D_MoeMapField02.glb";
 const TERRAIN_EDGE_MARGIN = 5;
@@ -229,15 +269,22 @@ function resolveBossAreaOnTerrain(
     return { x: s.x, y: s.z };
   };
   const midBossPos = snapBoss(layout.midBossPos);
-  let superBossPos = snapBoss(layout.superBossPos);
+  const superIntent = moe3dSuperBossSpawnPosition(
+    halfW,
+    halfD,
+    tileW,
+    tileD,
+    fieldStart
+  );
+  let superBossPos = snapBoss(superIntent, 72);
 
-  const intentDx = layout.superBossPos.x - layout.midBossPos.x;
-  const intentDy = layout.superBossPos.y - layout.midBossPos.y;
+  const intentDx = superIntent.x - layout.midBossPos.x;
+  const intentDy = superIntent.y - layout.midBossPos.y;
   const intentLen = Math.hypot(intentDx, intentDy) || 1;
   const minSep = Math.max(14, intentLen * 0.85);
   const sepDx = superBossPos.x - midBossPos.x;
   const sepDy = superBossPos.y - midBossPos.y;
-  if (Math.hypot(sepDx, sepDy) < minSep) {
+  if (Math.hypot(sepDx, sepDy) < minSep && intentLen < 120) {
     superBossPos = {
       x: midBossPos.x + (intentDx / intentLen) * minSep,
       y: midBossPos.y + (intentDy / intentLen) * minSep,
@@ -302,7 +349,7 @@ function attachEnemyPickTarget(root, enemyId, isBigBoss, isSuperBoss = false) {
     isSuperBoss ? 5 : isBigBoss ? 2.8 : 0.85
   );
   const r =
-    Math.max(size.x, size.z) * (isBigBoss || isSuperBoss ? 0.42 : 0.52);
+    Math.max(size.x, size.z) * (isBigBoss || isSuperBoss ? 0.46 : 0.6);
   const pick = new THREE.Mesh(
     new THREE.CylinderGeometry(r, r * 0.92, h, 12),
     new THREE.MeshBasicMaterial({
@@ -482,9 +529,13 @@ function createTreasureChestGroup(treasureId) {
   return { root, spawnTime: performance.now() };
 }
 
-const PICK_SCREEN_MAX_PX = 44;
-const PICK_PROXY_PENALTY_PX = 14;
+const PICK_SCREEN_MAX_PX = 54;
+const PICK_PROXY_PENALTY_PX = 8;
 const PICK_BOSS_SCREEN_MAX_PX = 72;
+/** 左クリック＝敵ターゲット優先（ペットが手前にあるときの救済） */
+const PICK_ENEMY_SCREEN_BIAS_PX = 14;
+const PICK_ENEMY_NEAR_POINTER_PX = 58;
+const PICK_FALLBACK_NEAR_POINTER_PX = 46;
 
 /** レイキャスト全ヒットから、クリック位置に最も近い交点の敵／ペットを選ぶ */
 function resolvePickFromHits(hits, pointer, camera, rect, treasures = []) {
@@ -582,7 +633,10 @@ function resolvePickFromHits(hits, pointer, camera, rect, treasures = []) {
   if (bestPlayer) {
     candidates.push({ type: "player", score: bestPlayerScore });
   }
-  candidates.sort((a, b) => a.score - b.score);
+  candidates.sort((a, b) => {
+    const bias = (t) => (t === "enemy" ? -PICK_ENEMY_SCREEN_BIAS_PX : 0);
+    return a.score + bias(a.type) - (b.score + bias(b.type));
+  });
   const best = candidates[0];
   if (!best) return null;
   if (best.type === "enemy") return { type: "enemy", id: best.id };
@@ -687,8 +741,15 @@ function pickEntityNearPointer(
   for (const en of enList) {
     if (en.hp <= 0) continue;
     const entry = enemyMeshes?.get(en.id);
+    let wx = en.x;
+    let wz = en.y;
     let py = 0.6;
     let thresh = thresholdPx;
+    if (entry?.pickAnchor) {
+      wx = entry.pickAnchor.x;
+      wz = entry.pickAnchor.z;
+      py = entry.pickAnchor.groundY + 0.5;
+    }
     if (en.midBoss || en.superBoss) {
       thresh = en.superBoss ? 58 : 46;
       if (entry?.root && !entry.placeholder) {
@@ -709,7 +770,7 @@ function pickEntityNearPointer(
         py = en.superBoss ? 8 : 3;
       }
     }
-    projected.set(en.x, py, en.y);
+    projected.set(wx, py, wz);
     projected.project(camera);
     if (projected.z > 1) continue;
     const sx = (projected.x * 0.5 + 0.5) * rect.width;
@@ -782,6 +843,9 @@ export default function MoeField3DCanvas({
   onPlayerClick,
   onPetDoubleClick = () => {},
   onRhodaClick,
+  onCashShopClick,
+  onCampfireClick,
+  campfireRestActiveRef,
   onAltarClick,
   targetEnemyId,
   enemyStatSearchOpen = false,
@@ -799,6 +863,7 @@ export default function MoeField3DCanvas({
   playerFacingRef,
   playerPosRef,
   playerJumpRef,
+  kintounFlyRef,
   playerSprintRef,
   petRunAnimRef,
   petPosRef,
@@ -813,9 +878,11 @@ export default function MoeField3DCanvas({
   enemyAttackMsRef,
   battleSpeedMultRef,
   overlayProjectRef,
+  playerGroundYRef,
   enemyStrikeVariantRef,
   moe3dCombatExtentsRef,
   hiddenShowcaseIds = { monsters: [], dragons: [] },
+  playerSummonFxRef,
 }) {
   const mountRef = useRef(null);
   const stateRef = useRef({
@@ -832,15 +899,17 @@ export default function MoeField3DCanvas({
   const onPetClickRef = useRef(onPetClick);
   const onPlayerClickRef = useRef(onPlayerClick);
   const onPetDoubleClickRef = useRef(onPetDoubleClick);
-  /** @deprecated 旧名 — ホットリロード互換 */
-  const onPetRightClickRef = onPetDoubleClickRef;
   const onRhodaClickRef = useRef(onRhodaClick);
+  const onCashShopClickRef = useRef(onCashShopClick);
+  const onCampfireClickRef = useRef(onCampfireClick);
+  const campfireRestActiveRefStable = useRef(campfireRestActiveRef);
   const onAltarClickRef = useRef(onAltarClick);
   const onMapReadyRef = useRef(onMapReady);
   const cameraYawRefStable = useRef(cameraYawRef);
   const playerFacingRefStable = useRef(playerFacingRef);
   const playerPosRefStable = useRef(playerPosRef);
   const playerJumpRefStable = useRef(playerJumpRef);
+  const kintounFlyRefStable = useRef(kintounFlyRef);
   const playerSprintRefStable = useRef(playerSprintRef);
   const petRunAnimRefStable = useRef(petRunAnimRef);
   const petPosRefStable = useRef(petPosRef);
@@ -855,6 +924,7 @@ export default function MoeField3DCanvas({
   const enemyAttackMsRefStable = useRef(enemyAttackMsRef);
   const battleSpeedMultRefStable = useRef(battleSpeedMultRef);
   const overlayProjectRefStable = useRef(overlayProjectRef);
+  const playerGroundYRefStable = useRef(playerGroundYRef);
   const enemyStrikeVariantRefStable = useRef(enemyStrikeVariantRef);
   const moe3dCombatExtentsRefStable = useRef(moe3dCombatExtentsRef);
   const targetEnemyFacingYawRefStable = useRef(targetEnemyFacingYawRef);
@@ -862,6 +932,7 @@ export default function MoeField3DCanvas({
   const enemyFieldSyncRefStable = useRef(enemyFieldSyncRef);
   const enemyDetectionOptsRefStable = useRef(enemyDetectionOptsRef);
   const playerKakureminoUntilRefStable = useRef(playerKakureminoUntilRef);
+  const playerSummonFxRefStable = useRef(playerSummonFxRef);
 
   stateRef.current = {
     enemies,
@@ -877,14 +948,17 @@ export default function MoeField3DCanvas({
   onPetClickRef.current = onPetClick;
   onPlayerClickRef.current = onPlayerClick;
   onPetDoubleClickRef.current = onPetDoubleClick;
-  onPetRightClickRef.current = onPetDoubleClick;
   onRhodaClickRef.current = onRhodaClick;
+  onCashShopClickRef.current = onCashShopClick;
+  onCampfireClickRef.current = onCampfireClick;
+  campfireRestActiveRefStable.current = campfireRestActiveRef;
   onAltarClickRef.current = onAltarClick;
   onMapReadyRef.current = onMapReady;
   cameraYawRefStable.current = cameraYawRef;
   playerFacingRefStable.current = playerFacingRef;
   playerPosRefStable.current = playerPosRef;
   playerJumpRefStable.current = playerJumpRef;
+  kintounFlyRefStable.current = kintounFlyRef;
   playerSprintRefStable.current = playerSprintRef;
   petRunAnimRefStable.current = petRunAnimRef;
   petPosRefStable.current = petPosRef;
@@ -899,6 +973,7 @@ export default function MoeField3DCanvas({
   enemyAttackMsRefStable.current = enemyAttackMsRef;
   battleSpeedMultRefStable.current = battleSpeedMultRef;
   overlayProjectRefStable.current = overlayProjectRef;
+  playerGroundYRefStable.current = playerGroundYRef;
   enemyStrikeVariantRefStable.current = enemyStrikeVariantRef;
   moe3dCombatExtentsRefStable.current = moe3dCombatExtentsRef;
   targetEnemyFacingYawRefStable.current = targetEnemyFacingYawRef;
@@ -906,6 +981,7 @@ export default function MoeField3DCanvas({
   enemyFieldSyncRefStable.current = enemyFieldSyncRef;
   enemyDetectionOptsRefStable.current = enemyDetectionOptsRef;
   playerKakureminoUntilRefStable.current = playerKakureminoUntilRef;
+  playerSummonFxRefStable.current = playerSummonFxRef;
 
   const petIdStable = useRef(petId);
   petIdStable.current = petId;
@@ -955,7 +1031,8 @@ export default function MoeField3DCanvas({
     renderer.shadowMap.enabled = true;
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.HemisphereLight(0xddeeff, 0x446633, 0.85));
+    const hemi = new THREE.HemisphereLight(0xddeeff, 0x446633, 0.85);
+    scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xffffff, 1.1);
     sun.position.set(12, 24, 8);
     sun.castShadow = true;
@@ -983,7 +1060,11 @@ export default function MoeField3DCanvas({
     let lastPlayerY =
       playerPosRefStable.current?.current?.y ?? 0;
     let lastPlayerFootY = 0;
+    let lastPetFootY = 0;
+    let pendingPetFootSnap = false;
     let lastKakureminoVisual = false;
+    /** 隠れ蓑前のマテリアル — 解除時に元の透明度へ戻す */
+    const kakureminoMatOrigins = new WeakMap();
 
     /** ペット ○（glb 読込前のプレースホルダ） */
     const petMesh = new THREE.Mesh(
@@ -1067,6 +1148,7 @@ export default function MoeField3DCanvas({
     const popupGroup = new THREE.Group();
     scene.add(popupGroup);
     const phoenixTailFire = createMoePhoenixTailFireEffect(scene);
+    const playerSummonFx = createMoePlayerSummonEffect(scene);
 
     let targetMarker = null;
     /** @type {{ group: THREE.Group, visionLine: THREE.Line, hearingLine: THREE.LineLoop, visionMat: THREE.LineBasicMaterial, hearingMat: THREE.LineBasicMaterial } | null} */
@@ -1179,6 +1261,30 @@ export default function MoeField3DCanvas({
       return enemyChaseRuntimeRefStable.current?.current?.[en.id];
     }
 
+    function snapshotKakureminoMatOrigin(mat) {
+      if (!kakureminoMatOrigins.has(mat)) {
+        kakureminoMatOrigins.set(mat, {
+          transparent: mat.transparent,
+          opacity: mat.opacity,
+          depthWrite: mat.depthWrite,
+        });
+      }
+    }
+
+    function restoreKakureminoMatOrigin(mat) {
+      const orig = kakureminoMatOrigins.get(mat);
+      if (orig) {
+        mat.transparent = orig.transparent;
+        mat.opacity = orig.opacity;
+        mat.depthWrite = orig.depthWrite;
+        kakureminoMatOrigins.delete(mat);
+        return;
+      }
+      mat.opacity = 1;
+      mat.transparent = false;
+      mat.depthWrite = true;
+    }
+
     function applyPlayerStealthVisual(root, stealthActive) {
       if (!root) return;
       root.traverse((obj) => {
@@ -1186,13 +1292,12 @@ export default function MoeField3DCanvas({
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         for (const mat of mats) {
           if (stealthActive) {
+            snapshotKakureminoMatOrigin(mat);
             mat.transparent = true;
             mat.opacity = MOE_KAKUREMINO_PLAYER_OPACITY;
             mat.depthWrite = false;
           } else {
-            mat.opacity = 1;
-            mat.transparent = false;
-            mat.depthWrite = true;
+            restoreKakureminoMatOrigin(mat);
           }
         }
       });
@@ -1203,7 +1308,8 @@ export default function MoeField3DCanvas({
       const stealthActive = isMoeKakureminoActive(until, performance.now());
       if (stealthActive === lastKakureminoVisual) return;
       lastKakureminoVisual = stealthActive;
-      applyPlayerStealthVisual(playerModel ?? playerPlaceholder, stealthActive);
+      applyPlayerStealthVisual(playerModel, stealthActive);
+      applyPlayerStealthVisual(playerPlaceholder, stealthActive);
     }
 
     function enemyWorldPos(en, entry) {
@@ -1720,12 +1826,19 @@ export default function MoeField3DCanvas({
     let mapReady = false;
     let fieldTileW = 0;
     let fieldTileD = 0;
+    /** @type {Record<string, number>} */
+    let mapTileRootY = {};
     let midBossTerrainPos = null;
     let superBossTerrainPos = null;
     let mountainBisonTerrainPos = null;
     let roughBisonTerrainPos = null;
     let gustavJuniorTerrainPos = null;
     let rhodaPickGroup = null;
+    let cashShopPickGroup = null;
+    let restCampPickGroup = null;
+    /** @type {ReturnType<typeof attachMoe3dCampfireRestFx>[]} */
+    const campfireRestFxList = [];
+    let campfireRestBlend = 0;
     /** @type {import("three").Object3D[]} */
     let altarPickMeshes = [];
 
@@ -1800,6 +1913,20 @@ export default function MoeField3DCanvas({
         onTreasureClickRef.current?.(picked.id);
         return;
       }
+      const enemyNear = pickEntityNearPointer(
+        pointer,
+        camera,
+        rect,
+        stateRef.current.enemies,
+        null,
+        null,
+        enemyMeshes,
+        PICK_ENEMY_NEAR_POINTER_PX
+      );
+      if (enemyNear?.type === "enemy") {
+        onEnemyClickRef.current?.(enemyNear.id);
+        return;
+      }
       if (picked?.type === "player") {
         onPlayerClickRef.current?.();
         return;
@@ -1829,6 +1956,30 @@ export default function MoeField3DCanvas({
           return;
         }
       }
+      if (restCampPickGroup) {
+        const campHits = raycaster.intersectObject(restCampPickGroup, true);
+        if (campHits.length > 0) {
+          onCampfireClickRef.current?.();
+          return;
+        }
+      }
+      if (cashShopPickGroup) {
+        const cashHits = raycaster.intersectObject(cashShopPickGroup, true);
+        if (cashHits.length > 0) {
+          onCashShopClickRef.current?.();
+          return;
+        }
+      }
+      if (terrainGroup) {
+        const terrainHits = raycaster.intersectObject(terrainGroup, true);
+        for (const hit of terrainHits) {
+          const lava = moeGeoLavaClickFromObject(hit.object);
+          if (lava) {
+            triggerGeoAbyssLavaRipple(hit.point, lava.color, terrainGroup);
+            return;
+          }
+        }
+      }
 
       const cx = ((pointer.x + 1) / 2) * rect.width;
       const cy = ((-pointer.y + 1) / 2) * rect.height;
@@ -1847,6 +1998,20 @@ export default function MoeField3DCanvas({
 
       const petPosNow = petPosRefStable.current?.current;
       const playerPosNow = playerPosRefStable.current?.current;
+      const enemyFallback = pickEntityNearPointer(
+        pointer,
+        camera,
+        rect,
+        stateRef.current.enemies,
+        null,
+        null,
+        enemyMeshes,
+        PICK_ENEMY_NEAR_POINTER_PX
+      );
+      if (enemyFallback?.type === "enemy") {
+        onEnemyClickRef.current?.(enemyFallback.id);
+        return;
+      }
       const fallback = pickEntityNearPointer(
         pointer,
         camera,
@@ -1854,7 +2019,8 @@ export default function MoeField3DCanvas({
         stateRef.current.enemies,
         petPosNow,
         playerPosNow,
-        enemyMeshes
+        enemyMeshes,
+        PICK_FALLBACK_NEAR_POINTER_PX
       );
       if (fallback?.type === "enemy") {
         onEnemyClickRef.current?.(fallback.id);
@@ -1952,6 +2118,8 @@ export default function MoeField3DCanvas({
         terrainGroup.position.set(terrainOff.x, 0, terrainOff.z);
         terrainGroup.updateMatrixWorld(true);
 
+        mapTileRootY = {};
+
         const biskSlot = moe3dMapSlotById("bisk");
         if (biskSlot) {
           const biskTile = buildMoe3dBiskTile(tileWidth, tileDepth);
@@ -1979,7 +2147,9 @@ export default function MoeField3DCanvas({
             biskSampleX,
             biskSampleZ
           );
+          appendMoe3dBiskL4Fx(biskTile, tileWidth, tileDepth);
           terrainGroup.add(biskTile);
+          mapTileRootY.bisk = biskTile.position.y;
           attachShowcaseNameLabel(
             biskTile,
             3.2,
@@ -2018,6 +2188,7 @@ export default function MoeField3DCanvas({
             bufSampleZ
           );
           terrainGroup.add(bufferTile);
+          mapTileRootY.legacy_buffer = bufferTile.position.y;
         }
 
         addMoe3dReservedMapTiles(
@@ -2032,35 +2203,86 @@ export default function MoeField3DCanvas({
               terrainGroup.position.z + (slot.iz + 0.5) * layoutD;
             const baseY = groundY(raycaster, terrainGroup, sampleX, sampleZ);
             tile.position.y = baseY;
+            mapTileRootY[slot.id] = tile.position.y;
           }
         );
+
+        loader.load(MOE_SULFUR_KAZAN_GLB_URL, (kazanGltf) => {
+          if (disposed) return;
+          const kazanTile = terrainGroup.children.find(
+            (child) => child.name === `reserved-map-${MOE_SULFUR_KAZAN_MAP_SLOT_ID}`
+          );
+          if (!kazanTile) return;
+          attachMoe3dSulfurKazanTemple(
+            kazanTile,
+            kazanGltf.scene,
+            tileWidth,
+            tileDepth
+          );
+          for (const child of kazanTile.children) {
+            if (child.name !== "sulfur-kazan-temple") {
+              child.visible = false;
+            }
+          }
+          terrainGroup.updateMatrixWorld(true);
+          moe3dInvalidateTerrainRaycastCache(terrainGroup);
+        });
+
+        loader.load(MOE_ELVIN_VALLEY_GLB_URL, (elvinGltf) => {
+          if (disposed) return;
+          const elvinTile = terrainGroup.children.find(
+            (child) =>
+              child.name === `reserved-map-${MOE_ELVIN_KEIKOKU_MAP_SLOT_ID}`
+          );
+          if (!elvinTile) return;
+          attachMoe3dElvinValleyGlb(
+            elvinTile,
+            elvinGltf.scene,
+            tileWidth,
+            tileDepth
+          );
+          for (const child of elvinTile.children) {
+            if (child.name !== MOE_ELVIN_VALLEY_GLB_ROOT_NAME) {
+              child.visible = false;
+            }
+          }
+          terrainGroup.updateMatrixWorld(true);
+          moe3dInvalidateTerrainRaycastCache(terrainGroup);
+        });
 
         addMoe3dMacro2L1Tiles(terrainGroup, tileWidth, tileDepth, {
           groundY,
           raycaster,
           attachShowcaseNameLabel,
+          onTilePlaced: (slotId, _tile, baseY) => {
+            mapTileRootY[slotId] = baseY;
+          },
         });
 
-        const ipsSlot = moe3dMapSlotById("ips_canyon");
-        let ipsLocalX = 0;
-        let ipsLocalZ = 0;
-        let ipsBaseY = 0;
-        if (ipsSlot) {
-          ipsLocalX = ipsSlot.ix * layoutW;
-          ipsLocalZ = ipsSlot.iz * layoutD;
-          const ipsSampleX =
-            terrainGroup.position.x + ipsLocalX + layoutW * 0.5;
-          const ipsSampleZ =
-            terrainGroup.position.z + ipsLocalZ + layoutD * 0.5;
-          ipsBaseY = groundY(raycaster, terrainGroup, ipsSampleX, ipsSampleZ);
+        addMoe3dMacro2AgeTiles(terrainGroup, tileWidth, tileDepth, {
+          groundY,
+          raycaster,
+          attachShowcaseNameLabel,
+        });
+        for (const slotId of MOE_AGE_MAP_SLOT_IDS) {
+          mapTileRootY[slotId] = 0;
         }
+
+        terrainGroup.updateMatrixWorld(true);
 
         /** @type {{ id: string, x: number, y: number, groundY: number }[]} */
         let altarNodes = [];
         for (const altarDef of MOE_ALTARS) {
           const pos = moe3dAltarWorldPos(altarDef, tileWidth, tileDepth);
           if (!pos) continue;
-          const gy = groundY(raycaster, terrainGroup, pos.x, pos.y);
+          const gy = moe3dAltarGroundY(
+            raycaster,
+            terrainGroup,
+            altarDef,
+            tileWidth,
+            tileDepth,
+            { mapTileRootY }
+          );
           const altarMesh = buildMoe3dAltarVisual({
             scale:
               altarDef.kind === "hub"
@@ -2080,44 +2302,125 @@ export default function MoeField3DCanvas({
             y: pos.y,
             groundY: gy,
           });
+          const isNewMapAltar =
+            altarDef.mapSlotId === MOE_SULFUR_KAZAN_MAP_SLOT_ID ||
+            altarDef.mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID;
+          const altarLabelTitle =
+            altarDef.mapSlotId === MOE_SULFUR_KAZAN_MAP_SLOT_ID
+              ? "【新】スルト鉱山 · 火山神殿"
+              : altarDef.mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID
+                ? "【新】エルビン渓谷"
+                : altarDef.nameJa;
+          const altarLabelSub = isNewMapAltar ? "新マップ" : "転送";
           attachShowcaseNameLabel(
             altarMesh,
-            3.8,
-            altarDef.nameJa,
-            "転送",
+            isNewMapAltar ? 4.6 : 3.8,
+            altarLabelTitle,
+            altarLabelSub,
             "dragon",
-            58
+            isNewMapAltar ? 72 : 58
           );
         }
 
-        const desertIdx = moe3dDesertPreviewTileIndex(
-          MOE_3D_LEGACY_TILES_X,
-          MOE_3D_LEGACY_TILES_Z
-        );
-        const desertOrigin = moe3dTileLocalOrigin(
-          desertIdx.ix,
-          desertIdx.iz,
-          tileWidth,
-          tileDepth
-        );
-        const desertSize = moe3dTileLocalSize(
-          desertIdx.ix,
-          desertIdx.iz,
-          tileWidth,
-          tileDepth
-        );
-        const desertSampleWorldX =
-          terrainGroup.position.x + desertOrigin.x + desertSize.w * 0.5;
-        const desertSampleWorldZ =
-          terrainGroup.position.z + desertOrigin.z + desertSize.d * 0.5;
-        const desertBaseY = groundY(
-          raycaster,
-          terrainGroup,
-          desertSampleWorldX,
-          desertSampleWorldZ
-        );
+        let ageHubHousePos = null;
+        const restCampsRoot = new THREE.Group();
+        restCampsRoot.name = "age-rest-camps";
+        const placeAgeRestCampfire = (worldX, worldY, groundY, subLabel) => {
+          const restCamp = buildMoe3dTrainingGuideRestCamp();
+          restCamp.position.set(worldX, groundY, worldY);
+          campfireRestFxList.push(attachMoe3dCampfireRestFx(restCamp));
+          restCampsRoot.add(restCamp);
+          attachShowcaseNameLabel(restCamp, 2.6, "焚き火", subLabel, "dragon", 44);
+        };
+        const ageHouseIntent = moe3dAgeHubHousePosition(tileWidth, tileDepth);
+        if (ageHouseIntent) {
+          ageHubHousePos = { x: ageHouseIntent.x, y: ageHouseIntent.y };
+          const ageGy = MOE_AGE_TILE_FLOOR_Y;
+          const campIntent = moe3dAgeHubCampfireWorldPos(tileWidth, tileDepth);
+          if (campIntent) {
+            placeAgeRestCampfire(
+              campIntent.x,
+              campIntent.y,
+              ageGy,
+              MOE_AGE_HUB_HOUSE.campfireNearLabel
+            );
+          }
+          if (MOE_YUG_COAST_SHOW_HUB_HOUSE) {
+            const ageHouseGroup = new THREE.Group();
+            ageHouseGroup.position.set(ageHouseIntent.x, ageGy, ageHouseIntent.y);
+            const ageBodyMat = new THREE.MeshStandardMaterial({ color: 0xb8e0d2 });
+            const ageRoofMat = new THREE.MeshStandardMaterial({ color: 0x0d9488 });
+            const ageBody = new THREE.Mesh(
+              new THREE.BoxGeometry(3.6, 2.2, 3),
+              ageBodyMat
+            );
+            ageBody.position.y = 1.1;
+            ageBody.castShadow = true;
+            ageBody.receiveShadow = true;
+            ageHouseGroup.add(ageBody);
+            const ageRoof = new THREE.Mesh(
+              new THREE.BoxGeometry(4.2, 0.5, 3.6),
+              ageRoofMat
+            );
+            ageRoof.position.y = 2.35;
+            ageRoof.castShadow = true;
+            ageHouseGroup.add(ageRoof);
+            scene.add(ageHouseGroup);
+            attachShowcaseNameLabel(
+              ageHouseGroup,
+              3.2,
+              MOE_AGE_HUB_HOUSE.houseLabel,
+              MOE_AGE_HUB_HOUSE.kanbanSub,
+              "dragon",
+              50
+            );
+          }
+        }
+        if (MOE_YUG_COAST_SHOW_FIELD_HOMES) {
+          const yugHomeGy = MOE_AGE_TILE_FLOOR_Y;
+          const yugHomeRow = moe3dPlaceYugAgeHomeRow(
+            scene,
+            tileWidth,
+            tileDepth,
+            yugHomeGy
+          );
+          for (const home of yugHomeRow) {
+            attachShowcaseNameLabel(
+              home.group,
+              3,
+              home.label,
+              home.sub,
+              "dragon",
+              46
+            );
+          }
+        }
 
-        const protoFieldStart = moe3dPrototypeFieldStart(tileWidth, tileDepth);
+        const solesAltarDef = MOE_ALTARS.find((a) => a.id === "altar_soles_valley");
+        const solesCampPos = moe3dSolesValleyCampfireWorldPos(tileWidth, tileDepth);
+        if (solesAltarDef && solesCampPos) {
+          const solesGy = moe3dAltarGroundY(
+            raycaster,
+            terrainGroup,
+            solesAltarDef,
+            tileWidth,
+            tileDepth,
+            { mapTileRootY }
+          );
+          placeAgeRestCampfire(
+            solesCampPos.x,
+            solesCampPos.y,
+            solesGy,
+            `ソレス渓谷 · ${MOE_AGE_HUB_HOUSE.restAreaLabel}`
+          );
+        }
+
+        if (restCampsRoot.children.length > 0) {
+          scene.add(restCampsRoot);
+          restCampPickGroup = restCampsRoot;
+        }
+
+        const hubAnchor = moe3dBiskHubAnchor();
 
         terrainGroup.updateMatrixWorld(true);
         const playBounds = terrainPlayBoundsFromGroup(terrainGroup);
@@ -2128,13 +2431,14 @@ export default function MoeField3DCanvas({
           MOE_3D_LEGACY_REF_HALF,
           tileWidth,
           tileDepth,
-          protoFieldStart
+          hubAnchor
         );
         midBossTerrainPos = hills.midBossPos;
         superBossTerrainPos = hills.superBossPos;
         mountainBisonTerrainPos = hills.mountainBisonPos;
         roughBisonTerrainPos = hills.roughBisonPos;
         gustavJuniorTerrainPos = hills.gustavJuniorPos;
+        moe3dInvalidateTerrainRaycastCache(terrainGroup);
         mapReady = true;
 
         const houseIntent = moe3dPetHousePosition(
@@ -2225,213 +2529,54 @@ export default function MoeField3DCanvas({
         scene.add(rhodaGroup);
         rhodaPickGroup = rhodaGroup;
 
-        const dragonSpots = moe3dDragonShowcaseLayout(
-          playBounds.halfW,
-          playBounds.halfD,
-          MOE_DRAGON_LINEUP.length
-        );
-        const dragonRoots = [];
-        const dragonTargetH = petModelHeightForId("mystery_dragon") * 0.88;
-        MOE_DRAGON_LINEUP.forEach((variant, i) => {
-          loader.load(
-            `/assets/models/pet/${variant.file}`,
-            (dragonGltf) => {
-              if (disposed) return;
-              const root = SkeletonUtils.clone(dragonGltf.scene);
-              const intent = dragonSpots[i];
-              const snap = snapToNearestTerrain(
-                raycaster,
-                terrainGroup,
-                intent.x,
-                intent.y,
-                24
-              );
-              const gy = groundY(raycaster, terrainGroup, snap.x, snap.z);
-              const { groundLift } = fitModelToGround(root, dragonTargetH);
-              root.position.set(snap.x, gy + groundLift, snap.z);
-              root.rotation.y = Math.PI;
-              enableShadows(root);
-              scene.add(root);
-              dragonRoots.push(root);
-              attachShowcaseNameLabel(
-                root,
-                dragonTargetH * 0.92,
-                variant.nameJa,
-                variant.note ?? "",
-                "dragon",
-                38,
-                { variantId: variant.id, kind: "dragon" }
-              );
-              applyHiddenShowcaseVisibility();
-            },
-            undefined,
-            (err) => console.warn("Dragon showcase load:", variant.file, err)
-          );
-        });
-
-        const dragonCenterIntent = moe3dDragonShowcaseCenter(
-          playBounds.halfW,
-          playBounds.halfD
-        );
-        const dragonCenterSnap = snapToNearestTerrain(
+        const cashShopIntent = moe3dCashShopNpcPosition(tileWidth, tileDepth);
+        const cashShopSnap = snapToNearestTerrain(
           raycaster,
           terrainGroup,
-          dragonCenterIntent.x,
-          dragonCenterIntent.y,
-          28
+          cashShopIntent.x,
+          cashShopIntent.y,
+          16
         );
-        const dragonCenterGy = groundY(
+        const cashShopGy = groundY(
           raycaster,
           terrainGroup,
-          dragonCenterSnap.x,
-          dragonCenterSnap.z
+          cashShopSnap.x,
+          cashShopSnap.z
         );
-        const signMat = new THREE.MeshStandardMaterial({
-          color: 0xf59e0b,
+        const cashShopGroup = new THREE.Group();
+        cashShopGroup.position.set(cashShopSnap.x, cashShopGy, cashShopSnap.z);
+        const stallMat = new THREE.MeshStandardMaterial({
+          color: 0xfbbf24,
           emissive: 0x92400e,
-          emissiveIntensity: 0.25,
+          emissiveIntensity: 0.22,
         });
-        const signGroup = new THREE.Group();
-        signGroup.position.set(
-          dragonCenterSnap.x,
-          dragonCenterGy,
-          dragonCenterSnap.z - 5.5
+        const stallBase = new THREE.Mesh(
+          new THREE.BoxGeometry(2.8, 1.1, 1.8),
+          stallMat
         );
-        const signPost = new THREE.Mesh(
-          new THREE.BoxGeometry(0.35, 2.4, 0.35),
-          signMat
+        stallBase.position.y = 0.55;
+        stallBase.castShadow = true;
+        stallBase.receiveShadow = true;
+        cashShopGroup.add(stallBase);
+        const stallAwning = new THREE.Mesh(
+          new THREE.BoxGeometry(3.4, 0.18, 2.2),
+          new THREE.MeshStandardMaterial({ color: 0x7c3aed })
         );
-        signPost.position.y = 1.2;
-        signPost.castShadow = true;
-        signGroup.add(signPost);
-        const signBoard = new THREE.Mesh(
-          new THREE.BoxGeometry(3.2, 0.55, 0.12),
-          signMat
-        );
-        signBoard.position.y = 2.55;
-        signBoard.castShadow = true;
-        signGroup.add(signBoard);
-        scene.add(signGroup);
-
-        const monsterSpots = moe3dMonsterShowcaseLayout(
-          playBounds.halfW,
-          playBounds.halfD,
-          MOE_MONSTER_LINEUP.length
-        );
-        const terrainOriginX = terrainGroup.position.x;
-        const terrainOriginZ = terrainGroup.position.z;
-
-        MOE_MONSTER_LINEUP.forEach((variant, i) => {
-          loader.load(
-            `/assets/models/monster/${variant.file}`,
-            (monsterGltf) => {
-              if (disposed) return;
-              const root = SkeletonUtils.clone(monsterGltf.scene);
-              const desertSpot = MOE_3D_DESERT_SHOWCASE_FAMILIES.has(
-                variant.familyId
-              )
-                ? moe3dDesertMonsterShowcaseSpot(
-                    variant.familyId,
-                    desertLocalX,
-                    desertLocalZ,
-                    tileWidth,
-                    tileDepth,
-                    terrainOriginX,
-                    terrainOriginZ
-                  )
-                : null;
-              const ipsSpot = MOE_3D_IPS_CANYON_SHOWCASE_FAMILIES.has(
-                variant.familyId
-              )
-                ? moe3dIpsCanyonMonsterShowcaseSpot(
-                    variant.familyId,
-                    ipsLocalX,
-                    ipsLocalZ,
-                    tileWidth,
-                    tileDepth,
-                    terrainOriginX,
-                    terrainOriginZ
-                  )
-                : null;
-              const tileSpot = ipsSpot ?? desertSpot;
-              const intent = tileSpot ?? monsterSpots[i];
-              const snap = snapToNearestTerrain(
-                raycaster,
-                terrainGroup,
-                intent.x,
-                intent.y,
-                tileSpot ? 12 : 32
-              );
-              const tileBaseY = ipsSpot ? ipsBaseY : desertSpot ? desertBaseY : null;
-              const gy =
-                tileBaseY != null
-                  ? tileBaseY
-                  : groundY(raycaster, terrainGroup, snap.x, snap.z);
-              const targetH = moe3dMonsterShowcaseTargetHeight(variant.familyId);
-              const { groundLift } = fitModelToGround(root, targetH);
-              root.position.set(snap.x, gy + groundLift, snap.z);
-              root.rotation.y = tileSpot?.yaw ?? Math.PI * 0.5;
-              enableShadows(root);
-              scene.add(root);
-              attachShowcaseNameLabel(
-                root,
-                targetH * 1.12,
-                variant.nameJa,
-                variant.variantLabel ?? "",
-                "monster",
-                44,
-                { variantId: variant.id, kind: "monster" }
-              );
-              applyHiddenShowcaseVisibility();
-            },
-            undefined,
-            (err) => console.warn("Monster showcase load:", variant.file, err)
-          );
+        stallAwning.position.y = 1.22;
+        stallAwning.castShadow = true;
+        cashShopGroup.add(stallAwning);
+        const gemMat = new THREE.MeshStandardMaterial({
+          color: 0x38bdf8,
+          emissive: 0x0c4a6e,
+          emissiveIntensity: 0.45,
         });
-
-        const monsterCenterIntent = moe3dMonsterShowcaseCenter(
-          playBounds.halfW,
-          playBounds.halfD
-        );
-        const monsterCenterSnap = snapToNearestTerrain(
-          raycaster,
-          terrainGroup,
-          monsterCenterIntent.x,
-          monsterCenterIntent.y,
-          36
-        );
-        const monsterCenterGy = groundY(
-          raycaster,
-          terrainGroup,
-          monsterCenterSnap.x,
-          monsterCenterSnap.z
-        );
-        const monsterSignMat = new THREE.MeshStandardMaterial({
-          color: 0xf43f5e,
-          emissive: 0x881337,
-          emissiveIntensity: 0.28,
-        });
-        const monsterSignGroup = new THREE.Group();
-        monsterSignGroup.position.set(
-          monsterCenterSnap.x - 4.5,
-          monsterCenterGy,
-          monsterCenterSnap.z
-        );
-        const monsterSignPost = new THREE.Mesh(
-          new THREE.BoxGeometry(0.35, 2.4, 0.35),
-          monsterSignMat
-        );
-        monsterSignPost.position.y = 1.2;
-        monsterSignPost.castShadow = true;
-        monsterSignGroup.add(monsterSignPost);
-        const monsterSignBoard = new THREE.Mesh(
-          new THREE.BoxGeometry(3.4, 0.55, 0.12),
-          monsterSignMat
-        );
-        monsterSignBoard.position.y = 2.55;
-        monsterSignBoard.castShadow = true;
-        monsterSignGroup.add(monsterSignBoard);
-        scene.add(monsterSignGroup);
+        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), gemMat);
+        gem.position.set(0, 1.55, 0.35);
+        gem.rotation.y = Math.PI / 6;
+        gem.castShadow = true;
+        cashShopGroup.add(gem);
+        scene.add(cashShopGroup);
+        cashShopPickGroup = cashShopGroup;
 
         onMapReadyRef.current?.({
           ...playBounds,
@@ -2444,14 +2589,7 @@ export default function MoeField3DCanvas({
           roughBisonPos: roughBisonTerrainPos,
           gustavJuniorPos: gustavJuniorTerrainPos,
           rhodaPos: { x: rhodaSnap.x, y: rhodaSnap.z },
-          dragonShowcasePos: {
-            x: dragonCenterSnap.x,
-            y: dragonCenterSnap.z,
-          },
-          monsterShowcasePos: {
-            x: monsterCenterSnap.x,
-            y: monsterCenterSnap.z,
-          },
+          ageHubHousePos,
         });
       },
       undefined,
@@ -2621,6 +2759,26 @@ export default function MoeField3DCanvas({
 
     function heightAt(x, z, currentFootY = null) {
       if (!mapReady) return 0;
+      const elvinGroundY = moe3dElvinKeikokuTerrainGroundY(
+        raycaster,
+        terrainGroup,
+        x,
+        z,
+        fieldTileW,
+        fieldTileD,
+        currentFootY
+      );
+      if (elvinGroundY != null) return elvinGroundY;
+      const kazanGroundY = moe3dSulfurKazanTerrainGroundY(
+        raycaster,
+        terrainGroup,
+        x,
+        z,
+        fieldTileW,
+        fieldTileD,
+        currentFootY
+      );
+      if (kazanGroundY != null) return kazanGroundY;
       return moe3dWalkableGroundY(raycaster, terrainGroup, x, z, {
         currentFootY,
       });
@@ -2653,6 +2811,8 @@ export default function MoeField3DCanvas({
       const isIxion = isIxionModelUrl(modelUrl);
       const isLion = isLionModelUrl(modelUrl);
       const isGustav = isGustavModelUrl(modelUrl);
+      const isSpider = isSpiderModelUrl(modelUrl);
+      const isElanKnight = isElanKnightModelUrl(modelUrl);
       const root = SkeletonUtils.clone(asset.scene);
       const isBossBison = isBison && (en.midBoss || en.superBoss);
       let fitScale = 1;
@@ -2729,14 +2889,18 @@ export default function MoeField3DCanvas({
           en.key === "brown_serpent" ||
           en.key === MOE_MEERIM_GUSTAV_JUNIOR_KEY ||
           en.key === "turtle" ||
-          en.key === "giant_tortoise",
+          en.key === "giant_tortoise" ||
+          isSpiderEnemyKey(en.key) ||
+          isElanKnightEnemyKey(en.key),
         layoutRev: isBossBison
           ? MOE_BISON_BOSS_LAYOUT_REV
           : isOrc
           ? MOE_ORC_MODEL_LAYOUT_REV
           : en.key === "earth_worm"
             ? MOE_EARTH_WORM_MATERIAL_REV
-            : en.key === "stray_ixion"
+            : en.key === "stray_ixion" ||
+                en.key === "eisis_ixion" ||
+                en.key === "bisk_ixion_water"
               ? MOE_IXION_MODEL_LAYOUT_REV
               : en.key === "hilltop_lion"
                 ? MOE_HILLTOP_LION_MODEL_LAYOUT_REV
@@ -2801,7 +2965,9 @@ export default function MoeField3DCanvas({
               entry.layoutRev !== MOE_ORC_MODEL_LAYOUT_REV) ||
             (en.key === "earth_worm" &&
               entry.layoutRev !== MOE_EARTH_WORM_MATERIAL_REV) ||
-            (en.key === "stray_ixion" &&
+            ((en.key === "stray_ixion" ||
+              en.key === "eisis_ixion" ||
+              en.key === "bisk_ixion_water") &&
               entry.layoutRev !== MOE_IXION_MODEL_LAYOUT_REV) ||
             (en.key === "hilltop_lion" &&
               entry.layoutRev !== MOE_HILLTOP_LION_MODEL_LAYOUT_REV) ||
@@ -2855,7 +3021,10 @@ export default function MoeField3DCanvas({
           px = snapped.x;
           pz = snapped.z;
         }
-        const gy = heightAt(px, pz);
+        const gy =
+          typeof en.spawnGroundY === "number"
+            ? en.spawnGroundY
+            : heightAt(px, pz);
         const yOff = entry.placeholder ? 0.6 : 0;
         const groundLift = entry.groundLift ?? 0;
         const baseY = gy + yOff + groundLift;
@@ -2923,8 +3092,8 @@ export default function MoeField3DCanvas({
         entry.frontExtent = moe3dMeasureModelFrontExtent(entry.root);
         entry.root.traverse((obj) => {
           if (obj.userData?.pickProxy) {
-            obj.visible =
-              en.hp > 0 && !lockCombat && !postCombatSettling;
+            // visible=false だと Three.js レイキャストが当たらずターゲット不可になる
+            obj.visible = en.hp > 0;
           }
         });
         entry.root.visible = en.hp > 0;
@@ -3352,10 +3521,42 @@ export default function MoeField3DCanvas({
         lastPetSpawnEpoch = spawnEpoch;
         lastPetX = pt.x;
         lastPetY = pt.y;
+        pendingPetFootSnap = true;
+        clearPetCombatVisualState();
+      }
+
+      const restTarget = campfireRestActiveRefStable.current?.current ? 1 : 0;
+      campfireRestBlend = moeCampfireRestBlendStep(
+        campfireRestBlend,
+        restTarget,
+        dt
+      );
+      if (campfireRestBlend > 0.001 || restTarget > 0) {
+        const colors = moeCampfireRestSceneColors(campfireRestBlend);
+        scene.background.setHex(colors.background);
+        scene.fog.color.setHex(colors.fog);
+        scene.fog.near = colors.fogNear;
+        scene.fog.far = colors.fogFar;
+        hemi.intensity = colors.hemiIntensity;
+        sun.intensity = colors.sunIntensity;
+      } else if (campfireRestBlend <= 0.001 && restTarget <= 0) {
+        scene.background.setHex(0x87b8e8);
+        scene.fog.color.setHex(0x87b8e8);
+        scene.fog.near = 55;
+        scene.fog.far = 190;
+        hemi.intensity = 0.85;
+        sun.intensity = 1.1;
+      }
+      for (const fx of campfireRestFxList) {
+        fx.update(dt, campfireRestBlend);
       }
 
       updateMoe3dMacro2L4Fx(dt);
+      updateMoe3dMacro2AgeL4Fx(dt);
+      updateMoe3dBiskL4Fx(dt);
       updateMoe3dMacro3L4Fx(dt);
+      updateElanPalaceMazeFx(dt);
+      updateSulfurMineMazeFx(dt);
 
       syncEnemyMeshes(ens);
       syncTreasureMeshes(trs ?? []);
@@ -3399,9 +3600,18 @@ export default function MoeField3DCanvas({
         ? heightAt(pl.x, pl.y, null)
         : heightAt(pl.x, pl.y, lastPlayerFootY);
       lastPlayerFootY = pgY;
+      const groundRef = playerGroundYRefStable.current;
+      if (groundRef?.current != null) {
+        groundRef.current.current = pgY;
+      }
       const jumpY = playerJumpRefStable.current?.current?.offset ?? 0;
+      const kintounFlyY = kintounFlyRefStable.current?.current?.offset ?? 0;
       const playerYOffset = playerModel ? playerGroundLift : PLAYER_HEIGHT;
-      playerRoot.position.set(pl.x, pgY + playerYOffset + jumpY, pl.y);
+      playerRoot.position.set(
+        pl.x,
+        pgY + playerYOffset + jumpY + kintounFlyY,
+        pl.y
+      );
       syncPlayerKakureminoVisual();
 
       const facingRef = playerFacingRefStable.current;
@@ -3441,7 +3651,15 @@ export default function MoeField3DCanvas({
         lastPlayerY = pl.y;
       }
 
-      const petGY = heightAt(pt.x, pt.y);
+      const petWarped = Math.hypot(pt.x - lastPetX, pt.y - lastPetY) > 18;
+      const petNearPlayer = Math.hypot(pt.x - pl.x, pt.y - pl.y) < 5.5;
+      let petFootHint = lastPetFootY;
+      if (pendingPetFootSnap || petWarped || petNearPlayer) {
+        petFootHint = pgY;
+        pendingPetFootSnap = false;
+      }
+      const petGY = heightAt(pt.x, pt.y, petFootHint);
+      lastPetFootY = petGY;
       let petGroundY = petGY + petGroundLift + petFloatLift;
       const inCombatCharge = duelNow?.phase === "simultaneous_charge";
       const nowMs = performance.now();
@@ -3458,9 +3676,12 @@ export default function MoeField3DCanvas({
         }
       } else {
         if (petCombatPosLock) {
-          petPostCombatPos = petCombatPosLock.clone();
-          petPostCombatYaw = petRoot?.rotation.y ?? petMesh.rotation.y;
-          petPostCombatUntil = nowMs + POST_COMBAT_SETTLE_MS;
+          const petCmd = petCommandRefStable.current?.current ?? "follow";
+          if (petCmd === "wait" || petCmd === "sit") {
+            petPostCombatPos = petCombatPosLock.clone();
+            petPostCombatYaw = petRoot?.rotation.y ?? petMesh.rotation.y;
+            petPostCombatUntil = nowMs + POST_COMBAT_SETTLE_MS;
+          }
           petCombatPosLock = null;
         }
         petCombatGroundY = null;
@@ -3496,6 +3717,12 @@ export default function MoeField3DCanvas({
       if (showPhoenixTailFire) {
         phoenixTailFire.update(dt, petRoot);
       }
+
+      const summonReq = playerSummonFxRefStable.current?.current;
+      if (summonReq) {
+        playerSummonFx.consumeRequest(summonReq);
+      }
+      playerSummonFx.update(dt, playerRoot);
 
       syncPopups(pops || []);
 
@@ -3579,6 +3806,10 @@ export default function MoeField3DCanvas({
       petLoadGen += 1;
       disposePetModel();
       phoenixTailFire.dispose();
+      playerSummonFx.dispose();
+      for (const fx of campfireRestFxList) {
+        fx.dispose();
+      }
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("contextmenu", blockContextMenu, { capture: true });

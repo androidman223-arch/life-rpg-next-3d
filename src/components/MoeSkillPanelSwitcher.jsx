@@ -56,17 +56,17 @@ export default function MoeSkillPanelSwitcher({
   const goNext = () => onSelectMode(cycleMoeSkillPanelMode(mode, "next"));
 
   return (
-    <div className="flex items-stretch gap-0.5">
+    <div className="flex items-stretch gap-0">
       <button
         type="button"
         title="← で前のスキルセット"
         onClick={goPrev}
-        className={`w-[4.25rem] shrink-0 rounded border px-0 py-0.5 text-[8px] font-bold leading-none transition active:scale-95 ${idleBtn}`}
+        className={`w-[2.75rem] shrink-0 rounded-none border-0 border-r px-0 py-px text-[7px] font-bold leading-none transition active:scale-95 ${idleBtn}`}
       >
         ←
       </button>
       <div
-        className={`flex min-w-0 flex-1 items-center justify-center rounded border px-0.5 py-0.5 text-[8px] font-bold leading-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)] ${centerTone}`}
+        className={`flex min-h-[0.95rem] min-w-0 flex-1 items-center justify-center rounded-none border-0 border-r px-0.5 py-px text-[7px] font-bold leading-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)] ${centerTone}`}
       >
         {label}
       </div>
@@ -74,7 +74,7 @@ export default function MoeSkillPanelSwitcher({
         type="button"
         title="→ で次のスキルセット"
         onClick={goNext}
-        className={`w-[4.25rem] shrink-0 rounded border px-0 py-0.5 text-[8px] font-bold leading-none transition active:scale-95 ${activeBtn}`}
+        className={`w-[2.75rem] shrink-0 rounded-none border-0 px-0 py-px text-[7px] font-bold leading-none transition active:scale-95 ${activeBtn}`}
       >
         →
       </button>

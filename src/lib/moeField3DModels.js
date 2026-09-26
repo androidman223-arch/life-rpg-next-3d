@@ -7,6 +7,12 @@ import {
   MOE_MONSTER_MODEL_FILE_BY_VARIANT,
   moeMonsterFieldAllEntries,
 } from "@/data/moeMonsterFieldRegistry";
+import {
+  moe3dBiskHubAnchor,
+  moe3dBiskNpcHubAnchor,
+} from "@/lib/moe3dBiskHubLayout";
+import { MOE_MEERIM_SPECIAL_BOSS_SPAWNS } from "@/data/moeMeerimEnemies";
+import { moe3dMapSlotNormSpawnPosition } from "@/lib/moe3dMonsterMapSpawns";
 
 const MOE_MONSTER_GLB_BASE = "/assets/models/monster";
 
@@ -27,6 +33,10 @@ export const MOE_ELEMENTAL_ATRUM_MODEL_URL = "/assets/models/pet/ElementalAtrum.
 export const MOE_CALGOCHE_MODEL_URL = "/assets/models/pet/Calgoche.glb";
 export const MOE_CARNIVAL_ELEPHANT_MODEL_URL = "/assets/models/pet/CarnivalElephant.glb";
 export const MOE_ABINYAN_MODEL_URL = "/assets/models/pet/Abinyan.glb";
+export {
+  MOE_PLAYER_SUMMON_DRAGON_MODEL_URL,
+  MOE_PLAYER_SUMMON_PHOENIX_MODEL_URL,
+} from "@/data/moePlayerSummonModels";
 
 /** ペット id → glb（未指定は Snake_green） */
 export const MOE_PET_MODEL_BY_ID = {
@@ -113,6 +123,32 @@ export const MOE_IPS_TURTLE_MODEL_URL =
   "/assets/models/monster/IpsTurtleA.glb";
 export const MOE_IPS_GIANT_TORTOISE_MODEL_URL =
   "/assets/models/monster/IpsGiantTortoiseA.glb";
+/** エルビン／エイシス蜘蛛 glb */
+export const MOE_ELVIN_SPIDER_MODEL_URL = moeMonsterGlbUrl("ElvinSpiderA.glb");
+export const MOE_ELVIN_SPIDER_B_MODEL_URL = moeMonsterGlbUrl("ElvinSpiderB.glb");
+/** エルアン宮殿 · 白骨·黒骨 */
+export const MOE_ELAN_KNIGHT_WHITE_A_MODEL_URL = moeMonsterGlbUrl(
+  "ElanKnightWhiteA.glb"
+);
+export const MOE_ELAN_KNIGHT_WHITE_B_MODEL_URL = moeMonsterGlbUrl(
+  "ElanKnightWhiteB.glb"
+);
+export const MOE_ELAN_KNIGHT_BLACK_A_MODEL_URL = moeMonsterGlbUrl(
+  "ElanKnightBlackA.glb"
+);
+export const MOE_ELAN_KNIGHT_BLACK_B_MODEL_URL = moeMonsterGlbUrl(
+  "ElanKnightBlackB.glb"
+);
+
+/** @param {string | null | undefined} key */
+export function isSpiderEnemyKey(key) {
+  return key === "elvin_spider" || key === "great_tarantula";
+}
+
+/** @param {string | null | undefined} key */
+export function isElanKnightEnemyKey(key) {
+  return key === "elan_knight_white" || key === "elan_knight_black";
+}
 
 /** 敵 key → glb（未指定は Snake） */
 export const MOE_ENEMY_MODEL_BY_KEY = {
@@ -122,6 +158,8 @@ export const MOE_ENEMY_MODEL_BY_KEY = {
   rough_bison: MOE_ROUGH_BISON_MODEL_URL,
   orc_infantry: MOE_ORC_INFANTRY_MODEL_URL,
   stray_ixion: MOE_STRAY_IXION_MODEL_URL,
+  eisis_ixion: MOE_STRAY_IXION_MODEL_URL,
+  bisk_ixion_water: MOE_STRAY_IXION_MODEL_URL,
   hilltop_lion: MOE_HILLTOP_LION_MODEL_URL,
   gustav_junior: MOE_GUSTAV_GIANT_MODEL_URL,
   turtle: MOE_IPS_TURTLE_MODEL_URL,
@@ -159,6 +197,8 @@ export const MOE_ENEMY_TINT_BY_KEY = {
   earth_worm: 0xdc2626,
   sea_snake: 0x0891b2,
   stray_ixion: 0x4338ca,
+  eisis_ixion: 0x22d3ee,
+  bisk_ixion_water: 0x38bdf8,
   elvin_bison: 0x6b4423,
   auzun_bura: 0x3d2817,
   mountain_bison: 0x8b7355,
@@ -212,26 +252,15 @@ export const MOE_EARTH_WORM_STRIPE_BLACK_FRAC = 0.3;
 /** 3D フィールドの半幅（Three.js x / z とも ±この値。マップ読込後に実測で上書き） */
 export const MOE_3D_HALF_W = 180;
 export const MOE_3D_HALF_D = 180;
-/** 試作マップ（既存 2×4 プロトタイプ）の敷き詰め枚数 */
-export const MOE_3D_LEGACY_TILES_X = 2;
-export const MOE_3D_LEGACY_TILES_Z = 4;
+export {
+  MOE_3D_LEGACY_TILES_X,
+  MOE_3D_LEGACY_TILES_Z,
+  MOE_3D_TILE_SPACING,
+  moe3dLayoutTileD,
+  moe3dLayoutTileW,
+} from "@/lib/moe3dLayoutConstants";
 /** 試作マップのスポーン／アルター基準 half（本編拡張前の 100） */
 export const MOE_3D_LEGACY_REF_HALF = 100;
-/**
- * 1マップ面あたりのワールド間隔倍率（マクロ追い込み後の余裕 · 推奨 1.6〜1.8）
- * 位置間隔とタイル mesh の xz スケールに共通利用
- */
-export const MOE_3D_TILE_SPACING = 1.7;
-
-/** @param {number} tileW */
-export function moe3dLayoutTileW(tileW) {
-  return tileW * MOE_3D_TILE_SPACING;
-}
-
-/** @param {number} tileD */
-export function moe3dLayoutTileD(tileD) {
-  return tileD * MOE_3D_TILE_SPACING;
-}
 /** 距離帯（ゾーン）ごとに同種2匹。外側ほど Lv が上がる */
 export const MOE_3D_ENEMIES_PER_ZONE = 2;
 /** @type {{ level: number, key: string }[]} 中心に近い順（Wiki Lv・小数） */
@@ -245,7 +274,7 @@ export const MOE_3D_ENEMY_ZONES = [
 /** 同ゾーン2匹目の Lv 差（±） */
 export const MOE_3D_ZONE_PAIR_LEVEL_OFFSET = 0.3;
 
-/** 初期位置そば・専用ボスエリア（通常敵ゾーンと被らない東側） */
+/** ビスク中央広場付近・専用ボスエリア（アルター東側を避け西寄り） */
 export function moe3dBossAreaLayout(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
@@ -253,28 +282,27 @@ export function moe3dBossAreaLayout(
   tileD,
   startOverride
 ) {
-  const start =
-    startOverride ?? moe3dPlayerStartPosition(halfW, halfD);
-  const east = tileW
-    ? Math.max(12, tileW * 0.28)
-    : Math.max(24, halfW * 0.24);
+  const hub = startOverride ?? moe3dBiskHubAnchor();
+  const west = tileW
+    ? Math.max(12, tileW * 0.22)
+    : Math.max(18, halfW * 0.12);
   const slotSep = tileW
-    ? Math.max(10, tileW * 0.22)
-    : Math.max(16, halfW * 0.14);
+    ? Math.max(10, tileW * 0.18)
+    : Math.max(14, halfW * 0.1);
   const north = tileD
-    ? Math.max(8, tileD * 0.52)
-    : Math.max(10, halfD * 0.08);
-  const midBossPos = { x: start.x + east, y: start.y - north };
-  const superBossPos = { x: start.x + east + slotSep, y: start.y - north };
+    ? Math.max(8, tileD * 0.16)
+    : Math.max(10, halfD * 0.05);
+  const midBossPos = { x: hub.x - west, y: hub.y - north };
+  const superBossPos = { x: hub.x - west - slotSep, y: hub.y - north };
   return {
     center: {
-      x: start.x + east + slotSep * 0.5,
-      y: start.y - north,
+      x: hub.x - west - slotSep * 0.5,
+      y: hub.y - north,
     },
     midBossPos,
     superBossPos,
     radiusX: slotSep * 0.65 + 8,
-    radiusZ: tileD ? Math.max(8, tileD * 0.2) : Math.max(12, halfD * 0.07),
+    radiusZ: tileD ? Math.max(8, tileD * 0.16) : Math.max(12, halfD * 0.06),
   };
 }
 
@@ -295,7 +323,7 @@ export function moe3dMidBossSpawnPosition(
   ).midBossPos;
 }
 
-/** 超ボス（アウズンブラ）— ボスエリア内・バイソンの隣 */
+/** 超ボス（アウズンブラ）— エルビン山脈の広い平地 */
 export function moe3dSuperBossSpawnPosition(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
@@ -303,6 +331,15 @@ export function moe3dSuperBossSpawnPosition(
   tileD,
   startOverride
 ) {
+  const spec = MOE_MEERIM_SPECIAL_BOSS_SPAWNS.superBoss;
+  const onMountains = moe3dMapSlotNormSpawnPosition(
+    spec.mapSlotId,
+    spec.tx,
+    spec.tz,
+    tileW,
+    tileD
+  );
+  if (onMountains) return onMountains;
   return moe3dBossAreaLayout(
     halfW,
     halfD,
@@ -312,7 +349,7 @@ export function moe3dSuperBossSpawnPosition(
   ).superBossPos;
 }
 
-/** マウンテンバイソン — エルビン バイソンの少し南西 */
+/** マウンテンバイソン — エルビン渓谷の広い平地 */
 export function moe3dMountainBisonSpawnPosition(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
@@ -320,6 +357,15 @@ export function moe3dMountainBisonSpawnPosition(
   tileD,
   startOverride
 ) {
+  const spec = MOE_MEERIM_SPECIAL_BOSS_SPAWNS.mountainBison;
+  const onValley = moe3dMapSlotNormSpawnPosition(
+    spec.mapSlotId,
+    spec.tx,
+    spec.tz,
+    tileW,
+    tileD
+  );
+  if (onValley) return onValley;
   const { midBossPos } = moe3dBossAreaLayout(
     halfW,
     halfD,
@@ -333,7 +379,7 @@ export function moe3dMountainBisonSpawnPosition(
   };
 }
 
-/** 荒くれバイソン — アウズンブラの少し南東 */
+/** 荒くれバイソン — エルビン渓谷の広い平地（マウンテンバイソン付近） */
 export function moe3dRoughBisonSpawnPosition(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
@@ -341,6 +387,15 @@ export function moe3dRoughBisonSpawnPosition(
   tileD,
   startOverride
 ) {
+  const spec = MOE_MEERIM_SPECIAL_BOSS_SPAWNS.roughBison;
+  const onValley = moe3dMapSlotNormSpawnPosition(
+    spec.mapSlotId,
+    spec.tx,
+    spec.tz,
+    tileW,
+    tileD
+  );
+  if (onValley) return onValley;
   const { superBossPos } = moe3dBossAreaLayout(
     halfW,
     halfD,
@@ -430,9 +485,16 @@ export function moe3dEnemyDisplayScale(en) {
   if (en?.key === "mountain_bison") return MOE_MOUNTAIN_BISON_MODEL_HEIGHT;
   if (en?.key === "rough_bison") return MOE_ROUGH_BISON_MODEL_HEIGHT;
   if (en?.key === "orc_infantry") return 1;
-  if (en?.key === "stray_ixion") return 1;
+  if (
+    en?.key === "stray_ixion" ||
+    en?.key === "eisis_ixion" ||
+    en?.key === "bisk_ixion_water"
+  )
+    return 1;
   if (en?.key === "hilltop_lion") return 1;
   if (en?.key === "gustav_junior") return 1;
+  if (isSpiderEnemyKey(en?.key)) return 1;
+  if (isElanKnightEnemyKey(en?.key)) return 1;
   if (en?.key === "brown_serpent") return 1;
   if (en?.displayScale != null) return en.displayScale;
   return 1;
@@ -461,32 +523,31 @@ export function moe3dGustavBodyLengthWorld() {
 /** スタートから北へ何体分離すか */
 export const MOE_GUSTAV_SPAWN_BODY_LENGTHS_NORTH = 7;
 
-/** ギュスターヴ spawn — スタートから北へ体7つ分（南＝プレイヤー側を向く） */
+/** ギュスターヴ spawn — ビスク中央から北へ体7つ分（南＝広場側を向く） */
 export function moe3dGustavJuniorSpawnPosition(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
   startOverride
 ) {
-  const start = startOverride ?? moe3dPlayerStartPosition(halfW, halfD);
-  const east = Math.max(8, halfW * 0.06);
+  const hub = startOverride ?? moe3dBiskHubAnchor();
   const northOffset =
     moe3dGustavBodyLengthWorld() * MOE_GUSTAV_SPAWN_BODY_LENGTHS_NORTH;
   return {
-    x: start.x + east,
-    y: start.y - northOffset,
+    x: hub.x - 3,
+    y: hub.y - northOffset,
   };
 }
 
-/** フィールド待機時：プレイヤー初期位置（南）を向く yaw */
+/** フィールド待機時：ビスク中央広場を向く yaw */
 export function moe3dGustavFacePlayerStartYaw(
   fromX,
   fromY,
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D
 ) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const hub = moe3dBiskHubAnchor();
   return (
-    moe3dYawFaceTarget(fromX, fromY, start.x, start.y) +
+    moe3dYawFaceTarget(fromX, fromY, hub.x, hub.y) +
     MOE_GUSTAV_MODEL_YAW_OFFSET
   );
 }
@@ -581,7 +642,12 @@ export function enemyModelHeightForKey(key) {
   if (key === "hilltop_lion") {
     return MOE_HILLTOP_LION_MODEL_HEIGHT * MOE_HILLTOP_LION_DISPLAY_SCALE;
   }
-  if (key === "stray_ixion") return MOE_STRAY_IXION_MODEL_HEIGHT;
+  if (
+    key === "stray_ixion" ||
+    key === "eisis_ixion" ||
+    key === "bisk_ixion_water"
+  )
+    return MOE_STRAY_IXION_MODEL_HEIGHT;
   return moeMacro1DisplayHeight(key, MOE_MONSTER_MODEL_HEIGHT);
 }
 
@@ -676,6 +742,21 @@ export function isGustavModelUrl(url) {
   return url === MOE_GUSTAV_GIANT_MODEL_URL;
 }
 
+export function isSpiderModelUrl(url) {
+  return (
+    url === MOE_ELVIN_SPIDER_MODEL_URL || url === MOE_ELVIN_SPIDER_B_MODEL_URL
+  );
+}
+
+export function isElanKnightModelUrl(url) {
+  return (
+    url === MOE_ELAN_KNIGHT_WHITE_A_MODEL_URL ||
+    url === MOE_ELAN_KNIGHT_WHITE_B_MODEL_URL ||
+    url === MOE_ELAN_KNIGHT_BLACK_A_MODEL_URL ||
+    url === MOE_ELAN_KNIGHT_BLACK_B_MODEL_URL
+  );
+}
+
 /** glb 内蔵カラーを使う敵（外部 tint しない） */
 const MOE_BAKED_COLOR_ENEMY_KEYS = new Set([
   "mountain_bison",
@@ -764,17 +845,6 @@ export const MOE_3D_MIN_RESPAWN_FROM_PLAYER = 55;
 export const MOE_3D_MIN_RESPAWN_FROM_ENEMY = 45;
 /** 戦闘時：先頭同士（モデル正面↔正面）の固定間隔 */
 export const MOE_3D_DUEL_FRONT_TO_FRONT_GAP = 4.2;
-/** @deprecated MOE_3D_DUEL_FRONT_TO_FRONT_GAP を使用 */
-export const MOE_3D_DUEL_FRONT_GAP = MOE_3D_DUEL_FRONT_TO_FRONT_GAP;
-/** @deprecated 敵種別 gap は廃止（先頭距離は MOE_3D_DUEL_FRONT_TO_FRONT_GAP で統一） */
-export const MOE_3D_DUEL_SNAKE_FRONT_GAP = MOE_3D_DUEL_FRONT_TO_FRONT_GAP;
-/** @deprecated 中心距離の下限 clamp は廃止 */
-export const MOE_3D_DUEL_SLOT_MIN_CENTER = 0;
-/** @deprecated 中心距離の下限 clamp は廃止 */
-export const MOE_3D_DUEL_SNAKE_MIN_CENTER = 0;
-/** @deprecated 互換用。新規は MOE_3D_DUEL_FRONT_TO_FRONT_GAP + 前面オフセット */
-export const MOE_3D_DUEL_SLOT_DIST = 6.5;
-
 export function isSnakeModelEnemyKey(key) {
   return monsterModelUrlForKey(key) === MONSTER_MODEL_URL;
 }
@@ -872,7 +942,13 @@ export function moe3dModelFrontExtent(kind, enemyKey = null, petId = null) {
   }
   const h = enemyFitHeightForKey(enemyKey);
   if (enemyKey === "orc_infantry") return MOE_ORC_INFANTRY_DISPLAY_SCALE * 0.32;
-  if (enemyKey === "stray_ixion") return MOE_STRAY_IXION_DISPLAY_SCALE * 0.36;
+  if (
+    enemyKey === "stray_ixion" ||
+    enemyKey === "eisis_ixion" ||
+    enemyKey === "bisk_ixion_water"
+  ) {
+    return MOE_STRAY_IXION_DISPLAY_SCALE * 0.36;
+  }
   if (enemyKey === "mountain_bison" || enemyKey === "rough_bison") return h * 0.34;
   if (enemyKey === "gustav_junior") {
     return MOE_GUSTAV_JUNIOR_MODEL_HEIGHT * MOE_GUSTAV_JUNIOR_DISPLAY_SCALE * 0.32;
@@ -939,13 +1015,12 @@ export function moe3dPetStartNearPlayer(playerPos, offset = { dx: 1.6, dy: -1.2 
   };
 }
 
-/** スポーンから歩いて約10歩（~10ユニット） */
+/** ペット小屋 — ビスク中央広場の南西 */
 export function moe3dPetHousePosition(halfW = MOE_3D_HALF_W, halfD = MOE_3D_HALF_D) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
-  const walkSteps = 10;
+  const hub = moe3dBiskNpcHubAnchor();
   return {
-    x: start.x - walkSteps,
-    y: start.y - 1,
+    x: hub.x - 12,
+    y: hub.y + 10,
   };
 }
 
@@ -954,12 +1029,12 @@ export function moe3dIsNearPetHouse(px, py, halfW, halfD, radius = 11) {
   return Math.hypot(px - house.x, py - house.y) <= radius;
 }
 
-/** スポーン南 — 魂の記憶者ローダ（ペット小屋と離す · ミニマップで下方向） */
+/** 魂の記憶者ローダ — ビスク中央広場の南（経験値粉） */
 export function moe3dRhodaPosition(halfW = MOE_3D_HALF_W, halfD = MOE_3D_HALF_D) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const hub = moe3dBiskNpcHubAnchor();
   return {
-    x: start.x + 6,
-    y: start.y + 12,
+    x: hub.x - 6,
+    y: hub.y + 14,
   };
 }
 
@@ -968,17 +1043,17 @@ export function moe3dIsNearRhoda(px, py, halfW, halfD, radius = 12, spot = null)
   return Math.hypot(px - center.x, py - center.y) <= radius;
 }
 
-/** ドラゴン10体展示 — スポーン南 · 東西に横並び */
+/** ドラゴン展示 — ビスク中央広場の南 · 西寄り横並び */
 export function moe3dDragonShowcaseLayout(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D,
   count = 10
 ) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
-  const spacing = 4.6;
+  const hub = moe3dBiskHubAnchor();
+  const spacing = 4.2;
   const total = (count - 1) * spacing;
-  const baseY = start.y + 14;
-  const baseX = start.x - total / 2;
+  const baseY = hub.y + 16;
+  const baseX = hub.x - total * 0.62;
   return Array.from({ length: count }, (_, i) => ({
     x: baseX + i * spacing,
     y: baseY,
@@ -1020,14 +1095,12 @@ export function moe3dMonsterShowcaseLayout(
   halfD = MOE_3D_HALF_D,
   count = MOE_3D_MONSTER_SHOWCASE_COUNT
 ) {
-  const start = moe3dPlayerStartPosition(halfW, halfD);
+  const hub = moe3dBiskHubAnchor();
   const cols = MOE_3D_MONSTER_SHOWCASE_COLS;
   const spX = 3.35;
   const spZ = 4.75;
-  const rows = Math.ceil(count / cols);
-  const east = Math.max(20, halfW * 0.2);
-  const baseX = start.x + east;
-  const baseY = start.y + 2;
+  const baseX = hub.x - 28;
+  const baseY = hub.y + 6;
   const offsetX = ((cols - 1) * spX) / 2;
   return Array.from({ length: count }, (_, i) => {
     const col = i % cols;
@@ -1077,12 +1150,12 @@ export function moe3dMonsterShowcaseTargetHeight(familyId) {
 }
 
 function moe3dZoneBandY(zoneIndex, zoneCount, halfD) {
-  const limD = halfD * 0.78;
-  /** ゾーン0＝南側（弱）→ 最終ゾーン＝北側（強） */
-  const southY = limD * 0.42;
-  const northY = -limD * 0.72;
+  const hub = moe3dBiskHubAnchor();
+  /** ゾーン0＝南（弱）→ 最終ゾーン＝北（強） · ビスク中央広場周辺 */
+  const southRing = Math.min(halfD * 0.14, 26);
+  const northRing = -Math.min(halfD * 0.12, 22);
   const t = zoneCount <= 1 ? 0 : zoneIndex / (zoneCount - 1);
-  return southY + (northY - southY) * t;
+  return hub.y + southRing + (northRing - southRing) * t;
 }
 
 const MOE_3D_MINI_ZONE_FILLS = [
@@ -1165,9 +1238,11 @@ export function moe3dZoneEnemyPosition(
   halfW = MOE_3D_HALF_W,
   halfD = MOE_3D_HALF_D
 ) {
+  const hub = moe3dBiskHubAnchor();
   const bandY = moe3dZoneBandY(zoneIndex, zoneCount, halfD);
-  const spreadX = halfW * (0.18 + zoneIndex * 0.05);
-  const x = slotInZone === 0 ? -spreadX * 0.55 : spreadX * 0.55;
+  const spreadX = 8 + zoneIndex * 3.5;
+  const x =
+    slotInZone === 0 ? hub.x - spreadX : hub.x - spreadX * 0.55;
   return { x, y: bandY };
 }
 
@@ -1199,12 +1274,16 @@ export function moe3dPickRespawnInZone(
   others,
   excludeId
 ) {
+  const hub = moe3dBiskHubAnchor();
   const bandY = moe3dZoneBandY(zoneIndex, zoneCount, halfD);
-  const bandHalfH = halfD * 0.07;
-  const spreadX = halfW * (0.18 + zoneIndex * 0.05);
+  const bandHalfH = halfD * 0.04;
+  const spreadX = 8 + zoneIndex * 3.5;
 
   for (let attempt = 0; attempt < 40; attempt++) {
-    const x = (Math.random() - 0.5) * spreadX * 1.1;
+    const x =
+      hub.x -
+      spreadX * 0.55 +
+      (Math.random() - 0.5) * spreadX * 0.95;
     const y = bandY + (Math.random() - 0.5) * bandHalfH * 2;
     if (moe3dIsInBossArea(x, y, halfW, halfD)) continue;
     if (

@@ -4,25 +4,34 @@
 
 export const MOE_PLAYER_UTILITY_SLOT_COUNT = 10;
 
-/** @typedef {'enemy_stat_search'} MoePlayerUtilitySkillKey */
+/** @typedef {'enemy_stat_search' | 'jiriki_kaihou' | 'jiriki_seiryu'} MoePlayerUtilitySkillKey */
 
-export const MOE_PLAYER_UTILITY_SLOT_KEYS = ["enemy_stat_search"];
+export const MOE_PLAYER_UTILITY_SLOT_KEYS = [
+  "enemy_stat_search",
+  "jiriki_kaihou",
+  "jiriki_seiryu",
+];
 
 /** @type {Record<MoePlayerUtilitySkillKey, string>} */
 export const MOE_PLAYER_UTILITY_SLOT_LABELS = {
   enemy_stat_search: "敵ステサーチ",
+  jiriki_kaihou: "生活改鳳",
+  jiriki_seiryu: "自力整龍",
 };
 
 /** @type {Record<MoePlayerUtilitySkillKey, string>} */
 export const MOE_PLAYER_UTILITY_SLOT_ICONS = {
   enemy_stat_search: "🔍",
+  jiriki_kaihou: "🐦‍🔥",
+  jiriki_seiryu: "🐉",
 };
 
 /** @returns {(MoePlayerUtilitySkillKey|null)[]} */
 export function defaultPlayerUtilitySlotOrder() {
   return [
     "enemy_stat_search",
-    null,
+    "jiriki_kaihou",
+    "jiriki_seiryu",
     null,
     null,
     null,

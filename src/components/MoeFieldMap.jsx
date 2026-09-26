@@ -31,6 +31,7 @@ import {
 } from "@/lib/moePetSave";
 import {
   formatMoeExternalSaveFileHint,
+  formatMoeExternalSaveFieldHint,
   formatMoeExternalSaveLocationBlock,
   formatMoeExternalSavePlaceStatus,
 } from "@/lib/moeExternalSaveLabels";
@@ -43,6 +44,7 @@ import { MOE_AGE_MAP_SLOT_IDS } from "@/lib/moe3dMacro2AgeConstants";
 import { playSfx } from "@/lib/sfx";
 import {
   requestMoeFieldCombatBgm,
+  requestMoeFieldBgmRest,
   requestMoeFieldZoneBgm,
 } from "@/lib/moeFieldBgm";
 import { MOE_MEERIM_ENEMIES, MOE_MEERIM_MID_BOSS_KEY, MOE_MEERIM_GUSTAV_JUNIOR_KEY, MOE_MEERIM_SUPER_BOSS_KEY, MOE_MEERIM_MOUNTAIN_BISON_KEY, MOE_MEERIM_ROUGH_BISON_KEY, MOE_MID_BOSS_HP_MULTIPLIER, MOE_SUPER_BOSS_HP_MULTIPLIER, enemyWikiStatsTitle, formatEnemyLevelUi } from "@/data/moeMeerimEnemies";
@@ -78,7 +80,8 @@ import {
 import { resolveMoeDuelSkillSequence } from "../data/moePetCombatSkills";
 import MoeField3DCanvas from "@/components/MoeField3DCanvas";
 import MoeAltarWarpPanel from "@/components/MoeAltarWarpPanel";
-import MoePetTrainingGuidePanel from "@/components/MoePetTrainingGuidePanel";
+import MoeAltarTomorrowMemo from "@/components/MoeAltarTomorrowMemo";
+import MoeAgeHubHousePanel from "@/components/MoeAgeHubHousePanel";
 import MoeMacroSessionTimer from "@/components/MoeMacroSessionTimer";
 import {
   MOE_ALTARS,
@@ -89,25 +92,45 @@ import {
   moe3dDefaultPlayerSpawn,
   moe3dEstimatedTileSize,
   moe3dFindNearbyAltar,
+  moe3dSlotSpawnWorld,
   moe3dWarpDestSpawnWorld,
 } from "@/lib/moe3dAltarWarp";
+import { MOE_ELVIN_KEIKOKU_MAP_SLOT_ID } from "@/lib/moe3dElvinValleyGlb";
 import {
-  moe3dIsNearTrainingGuideHouse,
-  moe3dTrainingGuideHousePosition,
-} from "@/lib/moe3dTrainingGuideHouse";
+  MOE_SULFUR_KAZAN_MAP_SLOT_ID,
+} from "@/lib/moe3dSulfurKazanTemple";
 import {
-  moe3dAgeHubHousePosition,
   moe3dIsNearAgeHubHouse,
+  moe3dAgeHubHousePosition,
   MOE_AGE_HUB_HOUSE,
 } from "@/lib/moe3dAgeHubHouse";
-import { MOE_PET_TRAINING_GUIDE_HOUSE } from "@/lib/moePetTrainingGuide";
+import {
+  MOE_MITOYA_TREE_TX,
+  MOE_MITOYA_TREE_TZ,
+} from "@/lib/moe3dMitoyaGreatTreeLayout";
+import { moe3dIsNearAgeRestCampfire } from "@/lib/moe3dAgeRestCamps";
+import {
+  MOE_AGE_HUB_HOUSE_PET_REGEN,
+  tickMoeAgeHubHousePetRegen,
+} from "@/lib/moeAgeHubHouseRegen";
+import { MOE_CAMPFIRE_REST } from "@/lib/moeCampfireRestCore";
+import {
+  startMoeCampfireCrackle,
+  stopMoeCampfireCrackle,
+} from "@/lib/moeCampfireCrackle";
+import MoeBattleLogPanel from "@/components/MoeBattleLogPanel";
+import {
+  createMoeBattleLogApi,
+  formatMoeBattleEnemyAttackLine,
+  MOE_BATTLE_LOG_COLOR,
+} from "@/lib/moeBattleLog";
 import {
   applyMoeTrainingGuideHpBonus,
   moeApplyFlatPetHpBonus,
   moeEnsureTrainingGuideHpBonus,
+  moeTrainingGuideChantMatches,
   MOE_TRAINING_GUIDE_BGM_MAP_SLOT,
   MOE_TRAINING_GUIDE_HP_BONUS,
-  moeTrainingGuideChantMatches,
 } from "@/lib/moeTrainingGuideHouseBuff";
 import {
   countMoeHolyRecordItems,
@@ -155,14 +178,27 @@ import MoeCrystalMarker from "@/components/MoeCrystalMarker";
 import MoeNpcDialogue from "@/components/MoeNpcDialogue";
 import MoePetHpWindow from "@/components/MoePetHpWindow";
 import MoePlayerHpWindow from "@/components/MoePlayerHpWindow";
+import MoePlayerStatusPanel from "@/components/MoePlayerStatusPanel";
 import MoeDuelTimeBarWindow from "@/components/MoeDuelTimeBarWindow";
 import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
 import MoeMergedSkillIconBar from "@/components/MoeMergedSkillIconBar";
 import MoeMergedVerticalSkillPanel from "@/components/MoeMergedVerticalSkillPanel";
+import MoeTrainingVerticalSkillPanel from "@/components/MoeTrainingVerticalSkillPanel";
+import { runTrainingSkillBridgeAction } from "@/lib/moeTrainingSkillBridge";
+import {
+  loadMoeTrainingSkillMode,
+  saveMoeTrainingSkillMode,
+  MOE_TRAINING_SKILL_MODE_ALL,
+  MOE_TRAINING_SKILL_MODE_LEARNED,
+  moeTrainingSkillModeLabel,
+  isTrainingSkillUsableAtLevel,
+} from "@/lib/moeTrainingSkillSettings";
 import MoeDragonLineupCanvas from "@/components/MoeDragonLineupCanvas";
 import MoeMonsterLineupCanvas from "@/components/MoeMonsterLineupCanvas";
 import MoeShowcaseDeletePicker from "@/components/MoeShowcaseDeletePicker";
 import MoeDraggableMinimapPanel from "@/components/MoeDraggableMinimapPanel";
+import { MoePanelDockProvider } from "@/context/MoePanelDockContext";
+import { MOE_DOCK_PANEL_MINIMAP_3D } from "@/lib/moePanelDock";
 import MoeField3DCompassHud from "@/components/MoeField3DCompassHud";
 import { MOE_DRAGON_LINEUP } from "@/data/moeDragonVariants";
 import {
@@ -182,6 +218,11 @@ import {
   loadPlayerSkillUnlocks,
   savePlayerSkillUnlocks,
 } from "@/data/moePlayerNinjaSkills";
+import { buildPlayerDragonSkillById } from "@/data/moePlayerDragonSkills";
+import {
+  moeKintounMoveSpeedMult,
+  tickKintounFlyOffset,
+} from "@/lib/moeDragonKintoun";
 import {
   loadPlayerSkillSlotOrder,
   savePlayerSkillSlotOrder,
@@ -193,20 +234,47 @@ import {
 } from "@/lib/moePlayerSkillSlotUi";
 import { defaultPlayerUtilitySlotOrder } from "@/data/moePlayerUtilitySkills";
 import { buildPlayerPhoenixSkillSlotEntries } from "@/lib/moePlayerPhoenixSkillUi";
-import MoePlayerSkill2LevelUpFlash from "@/components/MoePlayerSkill2LevelUpFlash";
+import MoePlayerSkill2LevelUpFlash, {
+  MOE_SKILL2_LEVEL_UP_FLASH_MS,
+} from "@/components/MoePlayerSkill2LevelUpFlash";
 import {
-  MOE_PHOENIX_PLAYER_CHANT_SEC,
   MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST,
   canSpendPlayerMpForPhoenixSkill,
   clearMoePetPoisonParalysis,
   isMoePhoenixPlayerChantSkill,
+  moePhoenixPlayerChantSec,
   petHasMoeAilment,
   spendPlayerMpForPhoenixSkill,
 } from "@/lib/moePhoenixPlayerSkill";
 import {
+  beginMoePhoenixHabitAscensionCooldown,
+  canUseMoePhoenixHabitAscension,
+  moePhoenixHabitAscensionRebirthGrant,
   resolvePhoenixHabitAscensionSequence,
   validatePhoenixHabitAscension,
 } from "@/lib/moePhoenixHabitAscension";
+import {
+  MOE_PHOENIX_COMBAT_ATK_MULT,
+  moePhoenixCombatAtkMultFromSkill,
+} from "@/lib/moePhoenixCombatAtk";
+import {
+  beginMoePhoenixHotSpringDefenseBuff,
+  formatMoePetDefenseWithBonus,
+  moeMitigatePetIncomingDamage,
+  moePhoenixHotSpringDefenseBonus,
+} from "@/lib/moePhoenixHotSpring";
+import {
+  applyMoePhoenixDeepSleepMp,
+  isMoePhoenixDeepSleepChant,
+} from "@/lib/moePhoenixDeepSleep";
+import MoePetDeepSleepOverlay from "@/components/MoePetDeepSleepOverlay";
+import {
+  MOE_REBIRTH_ONCE_DELAY_MS,
+  moeRebirthOnceBeginPending,
+  moeRebirthOnceHasCharge,
+  moeRebirthOnceIsPending,
+  moeRebirthOnceReviveHp,
+} from "@/lib/moePhoenixRebirthOnce";
 import {
   activateAtrumPetSkill,
   getAtrumMagicBuffMult,
@@ -219,9 +287,30 @@ import {
   loadMoePlayerVitals,
   MOE_BANANA_MILK_STAMINA_REGEN_MULT,
   moePlayerBananaMilkStaminaRegenPerSec,
+  moePlayerVitalsEqual,
   saveMoePlayerVitals,
   tickMoePlayerVitalsField,
 } from "@/lib/moePlayerVitals";
+import {
+  MOE_PLAYER_HEAL_ALL_AMOUNT,
+  MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC,
+  MOE_PLAYER_HEAL_HEALING_AMOUNT,
+  MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC,
+  MOE_PLAYER_HEAL_LIGHT_AMOUNT,
+  MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC,
+  moePlayerHealCooldownLabel,
+  moePlayerHealSkillTitle,
+} from "@/lib/moePlayerHealSkills";
+import {
+  MOE_PLAYER_REGEN_COOLDOWN_SEC,
+  MOE_PLAYER_REGEN_HP_PER_TICK,
+  MOE_PLAYER_REGEN_MP_PER_TICK,
+  MOE_PLAYER_REGEN_TICK_COUNT,
+  MOE_PLAYER_REGEN_TICK_INTERVAL_SEC,
+  moePlayerRegenCooldownRemainSec,
+  moePlayerRegenToggleTitle,
+} from "@/lib/moePlayerRegenSkill";
+import { formatWorldHealPopupAmount } from "@/lib/moeWorldHealPopup";
 import {
   activateCondenseMindOnTarget,
   isPlayerCondenseMindActive,
@@ -243,6 +332,18 @@ import {
   migratePlayerSkill2ProgressFromPreSkills,
   savePlayerSkill2Progress,
 } from "@/lib/moePlayerSkill2Progress";
+import {
+  loadPlayerExperience,
+  loadPlayerExperienceTrack,
+  savePlayerExperienceTrack,
+} from "@/lib/moePlayerExperience";
+import { loadPlayerSkill2TalismanActive } from "@/lib/moePlayerSkill2Talisman";
+import {
+  grantHealProficiencyAfterSuccess,
+  grantStealthProficiencyOnToggle,
+  rollPlayerHealSkillSuccess,
+  rollPlayerPhoenixSkillSuccess,
+} from "@/lib/moePlayerSkillUseFlow";
 import {
   loadMoeAllyTarget,
   saveMoeAllyTarget,
@@ -301,6 +402,8 @@ import {
   saveMoeItemBoxSlots,
 } from "@/lib/moeItemBoxStorage";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
+import { useMoePanelCollapsed } from "@/hooks/useMoePanelCollapsed";
+import MoePanelCollapseToggle from "@/components/MoePanelCollapseToggle";
 import {
   buildPetMasterDialogue,
   MOE_PET_MASTER_NPC,
@@ -533,23 +636,7 @@ const SPRINT_BOOST_MULT_3D = 3;
 const JUMP_VELOCITY_3D = 17;
 const GRAVITY_3D = 30;
 /** プレイヤー操作の回復量（Wiki比率寄り: ライト基準 ×1 / ×1.5 / ×3） */
-const HEAL_AMOUNT_LIGHT = 30;
-const HEAL_AMOUNT_HEALING = 45;
-const HEAL_AMOUNT_HEAL_ALL = 90;
-const HEAL_COOLDOWN_HEALING_SEC = 10;
-const HEAL_COOLDOWN_HEAL_ALL_SEC = 20;
-/** リジェネ：2秒ごとの小回復（トグル） */
-const PET_REGEN_INTERVAL_SEC = 2;
-const PET_REGEN_HP = 20;
-const PET_REGEN_MP = 2;
-
-/** リジェネポップ表示用（異常値・内部ID混入を除外） */
-function formatRegenHealPopupAmount(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n <= 0 || n > PET_REGEN_HP + 0.05) return null;
-  const rounded = Math.round(n * 10) / 10;
-  return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
-}
+const HEAL_POPUP_MAX_AMOUNT = MOE_PLAYER_HEAL_ALL_AMOUNT;
 /** 座れ：自然回復（秒あたり） */
 const PET_SIT_REGEN_HP = 3;
 const PET_SIT_REGEN_MP = 2;
@@ -937,6 +1024,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const cameraYawRef = useRef(0);
   const lastMinimap3dSyncRef = useRef(0);
   const fieldBgmMapSlotRef = useRef(null);
+  const fieldBgmWarpLockRef = useRef({ mapSlotId: null, until: 0 });
   const lastFieldBgmSyncRef = useRef(0);
   const [minimap3d, setMinimap3d] = useState({ x: 0, y: 0, yaw: 0 });
   const playerFacingRef = useRef(0);
@@ -955,6 +1043,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [targetEnemyId, setTargetEnemyId] = useState(null);
   const [petFocused, setPetFocused] = useState(false);
   const [showPetStatusOverlay, setShowPetStatusOverlay] = useState(false);
+  const [showPlayerStatusPanel, setShowPlayerStatusPanel] = useState(false);
   const [petMasterDialogue, setPetMasterDialogue] = useState(null);
   const [expVendorOpen, setExpVendorOpen] = useState(false);
   const [expVendorView, setExpVendorView] = useState("lines");
@@ -991,16 +1080,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const nearAltarRef = useRef(null);
   const skillChantRef = useRef(null);
   const cancelSkillChantRef = useRef(() => {});
+  const startPetDeepSleepChantRef = useRef(() => false);
   const [skillChant, setSkillChant] = useState(null);
   const [skillChantRemainSec, setSkillChantRemainSec] = useState(null);
   const [itemBoxSelectedIndex, setItemBoxSelectedIndex] = useState(null);
   const [altarOpen, setAltarOpen] = useState(false);
   const [activeAltar, setActiveAltar] = useState(null);
-  const [trainingGuideOpen, setTrainingGuideOpen] = useState(false);
-  const [trainingGuideInHouse, setTrainingGuideInHouse] = useState(false);
+  const [tomorrowMemoOpen, setTomorrowMemoOpen] = useState(false);
+  const [ageHubView, setAgeHubView] = useState("menu");
   const trainingGuideInHouseRef = useRef(false);
-  const [nearTrainingGuideHouse, setNearTrainingGuideHouse] = useState(false);
-  const nearTrainingGuideHouseRef = useRef(false);
+  const [campfireResting, setCampfireResting] = useState(false);
+  const campfireRestingRef = useRef(false);
+  const campfireRestActiveRef = useRef(false);
+  const [battleLogEntries, setBattleLogEntries] = useState([]);
+  const battleLogApiRef = useRef(null);
+  const duelSkillLabelRef = useRef("アタック");
+  const [nearCampfire, setNearCampfire] = useState(false);
+  const nearCampfireRef = useRef(false);
   const [nearAgeHubHouse, setNearAgeHubHouse] = useState(false);
   const nearAgeHubHouseRef = useRef(false);
   const initialSpawnAppliedRef = useRef(false);
@@ -1020,6 +1116,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [dragonDeleteListIds, setDragonDeleteListIds] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
   const [petSkillMode, setPetSkillMode] = useState(MOE_PET_SKILL_MODE_ALL);
+  const [trainingSkillMode, setTrainingSkillMode] = useState(
+    MOE_TRAINING_SKILL_MODE_ALL
+  );
   const [externalSaveFolderLabel, setExternalSaveFolderLabel] = useState(null);
   const [externalSaveFolderActionMsg, setExternalSaveFolderActionMsg] =
     useState(null);
@@ -1062,16 +1161,30 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [playerSkill2Progress, setPlayerSkill2Progress] = useState(() =>
     migratePlayerSkill2ProgressFromPreSkills(loadPlayerPreSkillProgress())
   );
+  const [playerHealProficiency, setPlayerHealProficiency] = useState(
+    () => loadPlayerExperience().heal
+  );
+  const [playerStealthProficiency, setPlayerStealthProficiency] = useState(
+    () => loadPlayerExperience().stealth
+  );
   const playerSkill2ProgressRef = useRef(playerSkill2Progress);
   const playerPreSkillProgressRef = useRef(playerPreSkillProgress);
+  const playerHealProficiencyRef = useRef(playerHealProficiency);
+  const playerStealthProficiencyRef = useRef(playerStealthProficiency);
   const [playerVitals, setPlayerVitals] = useState(() =>
     defaultMoePlayerVitals(1)
   );
   const playerVitalsRef = useRef(playerVitals);
   const fieldVitalsBootstrappedRef = useRef(false);
-  /** ヒーリング / ヒーリングオールのクールダウン終了時刻（ms） */
-  const healCdUntilRef = useRef({ healing: 0, healAll: 0 });
-  const [healCdSec, setHealCdSec] = useState({ healing: 0, healAll: 0 });
+  /** 回復魔法のクールダウン終了時刻（ms） — MOE 公式ディレイ */
+  const healCdUntilRef = useRef({ light: 0, healing: 0, healAll: 0, regen: 0 });
+  const [healCdSec, setHealCdSec] = useState({
+    light: 0,
+    healing: 0,
+    healAll: 0,
+    regen: 0,
+  });
+  const [regenTicksLeft, setRegenTicksLeft] = useState(0);
 
   // Pet State（SSR/初回HTMLはデフォルト → クライアントマウント後に localStorage 復元）
   const [pet, setPet] = useState(() => getDefaultPetForId("sun_spirit"));
@@ -1088,6 +1201,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(() => {
     setPetSkillMode(loadMoePetSkillMode());
+    setTrainingSkillMode(loadMoeTrainingSkillMode());
   }, []);
 
   useEffect(() => {
@@ -1118,8 +1232,26 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const snapPet3dNearPlayer = useCallback((halfW, halfD, playerPos = null) => {
     const hw = halfW ?? MOE_3D_HALF_W;
     const hd = halfD ?? MOE_3D_HALF_D;
-    const start = playerPos ?? moe3dPlayerStartPosition(hw, hd);
-    const playerAt = moe3dClampToPlayBounds(start.x, start.y, { halfW: hw, halfD: hd }, 1.5);
+    const bounds = worldRef.current ?? { halfW: hw, halfD: hd };
+    const tw = bounds.tileWidth;
+    const td = bounds.tileDepth;
+    let playerAt;
+    if (playerPos) {
+      playerAt = playerPos;
+    } else {
+      const start = moe3dPlayerStartPosition(hw, hd);
+      playerAt =
+        tw && td
+          ? moe3dClampFieldPlayPosition(
+              start.x,
+              start.y,
+              bounds,
+              tw,
+              td,
+              1.5
+            )
+          : moe3dClampToPlayBounds(start.x, start.y, bounds, 1.5);
+    }
     const petAt = moe3dPetStartNearPlayer(playerAt);
     petPosRef.current = petAt;
     pet3dSpawnSyncedRef.current = true;
@@ -1169,16 +1301,26 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [allyTarget, setAllyTarget] = useState(() => loadMoeAllyTarget());
   const allyTargetRef = useRef(allyTarget);
   const regenAccRef = useRef(0);
+  const regenTicksLeftRef = useRef(0);
+  const regenCooldownUntilRef = useRef(0);
+  const habitAscensionCooldownUntilRef = useRef(0);
+  const ageHubHouseRegenAccRef = useRef(0);
   const playerNaturalRegenAccRef = useRef(0);
   /** プレイヤー詠唱 — 安眠導歩 / 睡眠絶崩のペットリジェネ */
   const phoenixAnsleepRegenRef = useRef(null);
   const phoenixUltimateRegenRef = useRef(null);
+  /** 温泉調気 — 守り+50 */
+  const phoenixHotSpringDefenseRef = useRef(null);
+  const startCampfireRestRef = useRef(null);
   /** アトルーム — 温故知新（魔力buff期限 ms） */
   const atrumMagicBuffUntilRef = useRef(0);
   /** アトルーム — マナ増幅法 MP回復 */
   const atrumMpRegenRef = useRef(null);
   const [phoenixHabitAtk2x, setPhoenixHabitAtk2x] = useState(false);
   const phoenixHabitAtk2xRef = useRef(false);
+  /** 生活改鳳 — リボーンワンス（1回 · 3秒後復活） */
+  const rebirthOnceRef = useRef(null);
+  const rebirthOnceReviveTimerRef = useRef(null);
   /** 3D: プレイヤー召喚スキル VFX（seq で再発火） */
   const playerSummonFxRef = useRef({ current: null });
   /** 3D：リジェネ回復ポップ（React state を介さず毎フレーム描画） */
@@ -1186,6 +1328,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const worldSkillExpPopupsRef = useRef([]);
   /** 3D: world → screen 投影（MoeField3DCanvas が毎フレーム更新） */
   const overlayProjectRef = useRef(null);
+  /** 3D: プレイヤー足元の高さ（Three.js Y · コンパス HUD の z 表示用） */
+  const playerGroundYRef = useRef({ current: 0 });
   /** 3D: 戦闘距離計算用（ペット・敵モデルの正面オフセット実測） */
   const moe3dCombatExtentsRef = useRef({ pet: null, enemies: {} });
   const targetEnemyIdRef = useRef(null);
@@ -1232,6 +1376,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const battleSpeedMultRef = useRef(1);
   const [dashBoost3x, setDashBoost3x] = useState(false);
   const dashBoost3xRef = useRef(false);
+  const [kintounOn, setKintounOn] = useState(false);
+  const kintounOnRef = useRef(false);
+  const kintounFlyRef = useRef({ offset: 0 });
   const [shinobiashiOn, setShinobiashiOn] = useState(false);
   const shinobiashiOnRef = useRef(false);
   const kakureminoUntilRef = useRef(0);
@@ -1247,11 +1394,31 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     dashBoost3xRef.current = dashBoost3x;
   }, [dashBoost3x]);
   useEffect(() => {
+    kintounOnRef.current = kintounOn;
+    if (!kintounOn) return;
+    if (!world?.mode3d) {
+      setKintounOn(false);
+      kintounOnRef.current = false;
+    }
+  }, [kintounOn, world?.mode3d]);
+  useEffect(() => {
     shinobiashiOnRef.current = shinobiashiOn;
   }, [shinobiashiOn]);
+  useEffect(
+    () => () => {
+      stopMoeCampfireCrackle();
+      campfireRestActiveRef.current = false;
+    },
+    []
+  );
   const sprintSpeedMult3d = useCallback((sprinting) => {
-    if (!sprinting) return 1;
+    const kintounMult = moeKintounMoveSpeedMult(
+      sprinting,
+      kintounOnRef.current
+    );
+    if (!sprinting) return kintounMult;
     return (
+      kintounMult *
       SPRINT_MULTIPLIER_3D *
       (dashBoost3xRef.current ? SPRINT_BOOST_MULT_3D : 1)
     );
@@ -1260,7 +1427,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     (ms) => ms / battleSpeedMultRef.current,
     []
   );
+  const clearRebirthOnceReviveTimer = useCallback(() => {
+    if (rebirthOnceReviveTimerRef.current != null) {
+      window.clearTimeout(rebirthOnceReviveTimerRef.current);
+      rebirthOnceReviveTimerRef.current = null;
+    }
+  }, []);
+
   const endActiveDuel = useCallback(() => {
+    clearRebirthOnceReviveTimer();
+    rebirthOnceRef.current = null;
     const endedId = duelRef.current?.enemyId;
     if (endedId != null) {
       clearMoeEnemyChaseRuntime(endedId, enemyChaseRuntimeRef.current);
@@ -1281,7 +1457,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     phoenixHabitAtk2xRef.current = false;
     setPhoenixHabitAtk2x(false);
     flushPersistActivePet(petStateRef.current);
-  }, []);
+  }, [clearRebirthOnceReviveTimer]);
 
   useEffect(() => {
     setPlayerSkillUnlocks(loadPlayerSkillUnlocks());
@@ -1295,6 +1471,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   useEffect(() => {
     playerPreSkillProgressRef.current = playerPreSkillProgress;
   }, [playerPreSkillProgress]);
+  useEffect(() => {
+    playerHealProficiencyRef.current = playerHealProficiency;
+  }, [playerHealProficiency]);
+  useEffect(() => {
+    playerStealthProficiencyRef.current = playerStealthProficiency;
+  }, [playerStealthProficiency]);
 
   useEffect(() => {
     petRef.current = pet;
@@ -1401,7 +1583,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   /** ワールド座標：水色 +HP（リジェネ等） */
   const pushWorldHealPopup = useCallback((worldX, worldY, hpAmount) => {
-    const label = formatRegenHealPopupAmount(hpAmount);
+    const label = formatWorldHealPopupAmount(hpAmount, HEAL_POPUP_MAX_AMOUNT);
     if (label == null) return;
     const id = ++battlePopupIdRef.current;
     const is3dMode = worldRef.current?.mode3d;
@@ -1437,6 +1619,28 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }, 2100);
   }, []);
 
+  const completeRebirthOnceRevive = useCallback(() => {
+    const p = petRef.current;
+    const reviveHp = moeRebirthOnceReviveHp(p.hpMax);
+    rebirthOnceRef.current = null;
+    setPet((prev) => {
+      const next = { ...prev, hp: reviveHp };
+      petRef.current = next;
+      petStateRef.current = next;
+      flushPersistActivePet(next);
+      return next;
+    });
+    const pos = petPosRef.current;
+    pushWorldHealPopup(pos.x, pos.y, reviveHp);
+    const petName = MOE_PET_DATA[p.id]?.name ?? "ペット";
+    battleLogApiRef.current?.pushLine(
+      `${petName}がリボーンワンスで復活した！`,
+      MOE_BATTLE_LOG_COLOR.heal
+    );
+    setToast("🪽 リボーンワンスで復活！");
+    playSfx("heal");
+  }, [flushPersistActivePet, pushWorldHealPopup]);
+
   /** ワールド座標：技② EXP / Lvアップ（プレイヤー付近） */
   const triggerSkill2LevelUpFlash = useCallback((level) => {
     if (level == null) return;
@@ -1448,7 +1652,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     skill2LevelUpTimerRef.current = window.setTimeout(() => {
       setSkill2LevelUpFlash(null);
       skill2LevelUpTimerRef.current = null;
-    }, 1400);
+    }, MOE_SKILL2_LEVEL_UP_FLASH_MS);
   }, []);
 
   const pushWorldSkillExpPopup = useCallback((award) => {
@@ -1720,6 +1924,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         magicScale = null,
         fixedDamage = null,
         stackIndex = null,
+        skillLabel = duelSkillLabelRef.current ?? "アタック",
       } = opts;
       const w = worldRef.current;
       let defeated = false;
@@ -1748,7 +1953,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           const enemyDef = target.wiki?.defense ?? 0;
           const atkBase = stats?.attack ?? 1;
           const magBase = stats?.magic ?? 0;
-          const atkMult = phoenixHabitAtk2xRef.current ? 2 : 1;
+          const atkMult = phoenixHabitAtk2xRef.current
+            ? MOE_PHOENIX_COMBAT_ATK_MULT
+            : 1;
           const magicBuffMult = getAtrumMagicBuffMult(atrumMagicBuffUntilRef);
           let damage;
           if (fixedDamage != null) {
@@ -1811,6 +2018,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             defeated,
             enemyLevel: target.level,
             enemyKey: target.key,
+            skillLabel,
+            enemyName: target.name,
           };
 
           if (defeated) {
@@ -2055,6 +2264,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           );
           if (h.petExpGained != null) {
             pushPetExpPopup(h.petExpGained, true);
+          }
+          const petName =
+            MOE_PET_DATA[petRef.current?.id]?.name ?? "ペット";
+          battleLogApiRef.current?.queuePetDamage(
+            petName,
+            h.skillLabel ?? "アタック",
+            h.enemyName ?? "敵",
+            h.damage
+          );
+          if (h.defeated) {
+            battleLogApiRef.current?.pushLine(
+              `${h.enemyName ?? "敵"}を倒した！`,
+              MOE_BATTLE_LOG_COLOR.victory
+            );
           }
           if (treasureDropped) {
             h.toastBits.push("💎宝が落ちた！");
@@ -2414,14 +2637,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       setToast("保存に失敗しました");
       return;
     }
+    const fieldHint = formatMoeExternalSaveFieldHint(fieldBgmMapSlotRef.current);
+    const fieldSuffix = fieldHint ? ` · ${fieldHint}` : "";
     if (result.method === "download") {
-      setToast(`新規ファイル「${result.fileName}」をダウンロードフォルダに保存した`);
+      setToast(
+        `新規ファイル「${result.fileName}」をダウンロードフォルダに保存した${fieldSuffix}`
+      );
       if (result.folderName) setExternalSaveFolderLabel(result.folderName);
     } else if (result.folderName) {
-      setToast(`新規ファイル「${result.fileName}」を 📁${result.folderName} に保存した`);
+      setToast(
+        `新規ファイル「${result.fileName}」を 📁${result.folderName} に保存した${fieldSuffix}`
+      );
       setExternalSaveFolderLabel(result.folderName);
     } else {
-      setToast(`新規ファイル「${result.fileName}」に保存した`);
+      setToast(`新規ファイル「${result.fileName}」に保存した${fieldSuffix}`);
     }
   }, []);
 
@@ -2487,8 +2716,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   );
 
   /** resolveMoeDuelSkillSequence のヒット列を時間差で実行 */
-  const scheduleMoeDuelSkillHits = useCallback((enemyId, sequence) => {
+  const scheduleMoeDuelSkillHits = useCallback((enemyId, sequence, skillLabel = "スキル") => {
     if (!sequence?.hits?.length) return;
+    duelSkillLabelRef.current = skillLabel;
     const gen = ++moeSkillComboGenRef.current;
     sequence.hits.forEach((hit, idx) => {
       const isLast = idx === sequence.hits.length - 1;
@@ -2554,6 +2784,41 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }
       }
 
+      if (skill.id === "phoenix_hot_spring") {
+        const mpCost = skill.mpCost ?? 0;
+        if (mpCost > 0 && (petRef.current.mp ?? 0) < mpCost) {
+          setToast("MPが足りません");
+          return;
+        }
+        const now = Date.now();
+        const hadAilment = petHasMoeAilment(petRef.current);
+        const defenseBuff = beginMoePhoenixHotSpringDefenseBuff(skill, now);
+        phoenixHotSpringDefenseRef.current = defenseBuff;
+        setBuffUiNow(now);
+        setPet((prev) => {
+          let next = clearMoePetPoisonParalysis(prev);
+          if (mpCost > 0) {
+            next = { ...next, mp: Math.max(0, (next.mp ?? 0) - mpCost) };
+          }
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          return next;
+        });
+        const atBath = nearCampfireRef.current;
+        if (atBath && startCampfireRestRef.current) {
+          startCampfireRestRef.current();
+        }
+        const lines = [
+          `♨ ${skill.name} — 守り+${defenseBuff.bonus}`,
+          hadAilment ? "毒・麻痺を解毒しました" : null,
+          atBath ? "温泉で眠る体に戻した" : null,
+        ].filter(Boolean);
+        setToast(lines.join("\n"));
+        playSfx("heal");
+        return;
+      }
+
       if (skill.id === "phoenix_life_burst") {
         const healAmt = skill.healFlat ?? 100;
         const mpCost = skill.mpCost ?? 0;
@@ -2573,13 +2838,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           pushWorldHealPopup(pos.x, pos.y, healAmt);
           return next;
         });
-      } else if (
-        skill.type === "heal" ||
-        skill.type === "heal_regen" ||
-        skill.id === "phoenix_deep_sleep"
-      ) {
-        const ratio =
-          skill.healRatio ?? (skill.id === "phoenix_deep_sleep" ? 0.45 : 1);
+      } else if (skill.type === "heal") {
+        const ratio = skill.healRatio ?? 1;
         setPet((prev) => {
           const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
           const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
@@ -2591,12 +2851,53 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           pushWorldHealPopup(pos.x, pos.y, healAmt);
           return next;
         });
+      } else if (
+        skill.type === "pet_mp_restore" ||
+        skill.id === "phoenix_deep_sleep"
+      ) {
+        if (startPetDeepSleepChantRef.current(skill)) return;
+      }
+
+      if (skill.id === "phoenix_ultimate_sleep") {
+        if (!duelRef.current) {
+          setToast("睡眠絶崩は戦闘中のみ使えます");
+          return;
+        }
+        const mpCost = skill.mpCost ?? 0;
+        if (mpCost > 0 && (petRef.current.mp ?? 0) < mpCost) {
+          setToast("MPが足りません");
+          return;
+        }
+        if (mpCost > 0) {
+          setPet((prev) => {
+            const next = { ...prev, mp: Math.max(0, prev.mp - mpCost) };
+            petRef.current = next;
+            petStateRef.current = next;
+            flushPersistActivePet(next);
+            return next;
+          });
+        }
+        phoenixHabitAtk2xRef.current = true;
+        setPhoenixHabitAtk2x(true);
+        setToast(
+          `${skill.name} — 攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`
+        );
+        return;
       }
 
       if (skill.id === "phoenix_habit_ascension") {
         const habitCheck = validatePhoenixHabitAscension(Boolean(duelRef.current));
         if (!habitCheck.ok) {
           setToast(habitCheck.toast ?? "使えません");
+          return;
+        }
+        const nowHabit = Date.now();
+        const cdCheck = canUseMoePhoenixHabitAscension(
+          habitAscensionCooldownUntilRef.current,
+          nowHabit
+        );
+        if (!cdCheck.ok) {
+          setToast(cdCheck.toast ?? "使えません");
           return;
         }
         const mpCost = skill.mpCost ?? 0;
@@ -2614,21 +2915,28 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             return next;
           });
         }
-        scheduleMoeDuelSkillHits(duelRef.current.enemyId, habitSeq);
+        scheduleMoeDuelSkillHits(duelRef.current.enemyId, habitSeq, "生活改鳳");
+        rebirthOnceRef.current = moePhoenixHabitAscensionRebirthGrant();
+        habitAscensionCooldownUntilRef.current =
+          beginMoePhoenixHabitAscensionCooldown(nowHabit);
         setSkillToast("生活改鳳！");
-        setToast("生活改鳳 — 炎！");
+        setToast("生活改鳳 — 炎！\n🪽 リボーンワンス付与");
         return;
       }
 
       if (skill.id === "phoenix_scorching_sky") {
         if (!duelRef.current) {
-          setToast("攻撃2倍は戦闘中のみ使えます");
+          setToast("攻撃1.5倍は戦闘中のみ使えます");
           return;
         }
         const nextOn = !phoenixHabitAtk2xRef.current;
         phoenixHabitAtk2xRef.current = nextOn;
         setPhoenixHabitAtk2x(nextOn);
-        setToast(nextOn ? "攻撃2倍【ON】" : "攻撃1倍に戻した");
+        setToast(
+          nextOn
+            ? `攻撃${MOE_PHOENIX_COMBAT_ATK_MULT}倍【ON】`
+            : "攻撃1倍に戻した"
+        );
         return;
       }
 
@@ -2638,7 +2946,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           ? resolveMoeDuelSkillSequence(pet.id, skill)
           : null;
       if (duelSkillSeq) {
-        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq);
+        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq, skill.name ?? "スキル");
       }
     },
     [pet.id, petCombatLevel, petSkillMode, scheduleMoeDuelSkillHits, pushWorldHealPopup, flushPersistActivePet]
@@ -2649,9 +2957,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     if (skill.id === "ninja_shinobiashi") {
       setShinobiashiOn((v) => {
         const next = !v;
-        setToast(
-          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`
-        );
+        const lines = [
+          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`,
+        ];
+        if (next) {
+          const award = grantStealthProficiencyOnToggle(
+            playerStealthProficiencyRef.current,
+            skill.level ?? 10
+          );
+          if (award.gained) {
+            playerStealthProficiencyRef.current = award.progress;
+            setPlayerStealthProficiency(award.progress);
+            savePlayerExperienceTrack("stealth", award.progress);
+            lines.push(...award.toastLines);
+          }
+        }
+        setToast(lines.join("\n"));
         return next;
       });
       return;
@@ -2662,6 +2983,27 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         setToast(
           `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`
         );
+        return next;
+      });
+      return;
+    }
+    if (skill.id === "dragon_kintoun") {
+      if (!worldRef.current?.mode3d) {
+        setToast("筋斗雲は3Dフィールドでのみ使えます");
+        return;
+      }
+      setKintounOn((v) => {
+        const next = !v;
+        setToast(
+          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】山の上を翔ける" : "【OFF】"}`
+        );
+        if (!next) {
+          kintounFlyRef.current.offset = tickKintounFlyOffset(
+            kintounFlyRef.current.offset,
+            false,
+            0.2
+          );
+        }
         return next;
       });
       return;
@@ -2731,7 +3073,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   const applySkill2ExpAfterUse = useCallback(() => {
-    const award = awardPlayerSkill2ExpOnUse(playerSkill2ProgressRef.current);
+    const award = awardPlayerSkill2ExpOnUse(
+      playerSkill2ProgressRef.current,
+      loadPlayerSkill2TalismanActive()
+    );
     if (award.gained) {
       setPlayerSkill2Progress(award.progress);
       savePlayerSkill2Progress(award.progress);
@@ -2754,9 +3099,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     [applySkill2ExpAfterUse]
   );
 
+  const assertPhoenixSkillSuccess = useCallback((skill) => {
+    const roll = rollPlayerPhoenixSkillSuccess(
+      skill,
+      playerSkill2ProgressRef.current
+    );
+    if (!roll.ok) {
+      setToast(roll.failToast);
+      return false;
+    }
+    return true;
+  }, []);
+
   const applyPhoenixPlayerChantEffect = useCallback(
     (skill) => {
       if (!skill) return;
+      if (!assertPhoenixSkillSuccess(skill)) return;
       if (!spendPhoenixPlayerMp(skill)) {
         setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
         return;
@@ -2774,7 +3132,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           acc: 0,
         };
         toastWithSkill2Exp(
-          `🪶 ${skill.name} — ペットに3秒ごとHP${skill.regenHpPerTick ?? 20}回復`
+          `🪶 ${skill.name} — ペットに${intervalMs / 1000}秒ごとHP${skill.regenHpPerTick ?? 20}回復`
         );
         playSfx("heal");
         return;
@@ -2782,6 +3140,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       if (skill.id === "phoenix_hot_spring") {
         const hadAilment = petHasMoeAilment(petRef.current);
+        const defenseBonus = beginMoePhoenixHotSpringDefenseBuff(skill, now);
+        phoenixHotSpringDefenseRef.current = defenseBonus;
+        setBuffUiNow(now);
         setPet((prev) => {
           const next = clearMoePetPoisonParalysis(prev);
           petRef.current = next;
@@ -2789,22 +3150,22 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           flushPersistActivePet(next);
           return next;
         });
-        toastWithSkill2Exp(
-          hadAilment
-            ? `🪶 ${skill.name} — 毒・麻痺を解毒しました`
-            : `🪶 ${skill.name} — ペットの気を整えました`
-        );
+        const atBath = nearCampfireRef.current;
+        if (atBath && startCampfireRestRef.current) {
+          startCampfireRestRef.current();
+        }
+        const lines = [
+          `🪶 ${skill.name} — 守り+${defenseBonus.bonus}`,
+          hadAilment ? "毒・麻痺を解毒しました" : null,
+          atBath ? "温泉で眠る体に戻した" : null,
+        ].filter(Boolean);
+        toastWithSkill2Exp(lines.join("\n"));
         playSfx("heal");
         return;
       }
 
-      if (
-        skill.type === "heal" ||
-        skill.type === "heal_regen" ||
-        skill.id === "phoenix_deep_sleep"
-      ) {
-        const ratio =
-          skill.healRatio ?? (skill.id === "phoenix_deep_sleep" ? 0.45 : 0.85);
+      if (skill.type === "heal") {
+        const ratio = skill.healRatio ?? 0.85;
         setPet((prev) => {
           const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
           const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
@@ -2819,22 +3180,87 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           pushWorldHealPopup(pos.x, pos.y, healAmt);
           return next;
         });
-        if (skill.type === "heal_regen" || skill.id === "phoenix_ultimate_sleep") {
-          const intervalMs = skill.regenIntervalMs ?? 3000;
-          const durationMs = skill.regenDurationMs ?? 30000;
-          phoenixUltimateRegenRef.current = {
-            until: now + durationMs,
-            hpPerTick: skill.regenHpPerTick ?? 20,
-            intervalSec: intervalMs / 1000,
-            acc: 0,
-          };
-        }
         toastWithSkill2Exp(`🪶 ${skill.name} — ペットのHPを回復しました`);
+        playSfx("heal");
+        return;
+      }
+
+      if (skill.type === "pet_mp_restore" || skill.id === "phoenix_deep_sleep") {
+        const ratio = skill.mpRestoreRatio ?? 0.45;
+        let mpGain = 0;
+        setPet((prev) => {
+          const { pet: next, gain } = applyMoePhoenixDeepSleepMp(prev, ratio);
+          mpGain = gain;
+          petRef.current = next;
+          petStateRef.current = next;
+          flushPersistActivePet(next);
+          return next;
+        });
+        toastWithSkill2Exp(`🪶 ${skill.name} — ペットMP+${mpGain}`);
         playSfx("heal");
       }
     },
-    [pushWorldHealPopup, spendPhoenixPlayerMp, toastWithSkill2Exp]
+    [
+      assertPhoenixSkillSuccess,
+      pushWorldHealPopup,
+      spendPhoenixPlayerMp,
+      toastWithSkill2Exp,
+      setBuffUiNow,
+    ]
   );
+
+  const applyPetDeepSleepEffect = useCallback(
+    (skill) => {
+      if (!skill) return;
+      const mpCost = skill.mpCost ?? 0;
+      if (mpCost > 0 && (petRef.current.mp ?? 0) < mpCost) {
+        setToast("MPが足りません");
+        return;
+      }
+      const ratio = skill.mpRestoreRatio ?? 0.45;
+      let mpGain = 0;
+      setPet((prev) => {
+        if (mpCost > 0 && prev.mp < mpCost) return prev;
+        const afterCost =
+          mpCost > 0
+            ? { ...prev, mp: Math.max(0, prev.mp - mpCost) }
+            : prev;
+        const { pet: next, gain } = applyMoePhoenixDeepSleepMp(afterCost, ratio);
+        mpGain = gain;
+        petRef.current = next;
+        petStateRef.current = next;
+        flushPersistActivePet(next);
+        return next;
+      });
+      setToast(`💤 ${skill.name} — ペットMP+${mpGain}`);
+      playSfx("heal");
+    },
+    [flushPersistActivePet]
+  );
+
+  const startPetDeepSleepChant = useCallback((skill) => {
+    if (!skill) return false;
+    if (skillChantRef.current) return true;
+    const mpCost = skill.mpCost ?? 0;
+    if (mpCost > 0 && (petRef.current.mp ?? 0) < mpCost) {
+      setToast("MPが足りません");
+      return true;
+    }
+    const chantSec = moePhoenixPlayerChantSec(skill);
+    skillChantRef.current = {
+      kind: "pet_deep_sleep",
+      skillId: skill.id,
+      skill,
+      startedAt: Date.now(),
+      chantSec,
+    };
+    setSkillChant(skillChantRef.current);
+    setSkillChantRemainSec(chantSec);
+    setToast(`💤 ${skill.name}…（${chantSec}秒）`);
+    return true;
+  }, []);
+
+  startPetDeepSleepChantRef.current = startPetDeepSleepChant;
 
   const startPhoenixPlayerSkillChant = useCallback(
     (skill) => {
@@ -2844,18 +3270,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
         return;
       }
+      const chantSec = moePhoenixPlayerChantSec(skill);
       const startedAt = Date.now();
       skillChantRef.current = {
         kind: "phoenix",
         skillId: skill.id,
         skill,
         startedAt,
-        chantSec: MOE_PHOENIX_PLAYER_CHANT_SEC,
+        chantSec,
       };
       setSkillChant(skillChantRef.current);
-      setSkillChantRemainSec(MOE_PHOENIX_PLAYER_CHANT_SEC);
+      setSkillChantRemainSec(chantSec);
       setToast(
-        `🪶 ${skill.name}をペットへ詠唱中…（${MOE_PHOENIX_PLAYER_CHANT_SEC}秒）`
+        skill.id === "phoenix_deep_sleep"
+          ? `💤 ${skill.name}…（${chantSec}秒）`
+          : `🪶 ${skill.name}をペットへ詠唱中…（${chantSec}秒）`
       );
     },
     []
@@ -2873,6 +3302,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
 
       if (skill.id === "jiriki_seiran") {
+        if (!assertPhoenixSkillSuccess(skill)) return;
         const result = activateJirikiSeiran(playerVitalsRef.current);
         if (!result.ok) {
           setToast(result.toast ?? "使えません");
@@ -2890,12 +3320,32 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         return;
       }
 
+      if (skill.id === "phoenix_ultimate_sleep") {
+        if (!duelRef.current) {
+          setToast("睡眠絶崩は戦闘中のみ使えます");
+          return;
+        }
+        if (!assertPhoenixSkillSuccess(skill)) return;
+        if (!spendPhoenixPlayerMp(skill)) {
+          setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
+          return;
+        }
+        phoenixHabitAtk2xRef.current = true;
+        setPhoenixHabitAtk2x(true);
+        toastWithSkill2Exp(
+          `${skill.name} — 攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`,
+          `${skill.name}！`
+        );
+        return;
+      }
+
       if (isMoePhoenixPlayerChantSkill(skill)) {
         startPhoenixPlayerSkillChant(skill);
         return;
       }
 
       if (skill.id === "phoenix_life_burst") {
+        if (!assertPhoenixSkillSuccess(skill)) return;
         const healAmt = skill.healFlat ?? 100;
         if (!spendPhoenixPlayerMp(skill)) {
           setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
@@ -2920,28 +3370,52 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           setToast(habitCheck.toast ?? "使えません");
           return;
         }
+        const nowHabit = Date.now();
+        const cdCheck = canUseMoePhoenixHabitAscension(
+          habitAscensionCooldownUntilRef.current,
+          nowHabit
+        );
+        if (!cdCheck.ok) {
+          setToast(cdCheck.toast ?? "使えません");
+          return;
+        }
+        if (!assertPhoenixSkillSuccess(skill)) return;
         if (!spendPhoenixPlayerMp(skill)) {
           setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
           return;
         }
         scheduleMoeDuelSkillHits(
           duelRef.current.enemyId,
-          resolvePhoenixHabitAscensionSequence(skill)
+          resolvePhoenixHabitAscensionSequence(skill),
+          "生活改鳳"
         );
-        toastWithSkill2Exp("生活改鳳 — 炎！", "生活改鳳！");
+        rebirthOnceRef.current = moePhoenixHabitAscensionRebirthGrant();
+        habitAscensionCooldownUntilRef.current =
+          beginMoePhoenixHabitAscensionCooldown(nowHabit);
+        toastWithSkill2Exp(
+          "生活改鳳 — 炎！\n🪽 リボーンワンス付与",
+          "生活改鳳！"
+        );
         return;
       }
 
       if (skill.id === "phoenix_scorching_sky") {
         if (!duelRef.current) {
-          setToast("攻撃2倍は戦闘中のみ使えます");
+          setToast("攻撃1.5倍は戦闘中のみ使えます");
           return;
         }
         const nextOn = !phoenixHabitAtk2xRef.current;
         phoenixHabitAtk2xRef.current = nextOn;
         setPhoenixHabitAtk2x(nextOn);
         if (nextOn) {
-          toastWithSkill2Exp("攻撃2倍【ON】");
+          if (!assertPhoenixSkillSuccess(skill)) {
+            phoenixHabitAtk2xRef.current = false;
+            setPhoenixHabitAtk2x(false);
+            return;
+          }
+          toastWithSkill2Exp(
+            `攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`
+          );
         } else {
           setToast("攻撃1倍に戻した");
         }
@@ -2954,16 +3428,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           ? resolveMoeDuelSkillSequence(pet.id, skill)
           : null;
       if (duelSkillSeq) {
+        if (!assertPhoenixSkillSuccess(skill)) return;
         if (!spendPhoenixPlayerMp(skill)) {
           setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
           return;
         }
-        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq);
+        scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq, skill.name ?? "スキル");
         const msg = skillToastMessage(pet.id, slotIndex, skill);
         toastWithSkill2Exp(formatMoePetSkillDescription(skill), msg ?? undefined);
       }
     },
     [
+      assertPhoenixSkillSuccess,
       pet.id,
       scheduleMoeDuelSkillHits,
       pushWorldHealPopup,
@@ -2980,6 +3456,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setPlayerVitals,
     duelRef,
     playerSummonFxRef,
+    rebirthOnceRef,
+    habitAscensionCooldownUntilRef,
     scheduleMoeDuelSkillHits,
     setToast,
     setSkillToast,
@@ -2989,6 +3467,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const applyEnemyStrike = React.useCallback((enemyId) => {
     const d = duelRef.current;
     if (!d || d.enemyId !== enemyId || d.phase !== "simultaneous_charge") {
+      return false;
+    }
+    const nowPerf = performance.now();
+    if (moeRebirthOnceIsPending(rebirthOnceRef.current, nowPerf)) {
       return false;
     }
     const target = enemiesRef.current.find((e) => e.id === enemyId);
@@ -3009,15 +3491,41 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       target.key === "elvin_bison" ||
       target.key === "auzun_bura";
     const useStrong = (isOrc || isBison || isGustav) && seq % 2 === 1;
-    const dmg = useStrong ? dmgStrong : dmgBase;
+    const dmgRaw = useStrong ? dmgStrong : dmgBase;
+    const petStats = calculatePetStats(p.id, p.level);
+    const hotSpringDef = moePhoenixHotSpringDefenseBonus(
+      phoenixHotSpringDefenseRef.current,
+      Date.now()
+    );
+    const dmg = moeMitigatePetIncomingDamage(
+      dmgRaw,
+      petStats?.defense ?? 0,
+      hotSpringDef
+    );
     let nh = Math.max(0, p.hp - dmg);
     if (petUsesPreciseWikiStats(p.id)) nh = roundPetStatInternal(nh);
-    const ends = nh <= 0;
+    const lethal = nh <= 0;
+    let duelEnds = lethal;
+    let rebirthTriggered = false;
+    if (lethal && moeRebirthOnceHasCharge(rebirthOnceRef.current)) {
+      rebirthTriggered = true;
+      duelEnds = false;
+      const delayMs = scaleBattleMs(MOE_REBIRTH_ONCE_DELAY_MS);
+      rebirthOnceRef.current = moeRebirthOnceBeginPending(nowPerf, delayMs);
+      clearRebirthOnceReviveTimer();
+      const session = duelCombatSessionRef.current;
+      rebirthOnceReviveTimerRef.current = window.setTimeout(() => {
+        rebirthOnceReviveTimerRef.current = null;
+        if (duelCombatSessionRef.current !== session) return;
+        if (!duelRef.current) return;
+        completeRebirthOnceRevive();
+      }, delayMs);
+    }
 
-    if (ends) playSfx("petDefeated");
+    if (lethal) playSfx("petDefeated");
     else playSfx("enemyHit");
 
-    if (!ends) {
+    if (!lethal) {
       enemyStrikeVariantRef.current = {
         enemyId,
         variant: useStrong ? "strong" : "weak",
@@ -3041,7 +3549,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     let petAfter = petDamaged;
     let petExpGained = null;
     let levelUpMessages = null;
-    if (!ends) {
+    if (!lethal) {
       const r = rollPetExpOnHit(petDamaged, target.level);
       petAfter = r.petAfter;
       petExpGained = r.petExpGained;
@@ -3063,19 +3571,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         })
       );
     }
-    if (ends) {
+    if (duelEnds) {
       endActiveDuel();
     }
     queueMicrotask(() => {
       pushWorldDamagePopup(px, py, dmg, true);
-      if (!ends && petExpGained != null) {
+      if (!lethal && petExpGained != null) {
         pushPetExpPopup(petExpGained, false);
       }
-      const toastBits = ends ? [`${tname}の攻撃！ ペットが倒れた…`] : [];
+      const petName = MOE_PET_DATA[p.id]?.name ?? "ペット";
+      battleLogApiRef.current?.pushLine(
+        formatMoeBattleEnemyAttackLine(tname, petName, dmg),
+        MOE_BATTLE_LOG_COLOR.enemy
+      );
+      if (lethal) {
+        battleLogApiRef.current?.pushLine(
+          rebirthTriggered
+            ? `${petName}が倒れた… リボーンワンス！`
+            : `${petName}が倒れた…`,
+          MOE_BATTLE_LOG_COLOR.boss
+        );
+      }
+      const toastBits = lethal
+        ? [
+            `${tname}の攻撃！ ペットが倒れた…`,
+            rebirthTriggered ? "🪽 3秒後にリボーンワンス" : null,
+          ]
+        : [];
       setToast(toastBits.length ? toastBits.filter(Boolean).join("　") : null);
     });
-    return ends;
-  }, [pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, scaleBattleMs, endActiveDuel, commitPetExpFromHit]);
+    return duelEnds;
+  }, [
+    pushPetExpPopup,
+    pushWorldDamagePopup,
+    rollPetExpOnHit,
+    scaleBattleMs,
+    endActiveDuel,
+    commitPetExpFromHit,
+    clearRebirthOnceReviveTimer,
+    completeRebirthOnceRevive,
+  ]);
 
   /** rAF デュエルループの useEffect 依存に含めない（参照の変化でループが二重化し同一フレームで2ヒットするのを防ぐ） */
   const applyPetStrikeRef = useRef(applyPetStrike);
@@ -3221,6 +3756,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           slotInZone: spot.slotInZone,
           x: spot.x,
           y: spot.y,
+          spawnGroundY: spot.groundY ?? null,
           level: scaled.level,
           hp: scaled.hpMax,
           hpMax: scaled.hpMax,
@@ -3393,6 +3929,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     const tick = () => {
       const now = Date.now();
       setHealCdSec({
+        light: Math.max(
+          0,
+          Math.ceil((healCdUntilRef.current.light - now) / 1000)
+        ),
         healing: Math.max(
           0,
           Math.ceil((healCdUntilRef.current.healing - now) / 1000)
@@ -3400,6 +3940,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         healAll: Math.max(
           0,
           Math.ceil((healCdUntilRef.current.healAll - now) / 1000)
+        ),
+        regen: Math.max(
+          0,
+          Math.ceil((healCdUntilRef.current.regen - now) / 1000)
         ),
       });
 
@@ -3449,6 +3993,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   const commitPlayerVitals = useCallback((next) => {
+    if (moePlayerVitalsEqual(playerVitalsRef.current, next)) {
+      playerVitalsRef.current = next;
+      return;
+    }
     playerVitalsRef.current = next;
     setPlayerVitals(next);
     saveMoePlayerVitals(next);
@@ -3518,6 +4066,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       !cashShopOpen &&
       !expConsumableLevelUpFlow &&
       !showPetStatusOverlay &&
+      !showPlayerStatusPanel &&
       !showFieldGuide &&
       !showEventGuide &&
       !showDragonLineup &&
@@ -3527,7 +4076,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     keysRef.current = createEmptyInputKeys();
     playerSprintRef.current = false;
     petRunAnimRef.current = false;
-  }, [petMasterDialogue, expVendorOpen, rhodaOpen, josephOpen, josephSynthOpen, cashShopOpen, expConsumableLevelUpFlow, showPetStatusOverlay, showFieldGuide, showEventGuide, showDragonLineup, showMonsterLineup]);
+  }, [petMasterDialogue, expVendorOpen, rhodaOpen, josephOpen, josephSynthOpen, cashShopOpen, expConsumableLevelUpFlow, showPetStatusOverlay, showPlayerStatusPanel, showFieldGuide, showEventGuide, showDragonLineup, showMonsterLineup]);
 
   useEffect(() => {
     if (!world) return;
@@ -3612,15 +4161,28 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         regenAccRef.current = 0;
         return;
       }
+      if (regenTicksLeftRef.current <= 0) {
+        regenActiveRef.current = false;
+        setRegenActive(false);
+        return;
+      }
       regenAccRef.current += dt;
-      if (regenAccRef.current < PET_REGEN_INTERVAL_SEC) return;
-      regenAccRef.current -= PET_REGEN_INTERVAL_SEC;
+      if (regenAccRef.current < MOE_PLAYER_REGEN_TICK_INTERVAL_SEC) return;
+      regenAccRef.current -= MOE_PLAYER_REGEN_TICK_INTERVAL_SEC;
 
       setPet((prev) => {
-        if (prev.hp >= prev.hpMax && prev.mp >= prev.mpMax) return prev;
+        if (
+          prev.hp >= prev.hpMax &&
+          (MOE_PLAYER_REGEN_MP_PER_TICK <= 0 || prev.mp >= prev.mpMax)
+        ) {
+          return prev;
+        }
 
-        const hpRaw = Math.min(prev.hpMax, prev.hp + PET_REGEN_HP);
-        const mpRaw = Math.min(prev.mpMax, prev.mp + PET_REGEN_MP);
+        const hpRaw = Math.min(prev.hpMax, prev.hp + MOE_PLAYER_REGEN_HP_PER_TICK);
+        const mpRaw =
+          MOE_PLAYER_REGEN_MP_PER_TICK > 0
+            ? Math.min(prev.mpMax, prev.mp + MOE_PLAYER_REGEN_MP_PER_TICK)
+            : prev.mp;
         const hp = petUsesPreciseWikiStats(prev.id)
           ? roundPetStatInternal(hpRaw)
           : hpRaw;
@@ -3636,6 +4198,49 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }
         return { ...prev, hp, mp };
       });
+
+      const nextTicks = Math.max(0, regenTicksLeftRef.current - 1);
+      regenTicksLeftRef.current = nextTicks;
+      setRegenTicksLeft(nextTicks);
+      if (nextTicks <= 0) {
+        const now = Date.now();
+        regenActiveRef.current = false;
+        setRegenActive(false);
+        regenCooldownUntilRef.current =
+          now + MOE_PLAYER_REGEN_COOLDOWN_SEC * 1000;
+        healCdUntilRef.current.regen = regenCooldownUntilRef.current;
+        setHealCdSec((prev) => ({
+            ...prev,
+          regen: MOE_PLAYER_REGEN_COOLDOWN_SEC,
+        }));
+      }
+    };
+
+    const tickAgeHubHousePetRegen = (dt) => {
+      const indoor =
+        nearAgeHubHouseRef.current &&
+        !nearCampfireRef.current &&
+        duelRef.current?.phase !== "simultaneous_charge";
+      if (!indoor) {
+        ageHubHouseRegenAccRef.current = 0;
+        return;
+      }
+      const result = tickMoeAgeHubHousePetRegen(
+        petRef.current,
+        ageHubHouseRegenAccRef.current,
+        dt,
+        { active: true }
+      );
+      ageHubHouseRegenAccRef.current = result.acc;
+      if (!result.changed) return;
+      setPet(result.pet);
+      flushPersistActivePet(result.pet);
+      if (result.hpGain > 0) {
+        const pt = petPosRef.current;
+        if (result.hpGain > 0) {
+          pushWorldHealPopupRef.current(pt.x, pt.y, result.hpGain);
+        }
+      }
     };
 
     const tickPhoenixRegenSource = (ref, dt, now) => {
@@ -3756,6 +4361,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       lastFrame = now;
       ensureDuelStillValid();
       tickRegen(dt);
+      tickAgeHubHousePetRegen(dt);
       tickPhoenixPetRegen(dt);
       const hadPetMpRegen = Boolean(atrumMpRegenRef.current);
       tickAtrumMpRegen(
@@ -3811,10 +4417,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const k = keysRef.current;
       let inputX = 0;
       let inputZ = 0;
-      if (k.up) inputZ -= 1;
-      if (k.down) inputZ += 1;
-      if (k.left) inputX -= 1;
-      if (k.right) inputX += 1;
+      if (!campfireRestingRef.current) {
+        if (k.up) inputZ -= 1;
+        if (k.down) inputZ += 1;
+        if (k.left) inputX -= 1;
+        if (k.right) inputX += 1;
+      }
 
       const moving = inputX !== 0 || inputZ !== 0;
       const sprinting3d = !!(world.mode3d && k.shift && moving);
@@ -3853,18 +4461,33 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const petSpeed = MOVE_SPEED_3D * 60 * dt * speedMult;
 
         const jump = playerJumpRef.current;
-        if (k.space && jump.offset <= 0.02 && jump.vy <= 0) {
+        if (
+          !campfireRestingRef.current &&
+          k.space &&
+          jump.offset <= 0.02 &&
+          jump.vy <= 0
+        ) {
           if (skillChantRef.current) {
             cancelSkillChantRef.current();
           }
           jump.vy = JUMP_VELOCITY_3D;
         }
-        jump.offset += jump.vy * dt;
-        jump.vy -= GRAVITY_3D * dt;
-        if (jump.offset <= 0) {
+        if (kintounOnRef.current) {
           jump.offset = 0;
-          jump.vy = Math.max(0, jump.vy);
+          jump.vy = 0;
+        } else {
+          jump.offset += jump.vy * dt;
+          jump.vy -= GRAVITY_3D * dt;
+          if (jump.offset <= 0) {
+            jump.offset = 0;
+            jump.vy = Math.max(0, jump.vy);
+          }
         }
+        kintounFlyRef.current.offset = tickKintounFlyOffset(
+          kintounFlyRef.current.offset,
+          kintounOnRef.current,
+          dt
+        );
 
         const fieldTw = worldRef.current?.tileWidth;
         const fieldTd = worldRef.current?.tileDepth;
@@ -3904,7 +4527,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           }
           if (fieldTw && fieldTd && now - lastFieldBgmSyncRef.current >= 320) {
             lastFieldBgmSyncRef.current = now;
-            const mapSlotId = moe3dMapSlotAtWorldPos(nx, ny, fieldTw, fieldTd);
+            const warpLock = fieldBgmWarpLockRef.current;
+            const mapSlotId =
+              warpLock.mapSlotId && now < warpLock.until
+                ? warpLock.mapSlotId
+                : moe3dMapSlotAtWorldPos(nx, ny, fieldTw, fieldTd);
             if (mapSlotId && mapSlotId !== fieldBgmMapSlotRef.current) {
               fieldBgmMapSlotRef.current = mapSlotId;
               requestMoeFieldZoneBgm(mapSlotId);
@@ -3929,11 +4556,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             nearRhodaRef.current = nearRhodaSpot;
             startTransition(() => setNearRhoda(nearRhodaSpot));
           }
-          const nearCashShopSpot = moe3dIsNearCashShopNpc(nx, ny);
-          if (nearCashShopSpot !== nearCashShopRef.current) {
-            nearCashShopRef.current = nearCashShopSpot;
-            startTransition(() => setNearCashShop(nearCashShopSpot));
-          }
           const nearbyAltar =
             fieldTw && fieldTd
               ? moe3dFindNearbyAltar(nx, ny, fieldTw, fieldTd, {
@@ -3946,18 +4568,30 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             nearAltarRef.current = nearbyAltar;
             startTransition(() => setNearAltar(nearbyAltar));
           }
-          const nearGuideHouse =
-            fieldTw && fieldTd
-              ? moe3dIsNearTrainingGuideHouse(nx, ny, fieldTw, fieldTd)
-              : false;
-          if (nearGuideHouse !== nearTrainingGuideHouseRef.current) {
-            nearTrainingGuideHouseRef.current = nearGuideHouse;
-            startTransition(() => setNearTrainingGuideHouse(nearGuideHouse));
+          const nearCashShopSpot =
+            !nearbyAltar &&
+            fieldTw &&
+            fieldTd &&
+            moe3dIsNearCashShopNpc(nx, ny, fieldTw, fieldTd);
+          if (nearCashShopSpot !== nearCashShopRef.current) {
+            nearCashShopRef.current = nearCashShopSpot;
+            startTransition(() => setNearCashShop(nearCashShopSpot));
+          }
+          const nearCampfireSpot =
+            !nearbyAltar &&
+            !campfireRestingRef.current &&
+            fieldTw &&
+            fieldTd &&
+            moe3dIsNearAgeRestCampfire(nx, ny, fieldTw, fieldTd);
+          if (nearCampfireSpot !== nearCampfireRef.current) {
+            nearCampfireRef.current = nearCampfireSpot;
+            startTransition(() => setNearCampfire(nearCampfireSpot));
           }
           const nearAgeHouse =
-            fieldTw && fieldTd
-              ? moe3dIsNearAgeHubHouse(nx, ny, fieldTw, fieldTd)
-              : false;
+            !nearbyAltar &&
+            fieldTw &&
+            fieldTd &&
+            moe3dIsNearAgeHubHouse(nx, ny, fieldTw, fieldTd);
           if (nearAgeHouse !== nearAgeHubHouseRef.current) {
             nearAgeHubHouseRef.current = nearAgeHouse;
             startTransition(() => setNearAgeHubHouse(nearAgeHouse));
@@ -3967,6 +4601,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerMoving: moving,
           shinobiashiOn: shinobiashiOnRef.current,
           kakureminoUntilMs: kakureminoUntilRef.current,
+          stealthProficiency: playerStealthProficiencyRef.current?.level ?? 0,
+          stealthRequiredLevel: 10,
         });
         const chaseResult = tickMoeEnemyFieldChaseBatch({
           enemies: enemiesRef.current,
@@ -4186,6 +4822,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const resetShinsokuForGustavRematch = useCallback(() => {
     setDashBoost3x(false);
     dashBoost3xRef.current = false;
+    setKintounOn(false);
+    kintounOnRef.current = false;
+    kintounFlyRef.current.offset = 0;
     setFieldTreasures((prev) => prev.filter((tr) => !isGustavJuniorTreasure(tr)));
   }, []);
 
@@ -4228,6 +4867,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     approachChargeScheduledRef.current = false;
     duelRef.current = next;
     setDuel(next);
+    duelSkillLabelRef.current = "アタック";
+    battleLogApiRef.current?.clear();
+    battleLogApiRef.current?.pushLine(
+      "――――――――――――――――",
+      MOE_BATTLE_LOG_COLOR.separator
+    );
+    battleLogApiRef.current?.pushLine(
+      `${target.name}（Lv.${target.level}）と戦いが始まった！`,
+      MOE_BATTLE_LOG_COLOR.system
+    );
     playSfx("duelEngage");
     },
     [is3d, pet.id, petCombatLevel]
@@ -4473,12 +5122,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     };
   }, [duel?.phase, duel?.enemyId, duel?.petChargeSec, duel?.enemyChargeSec, endActiveDuel]);
 
-  const handleHeal = (amount, label, cooldownKey = null, cooldownSec = 0) => {
+  const handleHeal = useCallback((amount, cooldownKey = null, cooldownSec = 0) => {
+    const now = Date.now();
     if (cooldownKey) {
-      const now = Date.now();
       if (now < healCdUntilRef.current[cooldownKey]) return;
+      const roll = rollPlayerHealSkillSuccess(
+        playerHealProficiencyRef.current,
+        cooldownKey
+      );
       healCdUntilRef.current[cooldownKey] = now + cooldownSec * 1000;
       setHealCdSec((prev) => ({ ...prev, [cooldownKey]: cooldownSec }));
+      if (!roll.ok) {
+        setToast(roll.failToast);
+        return;
+      }
     }
     playSfx("heal");
     setPet((prev) => {
@@ -4486,21 +5143,71 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const hp = petUsesPreciseWikiStats(prev.id)
         ? roundPetStatInternal(raw)
         : raw;
+      const hpGain = Math.max(0, hp - prev.hp);
+      if (hpGain > 0) {
+        const pt = petPosRef.current;
+        pushWorldHealPopup(pt.x, pt.y, hpGain);
+      }
       return { ...prev, hp };
     });
-    setToast(`${label}！✨ (+${amount})`);
-  };
+    if (cooldownKey) {
+      const award = grantHealProficiencyAfterSuccess(
+        playerHealProficiencyRef.current,
+        cooldownKey
+      );
+      if (award.gained) {
+        playerHealProficiencyRef.current = award.progress;
+        setPlayerHealProficiency(award.progress);
+        savePlayerExperienceTrack("heal", award.progress);
+        if (award.toastLines.length) {
+          setToast(award.toastLines.join("\n"));
+        }
+      }
+    }
+  }, [pushWorldHealPopup]);
 
   const handleRegenToggle = useCallback(() => {
+    const now = Date.now();
     setRegenActive((on) => {
-      const next = !on;
-      setToast(
-        next
-          ? `リジェネ ON（${PET_REGEN_INTERVAL_SEC}秒ごと HP+${PET_REGEN_HP} MP+${PET_REGEN_MP}）`
-          : "リジェネ OFF"
+      if (on) {
+        regenTicksLeftRef.current = 0;
+        setRegenTicksLeft(0);
+        setToast("リジェネ OFF");
+        return false;
+      }
+      const remain = moePlayerRegenCooldownRemainSec(
+        regenCooldownUntilRef.current,
+        now
       );
-      if (next) playSfx("heal");
-      return next;
+      if (remain > 0) {
+        setToast(`リジェネ · 待機中（${remain}秒）`);
+        return false;
+      }
+      const roll = rollPlayerHealSkillSuccess(
+        playerHealProficiencyRef.current,
+        "regen"
+      );
+      if (!roll.ok) {
+        setToast(roll.failToast);
+        return false;
+      }
+      const award = grantHealProficiencyAfterSuccess(
+        playerHealProficiencyRef.current,
+        "regen"
+      );
+      if (award.gained) {
+        playerHealProficiencyRef.current = award.progress;
+        setPlayerHealProficiency(award.progress);
+        savePlayerExperienceTrack("heal", award.progress);
+      }
+      regenTicksLeftRef.current = MOE_PLAYER_REGEN_TICK_COUNT;
+      setRegenTicksLeft(MOE_PLAYER_REGEN_TICK_COUNT);
+      regenAccRef.current = 0;
+      const lines = [`リジェネ ON（${moePlayerRegenToggleTitle()}）`];
+      if (award.gained) lines.push(...award.toastLines);
+      setToast(lines.join("\n"));
+      playSfx("heal");
+      return true;
     });
   }, []);
 
@@ -4613,15 +5320,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     petRunAnimRef.current = false;
     playerJumpRef.current = { offset: 0, vy: 0 };
 
+    const bounds = worldRef.current;
     const playerAt = { ...playerPosRef.current };
-    const petAt = moe3dPetStartNearPlayer(playerAt);
-    petPosRef.current = petAt;
-    if (worldRef.current?.mode3d) {
-      petSpawnEpochRef.current += 1;
+    if (bounds?.mode3d && bounds?.halfW) {
+      const { petAt } = snapPet3dNearPlayer(bounds.halfW, bounds.halfD, playerAt);
+      setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
+    } else {
+      const petAt = moe3dPetStartNearPlayer(playerAt);
+      petPosRef.current = petAt;
+      setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
     }
-    setPet((prev) => ({ ...prev, x: petAt.x, y: petAt.y }));
     setToast("🆘 ペットを呼び寄せた！");
-  }, [applyPetCommand, cancelActiveDuel]);
+  }, [applyPetCommand, cancelActiveDuel, snapPet3dNearPlayer]);
 
   const handleEnemyStatSearch = useCallback(() => {
     const tid = targetEnemyIdRef.current;
@@ -4685,10 +5395,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return;
     }
 
+    if (chant.kind === "pet_deep_sleep" && chant.skill) {
+      applyPetDeepSleepEffect(chant.skill);
+      return;
+    }
+
     if (chant.kind === "phoenix" && chant.skill) {
       applyPhoenixPlayerChantEffect(chant.skill);
     }
-  }, [warpPlayer3d, applyPhoenixPlayerChantEffect]);
+  }, [warpPlayer3d, applyPhoenixPlayerChantEffect, applyPetDeepSleepEffect]);
 
   const startHolyRecordChant = useCallback(() => {
     if (!is3d) return;
@@ -4830,6 +5545,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       ninja_shinsoku: playerSkillIconSlots[1],
       ninja_kakuremino: playerSkillIconSlots[2],
     };
+    const dragonById = buildPlayerDragonSkillById(
+      loadPlayerExperienceTrack("dragon").level ?? 0
+    );
     const condenseMindActiveOnTarget =
       allyTarget === "player"
         ? isPlayerCondenseMindActive(playerCondenseMindRef)
@@ -4851,13 +5569,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       kakureminoActive,
       kakureminoCooldownSec,
       dashBoost3x,
+      kintounOn,
       playerSkillCooldownSec,
       ninjaById,
-      healAmountLight: HEAL_AMOUNT_LIGHT,
-      healAmountHeal: HEAL_AMOUNT_HEALING,
-      healAmountAll: HEAL_AMOUNT_HEAL_ALL,
-      petRegenHp: PET_REGEN_HP,
-      petRegenMp: PET_REGEN_MP,
+      dragonById,
+      healAmountLight: MOE_PLAYER_HEAL_LIGHT_AMOUNT,
+      healAmountHeal: MOE_PLAYER_HEAL_HEALING_AMOUNT,
+      healAmountAll: MOE_PLAYER_HEAL_ALL_AMOUNT,
+      petRegenHp: MOE_PLAYER_REGEN_HP_PER_TICK,
+      petRegenMp: MOE_PLAYER_REGEN_MP_PER_TICK,
+      petRegenIntervalSec: MOE_PLAYER_REGEN_TICK_INTERVAL_SEC,
       skillChanting: Boolean(skillChant),
       skillChantKind: skillChant?.kind ?? null,
       skillChantRemainSec,
@@ -4866,25 +5587,29 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       teleportRecordLabel: teleportRecordCtx.label,
       onHolyRecord: startHolyRecordChant,
       onTeleport: startTeleportChant,
-      onLight: () => handleHeal(HEAL_AMOUNT_LIGHT, "ライトヒール"),
+      onLight: () =>
+        handleHeal(
+          MOE_PLAYER_HEAL_LIGHT_AMOUNT,
+          "light",
+          MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC
+        ),
       onHeal: () =>
         handleHeal(
-          HEAL_AMOUNT_HEALING,
-          "ヒーリング",
+          MOE_PLAYER_HEAL_HEALING_AMOUNT,
           "healing",
-          HEAL_COOLDOWN_HEALING_SEC
+          MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC
         ),
       onHealAll: () =>
         handleHeal(
-          HEAL_AMOUNT_HEAL_ALL,
-          "ヒーリングオール",
+          MOE_PLAYER_HEAL_ALL_AMOUNT,
           "healAll",
-          HEAL_COOLDOWN_HEAL_ALL_SEC
+          MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC
         ),
       onRegenToggle: handleRegenToggle,
       onBananaMilkToggle: handleBananaMilkToggle,
       onCondenseMind: handleCondenseMind,
       onNinja: (skill) => activatePlayerSkillSlot(0, skill),
+      onDragonSkill: (skill) => activatePlayerSkillSlot(0, skill),
     };
     return playerSkillSlotOrder.map((key, slotIndex) =>
       buildPlayerSkillSlotEntry(key, slotIndex, ctx)
@@ -4904,6 +5629,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     kakureminoActive,
     kakureminoCooldownSec,
     dashBoost3x,
+    kintounOn,
     playerSkillCooldownSec,
     handleRegenToggle,
     handleBananaMilkToggle,
@@ -4984,7 +5710,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         ({
           slotKey,
           label,
-          subLabel,
           disabled,
           unusable,
           active,
@@ -4995,7 +5720,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }) => ({
           slotKey,
           label,
-          subLabel,
           disabled,
           unusable,
           active,
@@ -5069,6 +5793,74 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const activePetSkillTitle = dataForSkillSlots.name
     ? `ペット（${dataForSkillSlots.name}）`
     : "ペット";
+
+  const activateTrainingSkill = useCallback(
+    (track, level) => {
+      const practiceLevel = loadPlayerExperienceTrack(track).level ?? 0;
+      if (
+        trainingSkillMode === MOE_TRAINING_SKILL_MODE_LEARNED &&
+        !isTrainingSkillUsableAtLevel(trainingSkillMode, practiceLevel, {
+          level,
+        })
+      ) {
+        const trackLabel = track === "phoenix" ? "知恵" : "実践";
+        setToast(
+          `${trackLabel} Lv.${level} で解放（現在 Lv.${Math.floor(practiceLevel)}）`
+        );
+        return;
+      }
+      runTrainingSkillBridgeAction(track, level, {
+        onSkill1: (key) => {
+          if (key === "light") {
+            handleHeal(
+              MOE_PLAYER_HEAL_LIGHT_AMOUNT,
+              "light",
+              MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC
+            );
+            return;
+          }
+          if (key === "heal") {
+            handleHeal(
+              MOE_PLAYER_HEAL_HEALING_AMOUNT,
+              "healing",
+              MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC
+            );
+            return;
+          }
+          if (key === "heal-all") {
+            handleHeal(
+              MOE_PLAYER_HEAL_ALL_AMOUNT,
+              "healAll",
+              MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC
+            );
+            return;
+          }
+          if (key === "holy_record") {
+            startHolyRecordChant();
+            return;
+          }
+          if (key === "teleport") {
+            startTeleportChant();
+          }
+        },
+        onSkill2: (skill) => activatePlayerPhoenixSkill(0, skill),
+        onPreSkill: activatePlayerPreSkill,
+        onNinja: (skill) => activatePlayerSkillSlot(0, skill),
+        onDragon: (skill) => activatePlayerSkillSlot(0, skill),
+        setToast,
+      });
+    },
+    [
+      handleHeal,
+      startHolyRecordChant,
+      startTeleportChant,
+      activatePlayerPhoenixSkill,
+      activatePlayerPreSkill,
+      activatePlayerSkillSlot,
+      setToast,
+      trainingSkillMode,
+    ]
+  );
 
   const mergedSkillPanelProps = {
     showPlayer: is3d,
@@ -5372,68 +6164,93 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setActiveAltar(null);
   }, []);
 
-  const openTrainingGuide = useCallback(() => {
+  const stopAgeHubTrainingBgm = useCallback(() => {
+    if (!trainingGuideInHouseRef.current) return;
     trainingGuideInHouseRef.current = false;
-    setTrainingGuideInHouse(false);
-    setTrainingGuideOpen(true);
+    const mapSlotId = fieldBgmMapSlotRef.current;
+    if (mapSlotId) requestMoeFieldZoneBgm(mapSlotId);
   }, []);
 
-  const openTrainingGuideFromHouse = useCallback(() => {
-    trainingGuideInHouseRef.current = true;
-    setTrainingGuideInHouse(true);
-    setTrainingGuideOpen(true);
-    requestMoeFieldZoneBgm(MOE_TRAINING_GUIDE_BGM_MAP_SLOT);
+  const handleAgeHubViewChange = useCallback(
+    (view) => {
+      setAgeHubView(view);
+      if (view === "training") {
+        trainingGuideInHouseRef.current = true;
+        requestMoeFieldZoneBgm(MOE_TRAINING_GUIDE_BGM_MAP_SLOT);
+      } else {
+        stopAgeHubTrainingBgm();
+      }
+    },
+    [stopAgeHubTrainingBgm]
+  );
+
+  const openAgeHubCampfireMenu = useCallback(() => {
+    if (campfireRestingRef.current) return;
+    setAgeHubView("restConfirm");
   }, []);
 
-  const enterAgeHubHouse = useCallback(() => {
-    setToast(MOE_AGE_HUB_HOUSE.enterToast);
-  }, []);
-
-  const closeTrainingGuide = useCallback(() => {
-    setTrainingGuideOpen(false);
-    if (trainingGuideInHouseRef.current) {
-      trainingGuideInHouseRef.current = false;
-      setTrainingGuideInHouse(false);
-      const mapSlotId = fieldBgmMapSlotRef.current;
-      if (mapSlotId) requestMoeFieldZoneBgm(mapSlotId);
-    }
-  }, []);
-
-  const handleTrainingGuideChant = useCallback(
-    (phrase) => {
-      if (!moeTrainingGuideChantMatches(phrase)) {
-        setToast(MOE_PET_TRAINING_GUIDE_HOUSE.chantMismatch);
+  const handleAgeHubChantSubmit = useCallback(
+    (text) => {
+      if (!moeTrainingGuideChantMatches(text)) {
+        setToast("唱和が違います…「生命爆神」を唱えてください");
         return;
       }
-      const cur = petRef.current ?? petStateRef.current;
-      const result = applyMoeTrainingGuideHpBonus(cur);
+      const petBefore = petStateRef.current ?? pet;
+      const result = applyMoeTrainingGuideHpBonus(petBefore);
       if (!result.applied) {
-        if (result.reason === "no_pet") {
-          setToast("ペットが見つかりません");
-          return;
+        if (result.reason === "already") {
+          setToast("生命爆神の効果はすでに付いています（リロードまで）");
+        } else {
+          setToast("唱和できませんでした");
         }
-        setToast(MOE_PET_TRAINING_GUIDE_HOUSE.chantAlready);
         return;
       }
-      setPet((prev) => {
-        const next = {
-          ...result.pet,
-          x: prev.x,
-          y: prev.y,
-          mp: prev.mp,
-          mpMax: prev.mpMax,
-        };
-        petRef.current = next;
-        petStateRef.current = next;
-        return next;
-      });
-      const pos = petPosRef.current;
-      pushWorldHealPopup(pos.x, pos.y, MOE_TRAINING_GUIDE_HP_BONUS);
-      setToast(MOE_PET_TRAINING_GUIDE_HOUSE.chantSuccess);
+      petStateRef.current = result.pet;
+      setPet(result.pet);
+      flushPersistActivePet(result.pet);
+      setToast(
+        `生命爆神 — ペットHP+${MOE_TRAINING_GUIDE_HP_BONUS}（セッション限定）`
+      );
       playSfx("heal");
     },
-    [pushWorldHealPopup]
+    [pet, flushPersistActivePet]
   );
+
+  useEffect(() => {
+    if (!nearAgeHubHouse && !nearCampfire) {
+      setAgeHubView("menu");
+      stopAgeHubTrainingBgm();
+    }
+  }, [nearAgeHubHouse, nearCampfire, stopAgeHubTrainingBgm]);
+
+  useEffect(() => {
+    const api = createMoeBattleLogApi((entries) => setBattleLogEntries(entries));
+    battleLogApiRef.current = api;
+    return () => api.dispose();
+  }, []);
+
+  const startCampfireRest = useCallback(() => {
+    campfireRestingRef.current = true;
+    campfireRestActiveRef.current = true;
+    setCampfireResting(true);
+    requestMoeFieldBgmRest(true);
+    void startMoeCampfireCrackle();
+  }, []);
+
+  useEffect(() => {
+    startCampfireRestRef.current = startCampfireRest;
+  }, [startCampfireRest]);
+
+  const wakeFromCampfireRest = useCallback(() => {
+    campfireRestingRef.current = false;
+    campfireRestActiveRef.current = false;
+    setCampfireResting(false);
+    stopMoeCampfireCrackle();
+    requestMoeFieldBgmRest(false);
+    const mapSlotId = fieldBgmMapSlotRef.current;
+    if (mapSlotId) requestMoeFieldZoneBgm(mapSlotId);
+    setToast(MOE_CAMPFIRE_REST.wakeToast);
+  }, []);
 
   const handleAltarWarp = useCallback(
     (destId) => {
@@ -5447,7 +6264,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         halfD: bounds.halfD,
       });
       if (!spawn) return;
-      let playerAt = moe3dClampToPlayBounds(spawn.x, spawn.y, bounds, 1.5);
+      let playerAt =
+        dest.mapSlotId === MOE_SULFUR_KAZAN_MAP_SLOT_ID ||
+        dest.mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID
+          ? moe3dClampToMapSlotRect(
+              spawn.x,
+              spawn.y,
+              dest.mapSlotId,
+              tw,
+              td,
+              2.5
+            )
+          : moe3dClampToPlayBounds(spawn.x, spawn.y, bounds, 1.5);
       if (MOE_AGE_MAP_SLOT_IDS.has(dest.mapSlotId)) {
         playerAt = moe3dClampToMapSlotRect(
           spawn.x,
@@ -5457,6 +6285,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           td,
           2.5
         );
+      }
+      if (dest.mapSlotId === "mitoya_great_tree") {
+        const treeCenter = moe3dSlotSpawnWorld(
+          "mitoya_great_tree",
+          tw,
+          td,
+          MOE_MITOYA_TREE_TX,
+          MOE_MITOYA_TREE_TZ
+        );
+        if (treeCenter) {
+          cameraYawRef.current = Math.atan2(
+            treeCenter.x - playerAt.x,
+            treeCenter.y - playerAt.y
+          );
+        }
       }
       playerPosRef.current = playerAt;
       setPlayer(playerAt);
@@ -5469,6 +6312,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       });
       closeAltar();
       fieldBgmMapSlotRef.current = dest.mapSlotId;
+      fieldBgmWarpLockRef.current = {
+        mapSlotId: dest.mapSlotId,
+        until: performance.now() + 6000,
+      };
       requestMoeFieldZoneBgm(dest.mapSlotId);
       const warpToast = `${dest.emoji ?? "✨"} ${dest.nameJa} へ転送しました`;
       setToast(dest.travelMemo ? `${warpToast}\n📝 ${dest.travelMemo}` : warpToast);
@@ -5954,6 +6801,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     () => calculatePetStats(pet.id, petCombatLevel),
     [pet.id, petCombatLevel]
   );
+  const petHotSpringDefenseBonus = moePhoenixHotSpringDefenseBonus(
+    phoenixHotSpringDefenseRef.current,
+    buffUiNow
+  );
   const wikiGrowthCaption = React.useMemo(
     () => getPetWikiGrowthCaptionLine(pet.id),
     [pet.id]
@@ -5991,6 +6842,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     "life-rpg-moe-pet-side-panel-pos",
     getPetSidePanelPos
   );
+  const {
+    collapsed: petSidePanelCollapsed,
+    toggleCollapsed: togglePetSidePanelCollapsed,
+  } = useMoePanelCollapsed("pet-side-panel");
+
+  const handleMacroTimerFinished = useCallback(() => {
+    setToast("⏱ マクロ４ 0:00 — お疲れさま！");
+    playSfx("heal");
+  }, []);
 
   if (!world) {
     return (
@@ -6022,17 +6882,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const mini3Rhoda = is3d
     ? (() => {
         const spot = world.rhodaPos ?? moe3dRhodaPosition(mini3HalfW, mini3HalfD);
-        return mini3Project(spot.x, spot.y);
-      })()
-    : null;
-  const mini3TrainingGuideHome = is3d
-    ? (() => {
-        const tw = world.tileWidth;
-        const td = world.tileDepth;
-        const spot =
-          world.trainingGuideHousePos ??
-          (tw && td ? moe3dTrainingGuideHousePosition(tw, td) : null);
-        if (!spot) return null;
         return mini3Project(spot.x, spot.y);
       })()
     : null;
@@ -6105,6 +6954,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     )
   );
 
+  const showBattleLog = is3d;
+
+  const showAgeHubPanel =
+    is3d &&
+    (nearAgeHubHouse || nearCampfire) &&
+    !nearAltar &&
+    !altarOpen &&
+    !campfireResting &&
+    !petMasterDialogue &&
+    !expVendorOpen &&
+    !josephOpen &&
+    !josephSynthOpen;
+
   const petNextRemaining = getMoePetExpRemainingToNextTenth(petTotalExp);
   const petExpPct = getMoePetExpTenthBarPct(petTotalExp);
 
@@ -6122,17 +6984,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     mpMax: allyTarget === "player" ? playerVitals.mpMax : pet.mpMax,
   };
 
-  const handleMacroTimerFinished = useCallback(() => {
-    setToast("⏱ マクロ４ 0:00 — お疲れさま！");
-    playSfx("heal");
-  }, []);
-
   return (
+    <MoePanelDockProvider>
     <div
       className="relative h-dvh w-full overflow-hidden bg-sky-900"
       onContextMenu={is3d ? (e) => e.preventDefault() : undefined}
     >
       <MoeMacroSessionTimer onFinished={handleMacroTimerFinished} />
+      <MoeBattleLogPanel open={showBattleLog} entries={battleLogEntries} />
       <MoeTargetWindow
         target={targetEnemy}
         chaseAggro={targetEnemyChaseAggro}
@@ -6165,6 +7024,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             shinobiashiOn,
             kakureminoUntilMs: kakureminoUntilRef.current,
             dashBoost3x,
+            kintounOn,
             playerCondenseMindRef,
             playerJirikiSeiranRef,
           },
@@ -6183,13 +7043,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         buffSlots={buildMoePetBuffStrip(
           {
             petRegenActive: regenActive,
-            petRegenHp: PET_REGEN_HP,
-            petRegenMp: PET_REGEN_MP,
-            petRegenIntervalSec: PET_REGEN_INTERVAL_SEC,
+            petRegenHp: MOE_PLAYER_REGEN_HP_PER_TICK,
+            petRegenMp: MOE_PLAYER_REGEN_MP_PER_TICK,
+            petRegenIntervalSec: MOE_PLAYER_REGEN_TICK_INTERVAL_SEC,
+            petRegenTicksLeft: regenActive ? regenTicksLeft : 0,
+            petRegenRemainSec:
+              regenActive && regenTicksLeft > 0
+                ? Math.max(
+                      0,
+                      Math.ceil(
+                      (regenTicksLeft - 1) * MOE_PLAYER_REGEN_TICK_INTERVAL_SEC
+                    )
+                  )
+                : null,
             phoenixAnsleepRegenRef,
             phoenixUltimateRegenRef,
+            phoenixHotSpringDefenseRef,
             atrumMpRegenRef,
             atrumMagicBuffUntilRef,
+            rebirthOnceRef,
           },
           buffUiNow
         )}
@@ -6202,10 +7074,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           phase={duel.phase}
           petEmoji={currentPetData.emoji}
           enemyEmoji={duelEnemy?.emoji ?? "👹"}
-          enemyName={duelEnemy?.name ?? ""}
           petChargeSec={duel.petChargeSec}
           enemyChargeSec={duel.enemyChargeSec}
-          battleSpeed2x={battleSpeed2x}
         />
       )}
       {petLevelUpFlash && (
@@ -6214,8 +7084,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           className="pointer-events-none absolute left-1/2 top-24 z-[60] max-w-[min(96vw,22rem)] -translate-x-1/2 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 px-4 py-3 text-center text-sm font-bold leading-snug text-amber-950 shadow-[0_0_40px_rgba(251,191,36,0.85)] whitespace-pre-wrap break-words"
         >
           🎉 {petLevelUpFlash}
-                </div>
-      )}
+            </div>
+          )}
       <MoePlayerSkill2LevelUpFlash level={skill2LevelUpFlash} />
       {expConsumableLevelUpFlow && (
         <div
@@ -6325,29 +7195,40 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         style={{ left: petSidePanelPos.x, top: petSidePanelPos.y }}
       >
         <div
-          className="max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-white/20 bg-black/75 p-2 text-white backdrop-blur-md [scrollbar-width:thin]"
+          className={`overflow-x-hidden rounded-lg border border-white/20 bg-black/75 text-white backdrop-blur-md [scrollbar-width:thin] ${petSidePanelCollapsed ? "w-auto" : "max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-y-auto overscroll-contain p-2"}`}
         >
           <div
-            className="mb-1.5 flex cursor-grab items-center gap-1.5 touch-none active:cursor-grabbing"
+            className={`relative flex cursor-grab touch-none pl-5 active:cursor-grabbing ${petSidePanelCollapsed ? "items-center gap-1 py-1 pr-2" : "mb-1.5 items-center gap-1.5"}`}
             onPointerDown={onPetSidePanelDrag}
             title="ドラッグで移動"
           >
-            <span className="text-xl leading-none">{currentPetData.emoji}</span>
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-bold leading-tight">{currentPetDisplay.name}</p>
-              <p
-                key={`pet-panel-lv-${pet.totalExp ?? 0}-${petLevelDisplay}`}
-                className="text-[9px] tabular-nums text-gray-400"
-                title={
-                  petCombatLevel >= MOE_PET_MAX_LEVEL
-                    ? "最大レベル"
-                    : `次の0.1まで ${petNextRemaining ?? "—"} EXP`
-                }
-              >
-                Lv.{petLevelDisplay}
+            <MoePanelCollapseToggle
+              collapsed={petSidePanelCollapsed}
+              onToggle={togglePetSidePanelCollapsed}
+            />
+            <span className={`leading-none ${petSidePanelCollapsed ? "text-base" : "text-xl"}`}>
+              {currentPetData.emoji}
+            </span>
+            <div className="min-w-0 flex-1 pr-1">
+              <p className="truncate text-[11px] font-bold leading-tight">
+                {currentPetDisplay.name}
               </p>
+              {!petSidePanelCollapsed ? (
+                <p
+                  key={`pet-panel-lv-${pet.totalExp ?? 0}-${petLevelDisplay}`}
+                  className="text-[9px] tabular-nums text-gray-400"
+                  title={
+                    petCombatLevel >= MOE_PET_MAX_LEVEL
+                      ? "最大レベル"
+                      : `次の0.1まで ${petNextRemaining ?? "—"} EXP`
+                  }
+                >
+                  Lv.{petLevelDisplay}
+                </p>
+              ) : null}
             </div>
           </div>
+          {!petSidePanelCollapsed ? (
           <div className="space-y-0.5">
             <div className="flex justify-between text-[9px]">
               <span>HP</span>
@@ -6446,21 +7327,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             <div className="mt-1 flex items-stretch justify-center gap-0.5">
               <button
                 type="button"
-                onClick={() => handleHeal(HEAL_AMOUNT_LIGHT, "ライトヒール")}
-                className="flex h-6 min-w-0 flex-1 items-center justify-center rounded bg-pink-700/90 px-0.5 text-[6px] font-bold leading-tight transition hover:bg-pink-600 active:scale-95"
-                title={`+${HEAL_AMOUNT_LIGHT} HP`}
+                disabled={healCdSec.light > 0}
+                onClick={() =>
+                  handleHeal(
+                    MOE_PLAYER_HEAL_LIGHT_AMOUNT,
+                    "light",
+                    MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC
+                  )
+                }
+                className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
+                  healCdSec.light > 0
+                    ? "cursor-not-allowed bg-pink-700/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
+                    : "bg-pink-700/90 hover:bg-pink-600"
+                }`}
+                title={
+                  healCdSec.light > 0
+                    ? moePlayerHealCooldownLabel("light")
+                    : moePlayerHealSkillTitle("light")
+                }
               >
-                ライト
+                {healCdSec.light > 0 ? (
+                  <span className="relative flex h-full w-full items-center justify-center">
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
+                      ライト
+                  </span>
+                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
+                      {healCdSec.light}
+                  </span>
+                  </span>
+                ) : (
+                  "ライト"
+                )}
               </button>
               <button
                 type="button"
                 disabled={healCdSec.healing > 0}
                 onClick={() =>
                   handleHeal(
-                    HEAL_AMOUNT_HEALING,
-                    "ヒーリング",
+                    MOE_PLAYER_HEAL_HEALING_AMOUNT,
                     "healing",
-                    HEAL_COOLDOWN_HEALING_SEC
+                    MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC
                   )
                 }
                 className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
@@ -6470,8 +7376,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 }`}
                 title={
                   healCdSec.healing > 0
-                    ? `待機中（あと${healCdSec.healing}秒）`
-                    : `+${HEAL_AMOUNT_HEALING} HP`
+                    ? moePlayerHealCooldownLabel("healing")
+                    : moePlayerHealSkillTitle("healing")
                 }
               >
                 {healCdSec.healing > 0 ? (
@@ -6492,10 +7398,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 disabled={healCdSec.healAll > 0}
                 onClick={() =>
                   handleHeal(
-                    HEAL_AMOUNT_HEAL_ALL,
-                    "ヒーリングオール",
+                    MOE_PLAYER_HEAL_ALL_AMOUNT,
                     "healAll",
-                    HEAL_COOLDOWN_HEAL_ALL_SEC
+                    MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC
                   )
                 }
                 className={`flex h-6 min-w-0 flex-[0.85] items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
@@ -6505,8 +7410,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 }`}
                 title={
                   healCdSec.healAll > 0
-                    ? `待機中（あと${healCdSec.healAll}秒）`
-                    : `ヒーリングオール +${HEAL_AMOUNT_HEAL_ALL} HP`
+                    ? moePlayerHealCooldownLabel("healAll")
+                    : moePlayerHealSkillTitle("healAll")
                 }
               >
                 {healCdSec.healAll > 0 ? (
@@ -6530,7 +7435,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     ? "border-teal-300/70 bg-teal-800/95 text-teal-50 ring-1 ring-teal-300/45"
                     : "border-teal-600/45 bg-teal-950/85 text-teal-100 hover:bg-teal-900/90"
                 }`}
-                title={`2秒ごと HP+${PET_REGEN_HP} MP+${PET_REGEN_MP}（トグル）`}
+                title={moePlayerRegenToggleTitle()}
               >
                 リジェネ
               </button>
@@ -6542,6 +7447,34 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             >
               ステータス{showPetStatusOverlay ? " ▲" : ""}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowPlayerStatusPanel((v) => !v)}
+              className="mt-1 w-full rounded border border-sky-500/50 bg-sky-950/90 py-1 text-[9px] font-bold text-sky-100 transition hover:bg-sky-900/95 active:scale-95"
+            >
+              プレイヤーステータス{showPlayerStatusPanel ? " ▲" : ""}
+            </button>
+            <MoePlayerStatusPanel
+              open={showPlayerStatusPanel}
+              trainerStatus={trainerStatus}
+              playerVitals={playerVitals}
+              playerSkill2Progress={playerSkill2Progress}
+              playerHealProficiency={playerHealProficiency}
+              playerStealthProficiency={playerStealthProficiency}
+              playerPreSkillProgress={playerPreSkillProgress}
+              playerBuffStrip={buildMoePlayerBuffStrip(
+                {
+                  bananaMilkActive,
+                  shinobiashiOn,
+                  kakureminoUntilMs: kakureminoUntilRef.current,
+                  dashBoost3x,
+                  kintounOn,
+                  playerCondenseMindRef,
+                  playerJirikiSeiranRef,
+                },
+                buffUiNow
+              )}
+            />
             {showPetStatusOverlay && (
               <div className="mt-1 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-emerald-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(14rem,38vh)]">
                 <div className="box-border w-full max-w-full px-1 py-2 text-white">
@@ -6594,7 +7527,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                       <div className="space-y-0.5 border-t border-white/15 pt-1.5 text-[9px] leading-tight">
                         {[
                           ["攻撃", formatPetStatUi(petWikiStats.attack), "耐火", formatPetResistUi(petWikiStats.resistFire)],
-                          ["防御", formatPetStatUi(petWikiStats.defense), "耐水", formatPetResistUi(petWikiStats.resistWater)],
+                          [
+                            "防御",
+                            formatMoePetDefenseWithBonus(
+                              petWikiStats.defense,
+                              petHotSpringDefenseBonus,
+                              formatPetStatUi
+                            ),
+                            "耐水",
+                            formatPetResistUi(petWikiStats.resistWater),
+                          ],
                           ["命中", formatPetStatUi(petWikiStats.hit), "耐地", formatPetResistUi(petWikiStats.resistEarth)],
                           ["回避", formatPetStatUi(petWikiStats.evasion), "耐風", formatPetResistUi(petWikiStats.resistWind)],
                           ["魔力", formatPetStatUi(petWikiStats.magic), "耐無", formatPetResistUi(petWikiStats.resistNeutral)],
@@ -6686,6 +7628,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               </div>
             </div>
           </div>
+          ) : null}
         </div>
       </div>
       )}
@@ -6702,11 +7645,37 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       <MoeMergedVerticalSkillPanel
         storageKey="life-rpg-moe-merged-skill-panel-b"
         defaultPos={() => ({
-          x: Math.max(8, window.innerWidth - 180),
+          x: Math.max(8, window.innerWidth - 168),
           y: 8,
         })}
         {...mergedSkillPanelProps}
       />
+
+      {/* 縦スキル ×2 — 鳳凰 / 龍神 修行スキルゲット表 */}
+      {is3d ? (
+        <>
+          <MoeTrainingVerticalSkillPanel
+            kind="phoenix"
+            storageKey="life-rpg-moe-phoenix-training-skill-panel"
+            onActivateSkill={activateTrainingSkill}
+            skillMode={trainingSkillMode}
+            defaultPos={() => ({
+              x: 8,
+              y: 8,
+            })}
+          />
+          <MoeTrainingVerticalSkillPanel
+            kind="dragon"
+            storageKey="life-rpg-moe-dragon-training-skill-panel"
+            onActivateSkill={activateTrainingSkill}
+            skillMode={trainingSkillMode}
+            defaultPos={() => ({
+              x: 8,
+              y: 220,
+            })}
+          />
+        </>
+      ) : null}
 
       {/* 横スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
       <MoeMergedSkillIconBar
@@ -6818,6 +7787,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             playerX={minimap3d.x}
             playerY={minimap3d.y}
             yaw={minimap3d.yaw}
+            playerGroundYRef={playerGroundYRef}
           />
         ) : null}
         <div className="min-w-0 flex-1">
@@ -6926,6 +7896,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                       petSkillMode === MOE_PET_SKILL_MODE_LEARNED
                         ? "border-violet-300/70 bg-violet-800/70 text-violet-50 ring-1 ring-violet-200/35"
                         : "border-violet-600/35 bg-violet-950/40 text-violet-100 hover:bg-violet-900/35"
+                    }`}
+                  >
+                    習得済みのみ（MOE風）
+                  </button>
+                </div>
+              </div>
+              <div className="rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1.5">
+                <p className="text-[10px] font-bold text-orange-100/95">
+                  鳳凰・龍神スキル
+                </p>
+                <p className="mt-0.5 text-[9px] leading-snug text-orange-100/70">
+                  現在: {moeTrainingSkillModeLabel(trainingSkillMode)}
+                </p>
+                <div className="mt-1.5 grid grid-cols-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrainingSkillMode(MOE_TRAINING_SKILL_MODE_ALL);
+                      saveMoeTrainingSkillMode(MOE_TRAINING_SKILL_MODE_ALL);
+                      setToast("鳳凰・龍神スキル: 全部使える");
+                    }}
+                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
+                      trainingSkillMode === MOE_TRAINING_SKILL_MODE_ALL
+                        ? "border-orange-300/70 bg-orange-800/70 text-orange-50 ring-1 ring-orange-200/35"
+                        : "border-orange-600/35 bg-orange-950/40 text-orange-100 hover:bg-orange-900/35"
+                    }`}
+                  >
+                    全部使える（未習得も表示）
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrainingSkillMode(MOE_TRAINING_SKILL_MODE_LEARNED);
+                      saveMoeTrainingSkillMode(MOE_TRAINING_SKILL_MODE_LEARNED);
+                      setToast("鳳凰・龍神スキル: 習得済みのみ");
+                    }}
+                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
+                      trainingSkillMode === MOE_TRAINING_SKILL_MODE_LEARNED
+                        ? "border-orange-300/70 bg-orange-800/70 text-orange-50 ring-1 ring-orange-200/35"
+                        : "border-orange-600/35 bg-orange-950/40 text-orange-100 hover:bg-orange-900/35"
                     }`}
                   >
                     習得済みのみ（MOE風）
@@ -7607,7 +8617,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
       )}
 
-      {is3d && nearCashShop && !cashShopOpen && !altarOpen && (
+      {is3d && nearCashShop && !cashShopOpen && !altarOpen && !nearAltar && (
         <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4 -translate-y-56">
           <button
             type="button"
@@ -7619,70 +8629,93 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
       )}
 
-      {is3d && nearAltar && !altarOpen && !trainingGuideOpen && (
-        <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4 -translate-y-48">
-          <button
-            type="button"
-            onClick={handleAltarOpen}
-            className="pointer-events-auto rounded-xl border-2 border-sky-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-sky-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
-          >
-            🌀 アルターで転送する
-          </button>
+      {is3d &&
+        nearAltar &&
+        !altarOpen &&
+        !tomorrowMemoOpen &&
+        !showAgeHubPanel && (
+        <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4">
+          <div className="pointer-events-auto flex w-full max-w-xs flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setTomorrowMemoOpen(true)}
+              className="rounded-xl border-2 border-violet-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-violet-100 shadow-lg backdrop-blur-sm transition hover:bg-violet-950/90 active:scale-95"
+            >
+              📋 明日やることメモ
+            </button>
+            <button
+              type="button"
+              onClick={handleAltarOpen}
+              className="rounded-xl border-2 border-sky-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-sky-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+            >
+              🌀 アルターで転送する
+            </button>
+          </div>
         </div>
       )}
 
-      {is3d &&
-        nearTrainingGuideHouse &&
-        !trainingGuideOpen &&
-        !altarOpen &&
-        !petMasterDialogue &&
-        !expVendorOpen &&
-        !josephOpen &&
-        !josephSynthOpen && (
-          <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
-            <button
-              type="button"
-              onClick={openTrainingGuideFromHouse}
-              className="rounded-xl border-2 border-emerald-500/50 bg-zinc-950/92 px-4 py-2 text-sm font-bold text-emerald-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
-            >
-              {MOE_PET_TRAINING_GUIDE_HOUSE.houseEmoji}{" "}
-              {MOE_PET_TRAINING_GUIDE_HOUSE.buttonLabel}
-            </button>
+      {is3d && tomorrowMemoOpen && (
+        <div
+          className="fixed inset-0 z-[61] flex items-start justify-center overflow-y-auto bg-black/50 p-3 pt-[8vh]"
+          role="dialog"
+          aria-label="明日やることメモ"
+          onClick={() => setTomorrowMemoOpen(false)}
+        >
+          <div
+            className="mb-8 w-full max-w-md shrink-0 overflow-hidden rounded-2xl border border-violet-400/40 bg-zinc-950/95 shadow-2xl backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoeAltarTomorrowMemo initialOpen />
+            <div className="border-t border-white/10 px-4 py-2.5">
+              <button
+                type="button"
+                onClick={() => setTomorrowMemoOpen(false)}
+                className="w-full rounded-lg border border-zinc-600/60 bg-zinc-800/80 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-700/90"
+              >
+                閉じる
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-      {is3d &&
-        nearAgeHubHouse &&
-        !altarOpen &&
-        !trainingGuideOpen &&
-        !petMasterDialogue &&
-        !expVendorOpen &&
-        !josephOpen &&
-        !josephSynthOpen && (
-          <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+      <MoeAgeHubHousePanel
+        open={showAgeHubPanel}
+        view={ageHubView}
+        onViewChange={handleAgeHubViewChange}
+        onStartRest={startCampfireRest}
+        onChantSubmit={handleAgeHubChantSubmit}
+      />
+
+      {is3d && campfireResting && (
+        <div className="pointer-events-none fixed inset-0 z-[58]">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 42% 38% at 50% 58%, transparent 0%, rgba(0,0,0,0.15) 42%, rgba(0,0,0,0.72) 100%)",
+            }}
+          />
+          <div className="flex h-full flex-col items-center justify-center gap-4 p-4">
+            <p className="text-lg font-medium tracking-widest text-amber-100/90 drop-shadow-md">
+              {MOE_CAMPFIRE_REST.restingHint}
+            </p>
             <button
               type="button"
-              onClick={enterAgeHubHouse}
-              className="rounded-xl border-2 border-teal-500/50 bg-zinc-950/92 px-4 py-2 text-sm font-bold text-teal-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+              onClick={wakeFromCampfireRest}
+              className="pointer-events-auto rounded-xl border-2 border-amber-300/50 bg-zinc-950/90 px-6 py-2.5 text-sm font-bold text-amber-50 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
             >
-              {MOE_AGE_HUB_HOUSE.houseEmoji} {MOE_AGE_HUB_HOUSE.buttonLabel}
+              {MOE_CAMPFIRE_REST.wakeLabel}
             </button>
           </div>
-        )}
+        </div>
+      )}
 
       <MoeAltarWarpPanel
         open={is3d && altarOpen}
         altar={activeAltar}
         onClose={closeAltar}
         onSelect={handleAltarWarp}
-        onOpenTrainingGuide={openTrainingGuide}
-      />
-
-      <MoePetTrainingGuidePanel
-        open={is3d && trainingGuideOpen}
-        onClose={closeTrainingGuide}
-        inHouse={trainingGuideInHouse}
-        onChant={handleTrainingGuideChant}
       />
 
       {is3d ? (
@@ -7699,6 +8732,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             dragons: hiddenDragonShowcaseIds,
           }}
           overlayProjectRef={overlayProjectRef}
+          playerGroundYRef={playerGroundYRef}
           onEnemyClick={(id) => handleEnemySelect(id)}
           onTreasureClick={handleTreasureClick}
           onPetClick={() => handlePetSelect()}
@@ -7706,6 +8740,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           onPetDoubleClick={() => handlePetDoubleClick()}
           onRhodaClick={handleRhodaShrineClick}
           onCashShopClick={handleCashShopNpcClick}
+          onCampfireClick={openAgeHubCampfireMenu}
+          campfireRestActiveRef={campfireRestActiveRef}
           onAltarClick={handleAltarClickById}
           targetEnemyId={targetEnemyId}
           enemyStatSearchOpen={enemyStatSearchOpen}
@@ -7799,10 +8835,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 ...w,
                 halfW: bounds.halfW,
                 halfD: bounds.halfD,
-                minX: bounds.minX,
-                maxX: bounds.maxX,
-                minZ: bounds.minZ,
-                maxZ: bounds.maxZ,
+                minX: bounds.minX ?? miniBounds.minX,
+                maxX: bounds.maxX ?? miniBounds.maxX,
+                minZ: bounds.minZ ?? miniBounds.minZ,
+                maxZ: bounds.maxZ ?? miniBounds.maxZ,
                 mw: bounds.halfW * 2,
                 mh: bounds.halfD * 2,
                 midBossPos: bounds.midBossPos ?? w.midBossPos,
@@ -7813,8 +8849,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 gustavJuniorPos:
                   bounds.gustavJuniorPos ?? w.gustavJuniorPos,
                 rhodaPos: bounds.rhodaPos ?? w.rhodaPos,
-                trainingGuideHousePos:
-                  bounds.trainingGuideHousePos ?? w.trainingGuideHousePos,
                 ageHubHousePos: bounds.ageHubHousePos ?? w.ageHubHousePos,
                 dragonShowcasePos:
                   bounds.dragonShowcasePos ?? w.dragonShowcasePos,
@@ -8015,6 +9049,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerFacingRef={playerFacingRef}
           playerPosRef={playerPosRef}
           playerJumpRef={playerJumpRef}
+          kintounFlyRef={kintounFlyRef}
           playerSprintRef={playerSprintRef}
           petRunAnimRef={petRunAnimRef}
           petPosRef={petPosRef}
@@ -8039,6 +9074,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           overlayProjectRef={overlayProjectRef}
           enemies={enemies}
         />
+        <MoePetDeepSleepOverlay
+          active={isMoePhoenixDeepSleepChant(skillChant)}
+          remainSec={skillChantRemainSec}
+          overlayProjectRef={overlayProjectRef}
+          is3d
+        />
         <MoeField3DTreasureOverlay
           treasures={fieldTreasures}
           overlayProjectRef={overlayProjectRef}
@@ -8050,7 +9091,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         {world.mode3d && mini3Player && (
           <MoeDraggableMinimapPanel
             storageKey="life-rpg-moe-minimap-pos-3d"
-            hint="黄＝視界 · 紫＝自分 · 🔮＝ローダ · 🏠＝育成表の家 · 赤＝敵 · 南↓北↑"
+            dockPanelId={MOE_DOCK_PANEL_MINIMAP_3D}
+            hint="黄＝視界 · 紫＝自分 · 🔮＝ローダ · 🏠＝AGE拠点 · 🌀＝転送 · 赤＝敵 · 南↓北↑"
           >
             <svg
               className="block w-full rounded border border-white/10"
@@ -8190,28 +9232,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                     fontSize={Math.max(6, mini3W * 0.055)}
                   >
                     🔮
-                  </text>
-                </g>
-              )}
-              {mini3TrainingGuideHome && (
-                <g aria-label={MOE_PET_TRAINING_GUIDE_HOUSE.houseLabel}>
-                  <circle
-                    cx={mini3TrainingGuideHome.x}
-                    cy={mini3TrainingGuideHome.y}
-                    r={Math.max(4, mini3W * 0.016)}
-                    fill="#047857"
-                    opacity={0.92}
-                    stroke="#a7f3d0"
-                    strokeWidth={1}
-                  />
-                  <text
-                    x={mini3TrainingGuideHome.x}
-                    y={mini3TrainingGuideHome.y + 1}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize={Math.max(6, mini3W * 0.055)}
-                  >
-                    {MOE_PET_TRAINING_GUIDE_HOUSE.mapIcon}
                   </text>
                 </g>
               )}
@@ -8704,6 +9724,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           })}
 
         {/* Pet */}
+        <MoePetDeepSleepOverlay
+          active={isMoePhoenixDeepSleepChant(skillChant)}
+          remainSec={skillChantRemainSec}
+          petX={pet.x}
+          petY={pet.y}
+          is3d={false}
+        />
         <button
           type="button"
           onPointerDown={handlePetSelect}
@@ -8985,5 +10012,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }}
       />
     </div>
+    </MoePanelDockProvider>
   );
 }

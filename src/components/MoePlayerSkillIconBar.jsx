@@ -92,7 +92,7 @@ export default function MoePlayerSkillIconBar({
     >
       <div className="overflow-hidden rounded-[5px] border border-slate-300/85 bg-black shadow-[0_2px_10px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)]">
         <div
-          className={`cursor-grab touch-none bg-gradient-to-b px-2 py-0.5 active:cursor-grabbing ${headerGradient}`}
+          className={`cursor-grab touch-none bg-gradient-to-b px-1 py-px active:cursor-grabbing ${headerGradient}`}
           onPointerDown={onDragPointerDown}
           title="ドラッグで移動"
         >
@@ -122,7 +122,7 @@ export default function MoePlayerSkillIconBar({
             {row.map((slot, i) => {
               const onCooldown =
                 slot.cooldownSec !== null && slot.cooldownSec !== undefined;
-              const alwaysClickable = slot.slotKey === "condense_mind";
+              const alwaysClickable = slot.slotKey === "jiriki_seiran";
               const disabled =
                 (slot.disabled || onCooldown) && !alwaysClickable;
               const slotReorder =

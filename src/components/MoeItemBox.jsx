@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
+import { useMoeItemBoxLayout } from "@/hooks/useMoeItemBoxLayout";
+import {
+  MOE_ITEM_BOX_DEFAULT_COLS,
+  MOE_ITEM_BOX_SLOT_GAP_PX,
+  MOE_ITEM_BOX_SLOT_PX,
+  moeItemBoxCellCount,
+  moeItemBoxGridPx,
+  moeItemBoxRowsForCols,
+} from "@/lib/moeItemBoxLayout";
 import {
   loadMoeItemBoxSelectedIndex,
   loadMoeItemBoxSlots,
@@ -22,9 +31,7 @@ export { MOE_ITEM_BOX_COLS, MOE_ITEM_BOX_ROWS, MOE_ITEM_SLOT_COUNT };
 
 const STORAGE_KEY = "life-rpg-moe-item-box-pos";
 const GOLD_STORAGE_KEY = "life-rpg-moe-item-box-gold";
-const SLOT_PX = 32;
 const CAP_W = 5;
-const SLOT_GAP_PX = 2;
 
 /** MOE 本家 skin1.ini / skin1.bmp 準拠（黄みの強いゴールド） */
 export const MOE_UI_GOLD = {
@@ -45,14 +52,10 @@ export const MOE_UI_GOLD = {
   textOnGold: "#fffef5",
 };
 
-function defaultPos() {
-  const gridW =
-    CAP_W * 2 +
-    MOE_ITEM_BOX_COLS * SLOT_PX +
-    (MOE_ITEM_BOX_COLS - 1) * SLOT_GAP_PX +
-    16;
-  const gridH =
-    MOE_ITEM_BOX_ROWS * SLOT_PX + (MOE_ITEM_BOX_ROWS - 1) * SLOT_GAP_PX + 8;
+function defaultPos(cols = MOE_ITEM_BOX_DEFAULT_COLS) {
+  const { width: gridInnerW, height: gridInnerH } = moeItemBoxGridPx(cols);
+  const gridW = CAP_W * 2 + gridInnerW + 16;
+  const gridH = gridInnerH + 8;
   const footerH = 34;
   const headerH = 22;
   const totalH = headerH + 1 + gridH + 1 + footerH;
@@ -136,7 +139,7 @@ function ItemSlotIcon({ item }) {
 }
 
 /**
- * MOE風アイテムボックス（5×4 · ドラッグ可）
+ * MOE風アイテムボックス（20枠 · 右下で列数変更 · ドラッグ可）
  * @param {{
  *   onUse?: (slotIndex: number, item: object | null) => void,
  *   onTrash?: (slotIndex: number, item: object | null) => void,
@@ -149,6 +152,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
     STORAGE_KEY,
     getDefaultPos
   );
+  const { layout, onResizePointerDown } = useMoeItemBoxLayout();
 
   const [slots, setSlots] = useState(emptySlots);
   const [selectedIndex, setSelectedIndex] = useState(null);
@@ -245,7 +249,11 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
     setTrashConfirmOpen(false);
   }, [onToast, onTrash, selectedIndex, selectedItem, updateSlots]);
 
-  if (!pos) return null;
+  if (!pos || !layout) return null;
+
+  const gridCols = layout.cols;
+  const gridRows = moeItemBoxRowsForCols(gridCols);
+  const cellCount = moeItemBoxCellCount(gridCols);
 
   return (
     <div
@@ -258,7 +266,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
       style={{ left: pos.x, top: pos.y }}
     >
       <div
-        className="overflow-hidden rounded-[5px] bg-black"
+        className="relative overflow-hidden rounded-[5px] bg-black"
         style={{
           border: `1px solid ${MOE_UI_GOLD.frameEdge}`,
           boxShadow:
@@ -303,53 +311,65 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
           <div
             className="grid min-w-0 flex-1 px-0.5"
             style={{
-              gridTemplateColumns: `repeat(${MOE_ITEM_BOX_COLS}, ${SLOT_PX}px)`,
-              gap: SLOT_GAP_PX,
+              gridTemplateColumns: `repeat(${gridCols}, ${MOE_ITEM_BOX_SLOT_PX}px)`,
+              gap: MOE_ITEM_BOX_SLOT_GAP_PX,
             }}
             role="grid"
-            aria-label="アイテム 1〜20"
+            aria-label={`アイテム 1〜${MOE_ITEM_SLOT_COUNT}（${gridCols}×${gridRows}）`}
           >
-            {slots.map((item, i) => {
+            {Array.from({ length: cellCount }, (_, i) => {
+              const item = i < MOE_ITEM_SLOT_COUNT ? slots[i] ?? null : null;
               const filled = Boolean(item);
               const selected = selectedIndex === i;
+              const playable = i < MOE_ITEM_SLOT_COUNT;
               return (
                 <button
                   key={i}
                   type="button"
                   role="gridcell"
+                  disabled={!playable}
                   title={
-                    filled
-                      ? item.label ?? `アイテム ${i + 1}`
-                      : `空き ${i + 1}`
+                    !playable
+                      ? ""
+                      : filled
+                        ? item.label ?? `アイテム ${i + 1}`
+                        : `空き ${i + 1}`
                   }
                   onClick={() => {
+                    if (!playable) return;
                     setTrashConfirmOpen(false);
                     selectSlot(selectedIndex === i ? null : i);
                   }}
                   style={{
-                    width: SLOT_PX,
-                    height: SLOT_PX,
+                    width: MOE_ITEM_BOX_SLOT_PX,
+                    height: MOE_ITEM_BOX_SLOT_PX,
                     border: `1px solid ${selected ? MOE_UI_GOLD.frameBright : MOE_UI_GOLD.frameEdge}`,
                     boxShadow: selected
                       ? `0 0 0 1px ${MOE_UI_GOLD.slotSel}, inset 0 1px 0 rgba(255,236,180,0.22)`
                       : "inset 0 1px 0 rgba(255,236,180,0.1)",
                   }}
-                  className={`relative shrink-0 overflow-hidden rounded-[3px] transition active:scale-95 ${
-                    filled
-                      ? "bg-gradient-to-b from-[#4a4020] via-zinc-950 to-black text-[#fff8e7] shadow-[0_1px_3px_rgba(0,0,0,0.45)] hover:brightness-110"
-                      : "cursor-default bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-90"
+                  className={`relative shrink-0 overflow-hidden rounded-[3px] transition ${
+                    !playable
+                      ? "cursor-default bg-zinc-950/40 opacity-35"
+                      : filled
+                        ? "bg-gradient-to-b from-[#4a4020] via-zinc-950 to-black text-[#fff8e7] shadow-[0_1px_3px_rgba(0,0,0,0.45)] hover:brightness-110 active:scale-95"
+                        : "cursor-default bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-90 active:scale-95"
                   }`}
                 >
-                  <span
-                    className="pointer-events-none absolute left-0.5 top-0 text-[6px] font-bold tabular-nums leading-none"
-                    style={{
-                      color: filled ? MOE_UI_GOLD.frameHi : `${MOE_UI_GOLD.frame}99`,
-                    }}
-                  >
-                    {i + 1}
-                  </span>
+                  {playable ? (
+                    <span
+                      className="pointer-events-none absolute left-0.5 top-0 text-[6px] font-bold tabular-nums leading-none"
+                      style={{
+                        color: filled
+                          ? MOE_UI_GOLD.frameHi
+                          : `${MOE_UI_GOLD.frame}99`,
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                  ) : null}
                   <span className="pointer-events-none flex h-full w-full items-center justify-center leading-none">
-                    {filled ? <ItemSlotIcon item={item} /> : "·"}
+                    {filled ? <ItemSlotIcon item={item} /> : playable ? "·" : ""}
                   </span>
                 </button>
               );
@@ -417,6 +437,37 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
           >
             🗑
           </button>
+        </div>
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="アイテムボックスサイズ変更"
+          className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize touch-none items-end justify-end rounded-br-[5px] pb-0.5 pr-0.5"
+          onPointerDown={onResizePointerDown}
+          title="右下をドラッグで縦横サイズ変更（列数が変わります）"
+        >
+          <svg
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            className="pointer-events-none text-white/35"
+            aria-hidden
+          >
+            <path
+              d="M9 1v8H1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M9 5v4H5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
       </div>
 

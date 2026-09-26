@@ -13,6 +13,11 @@ import { auditMoeLocalStorage } from "@/lib/moe/moeStorageRegistry";
 import { printMoeSubsystemGuide, MOE_SUBSYSTEMS } from "@/lib/moe/moeSubsystemGuide";
 import { collectMoeFieldInvariantIssues } from "@/lib/moe/moeFieldInvariants";
 import { isMoeDevMode } from "@/lib/moe/moeDevAssert";
+import {
+  loadPlayerSkill2TalismanActive,
+  resolvePlayerSkill2ExpProcRate,
+  savePlayerSkill2TalismanActive,
+} from "@/lib/moePlayerSkill2Talisman";
 
 let latestSnapshot = null;
 let installed = false;
@@ -43,6 +48,15 @@ export function installMoeDevRegistry() {
     guide: printMoeSubsystemGuide,
     storage: auditMoeLocalStorage,
     fieldNonActive: listMoeEnemyFieldNonActiveKeys,
+    skill2Talisman: (on) => {
+      savePlayerSkill2TalismanActive(Boolean(on));
+      const active = loadPlayerSkill2TalismanActive();
+      const rate = resolvePlayerSkill2ExpProcRate(active);
+      console.info(
+        `[MOE] スキルアップの御札: ${active ? "ON" : "OFF"} · 技②EXP率 ${Math.round(rate * 100)}%`
+      );
+      return { active, procRate: rate };
+    },
   };
 
   console.info(

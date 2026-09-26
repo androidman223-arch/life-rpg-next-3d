@@ -27,12 +27,14 @@ export function useMoeDraggablePos(storageKey, getDefaultPos) {
   const [pos, setPos] = useState(null);
   const canSaveRef = useRef(false);
   const sizeRef = useRef({ w: 130, h: 32 });
+  const getDefaultPosRef = useRef(getDefaultPos);
+  getDefaultPosRef.current = getDefaultPos;
 
   useEffect(() => {
     canSaveRef.current = false;
-    setPos(loadSavedPos(storageKey) ?? getDefaultPos());
+    setPos(loadSavedPos(storageKey) ?? getDefaultPosRef.current());
     canSaveRef.current = true;
-  }, [storageKey, getDefaultPos]);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!canSaveRef.current || pos == null) return;

@@ -2,13 +2,26 @@ const STORAGE_KEY = "life-rpg-moe-player-vitals";
 
 /** @typedef {{ hp: number, hpMax: number, stamina: number, staminaMax: number, mp: number, mpMax: number }} MoePlayerVitals */
 
+/** @param {MoePlayerVitals | null | undefined} a @param {MoePlayerVitals | null | undefined} b */
+export function moePlayerVitalsEqual(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.hp === b.hp &&
+    a.hpMax === b.hpMax &&
+    a.stamina === b.stamina &&
+    a.staminaMax === b.staminaMax &&
+    a.mp === b.mp &&
+    a.mpMax === b.mpMax
+  );
+}
+
 /** @param {number} level */
 export function moePlayerVitalsMaxForLevel(level) {
   const L = Math.max(1, Math.floor(Number(level) || 1));
   return {
-    hpMax: 80 + L * 12,
+    hpMax: 100 + (L - 1) * 12,
     staminaMax: 100,
-    mpMax: 28 + L * 6,
+    mpMax: 100 + (L - 1) * 6,
   };
 }
 
@@ -23,6 +36,13 @@ export function defaultMoePlayerVitals(level = 1) {
     mp: maxes.mpMax,
     mpMax: maxes.mpMax,
   };
+}
+
+/** フィールド再入場（リロード）時：MAXまで全回復 */
+export function fullHealMoePlayerVitals(level = 1) {
+  const vitals = defaultMoePlayerVitals(level);
+  saveMoePlayerVitals(vitals);
+  return vitals;
 }
 
 /** @param {number} level @returns {MoePlayerVitals} */

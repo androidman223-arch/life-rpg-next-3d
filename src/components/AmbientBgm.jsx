@@ -4,13 +4,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   isMoeFieldPath,
+  MOE_BGM_FADE_MS,
+  MOE_BGM_REST_STOP_MS,
   MOE_FIELD_BGM_EVENT,
-} from "@/lib/bgmControl";
+  MOE_FIELD_COMBAT_BGM,
+  MOE_FIELD_BGM_COMBAT_EVENT,
+  MOE_FIELD_BGM_REST_EVENT,
+  MOE_FIELD_BGM_ZONE_EVENT,
+  moeFieldBgmTrackForMapSlot,
+} from "@/lib/moeFieldBgm";
+import {
+  BGM_TRACK_STORAGE_KEY,
+  BGM_VOLUME_STORAGE_KEY,
+  DEFAULT_BGM_VOLUME,
+  MOE_AMBIENT_BGM_SELECT_OPTIONS,
+  MOE_AMBIENT_DEFAULT_LOCAL_TRACK_ID,
+  isMoeAmbientLocalTrackId,
+  isMoeAmbientValidTrackId,
+  moeAmbientBgmPathForTrackId,
+} from "@/lib/moeAmbientBgmTracks";
 
-const STORAGE_KEY = "life-rpg-bgm-track";
-const VOLUME_STORAGE_KEY = "life-rpg-bgm-volume-v5";
-/** 初期音量（未保存時のデフォルト） */
-const DEFAULT_BGM_VOLUME = 0.22;
+const STORAGE_KEY = BGM_TRACK_STORAGE_KEY;
+const VOLUME_STORAGE_KEY = BGM_VOLUME_STORAGE_KEY;
 
 function readInitialBgmVolume() {
   if (typeof window === "undefined") return DEFAULT_BGM_VOLUME;
@@ -31,76 +46,29 @@ function applyBgmVolume(audio, vol) {
   audio.volume = Math.max(0, Math.min(1, vol));
 }
 
-const BGM_DIR = "/assets/bgm";
+const LOCAL_ID = MOE_AMBIENT_DEFAULT_LOCAL_TRACK_ID;
+const SELECT_OPTIONS = MOE_AMBIENT_BGM_SELECT_OPTIONS;
+const pathForTrackId = moeAmbientBgmPathForTrackId;
+const isLocalTrackId = isMoeAmbientLocalTrackId;
+const isValidTrackId = isMoeAmbientValidTrackId;
 
-/** ローカル専用（.gitignore — public/assets/bgm/ambient-bgm*.mp3） */
-const LOCAL_TRACKS = [
-  {
-    id: "local",
-    label: "マイ BGM：ambient-bgm.mp3",
-    path: "/ambient-bgm.mp3",
-  },
-  ...Array.from({ length: 6 }, (_, i) => {
-    const n = i + 2;
-    return {
-      id: `local${n}`,
-      label: `マイ BGM ${n}：ambient-bgm-${n}.mp3`,
-      path: `${BGM_DIR}/ambient-bgm-${n}.mp3`,
-    };
-  }),
-  {
-    id: "eruan",
-    label: "エルアン：ambient-bgm-8eruan.mp3",
-    path: "/ambient-bgm-8eruan.mp3.mp3",
-  },
-];
-
-const LOCAL_ID = LOCAL_TRACKS[0].id;
-
-/** リポジトリ同梱（Kevin MacLeod / Incompetech・CC BY 4.0）— public/assets/bgm/bgm-royalty-free-LICENSE.txt */
-const ROYALTY_TRACKS = [
-  {
-    id: "carefree",
-    label: "フリー：bgm-royalty-free.mp3（のんびり・街・日常）",
-    path: `${BGM_DIR}/bgm-royalty-free.mp3`,
-  },
-  {
-    id: "castle",
-    label: "フリー：bgm-royalty-free-castle.mp3（城・宮殿・物語）",
-    path: `${BGM_DIR}/bgm-royalty-free-castle.mp3`,
-  },
-  {
-    id: "field",
-    label: "フリー：bgm-royalty-free-field.mp3（フィールド・散策）",
-    path: `${BGM_DIR}/bgm-royalty-free-field.mp3`,
-  },
-  {
-    id: "battle",
-    label: "フリー：bgm-royalty-free-battle.mp3（アクション・戦闘）",
-    path: `${BGM_DIR}/bgm-royalty-free-battle.mp3`,
-  },
-];
-
-const SELECT_OPTIONS = [...LOCAL_TRACKS, ...ROYALTY_TRACKS];
-
-function pathForTrackId(id) {
-  const local = LOCAL_TRACKS.find((t) => t.id === id);
-  if (local) return local.path;
-  return ROYALTY_TRACKS.find((t) => t.id === id)?.path ?? ROYALTY_TRACKS[0].path;
-}
-
-function isLocalTrackId(id) {
-  return LOCAL_TRACKS.some((t) => t.id === id);
-}
-
-function isValidTrackId(id) {
-  return isLocalTrackId(id) || ROYALTY_TRACKS.some((t) => t.id === id);
+function cancelFade(fadeRef) {
+  if (fadeRef.current != null) {
+    window.clearInterval(fadeRef.current);
+    fadeRef.current = null;
+  }
 }
 
 export default function AmbientBgm() {
   const pathname = usePathname();
   const audioRef = useRef(null);
   const volumeRef = useRef(DEFAULT_BGM_VOLUME);
+  const fadeRef = useRef(null);
+  const trackIdRef = useRef(LOCAL_ID);
+  const fieldAutoRef = useRef(false);
+  const fieldZoneSlotRef = useRef("bisk");
+  const fieldCombatRef = useRef(false);
+  const fieldRestRef = useRef(false);
   /** サーバーとクライアントの初回を揃える（localStorage はマウント後に読む） */
   const [trackId, setTrackId] = useState(LOCAL_ID);
   const [playing, setPlaying] = useState(false);
@@ -115,13 +83,113 @@ export default function AmbientBgm() {
 
   const activeSrc = useMemo(() => pathForTrackId(trackId), [trackId]);
 
+  const resolveFieldAutoTrackId = useCallback(() => {
+    if (fieldCombatRef.current) return MOE_FIELD_COMBAT_BGM;
+    return moeFieldBgmTrackForMapSlot(fieldZoneSlotRef.current);
+  }, []);
+
+  const fadeVolume = useCallback((audio, fromVol, toVol, durationMs, onDone) => {
+    cancelFade(fadeRef);
+    if (!audio) {
+      onDone?.();
+      return;
+    }
+    const steps = Math.max(8, Math.round(durationMs / 50));
+    const stepMs = durationMs / steps;
+    let step = 0;
+    fadeRef.current = window.setInterval(() => {
+      step += 1;
+      const t = Math.min(1, step / steps);
+      applyBgmVolume(audio, fromVol + (toVol - fromVol) * t);
+      if (t >= 1) {
+        cancelFade(fadeRef);
+        onDone?.();
+      }
+    }, stepMs);
+  }, []);
+
+  const swapTrack = useCallback(
+    (
+      nextId,
+      { fadeMs = 0, fadeOutMs = null, shouldPlay = true } = {}
+    ) => {
+      if (!isValidTrackId(nextId) || nextId === trackIdRef.current) return;
+      const audio = audioRef.current;
+      const targetVol = volumeRef.current;
+      const nextSrc = pathForTrackId(nextId);
+      const outMs = fadeOutMs ?? fadeMs;
+      const inMs = fadeOutMs != null ? 0 : fadeMs;
+
+      const applySwap = () => {
+        trackIdRef.current = nextId;
+        setTrackId(nextId);
+        setLoadError(false);
+        autoFallbackRef.current = false;
+        if (!audio) return;
+        audio.src = nextSrc;
+        audio.loop = true;
+        if (!shouldPlay) {
+          audio.pause();
+          return;
+        }
+        const startPlay = () => {
+          void audio
+            .play()
+            .then(() => {
+              setNeedsGesture(false);
+              setPlaying(true);
+              if (inMs <= 0) {
+                applyBgmVolume(audio, targetVol);
+              } else {
+                applyBgmVolume(audio, 0);
+                fadeVolume(audio, 0, targetVol, inMs);
+              }
+            })
+            .catch(() => {
+              setPlaying(false);
+              setNeedsGesture(true);
+            });
+        };
+        if (inMs <= 0) {
+          applyBgmVolume(audio, targetVol);
+          startPlay();
+          return;
+        }
+        applyBgmVolume(audio, 0);
+        startPlay();
+      };
+
+      if (!audio || !playing || outMs <= 0) {
+        applySwap();
+        return;
+      }
+
+      fadeVolume(audio, audio.volume, 0, outMs, applySwap);
+    },
+    [fadeVolume, playing]
+  );
+
+  const applyFieldAutoTrack = useCallback(
+    (shouldPlay = true, { fadeMs = 0, fadeOutMs = null } = {}) => {
+      if (!fieldAutoRef.current || fieldRestRef.current) return;
+      swapTrack(resolveFieldAutoTrackId(), { shouldPlay, fadeMs, fadeOutMs });
+    },
+    [resolveFieldAutoTrackId, swapTrack]
+  );
+
+  useEffect(() => {
+    trackIdRef.current = trackId;
+  }, [trackId]);
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved && isValidTrackId(saved)) {
         setTrackId(saved);
+        trackIdRef.current = saved;
       } else if (isMoeFieldPath(pathname)) {
         setTrackId("field");
+        trackIdRef.current = "field";
       }
       const initialVol = readInitialBgmVolume();
       volumeRef.current = initialVol;
@@ -158,38 +226,63 @@ export default function AmbientBgm() {
 
   const bindAudioRef = useCallback((node) => {
     audioRef.current = node;
+    if (node && !node.src) {
+      node.src = pathForTrackId(trackIdRef.current);
+      node.loop = true;
+    }
     applyBgmVolume(node, volumeRef.current);
   }, []);
 
   const handleAudioError = useCallback(() => {
     if (isLocalTrackId(trackId) && !autoFallbackRef.current) {
       autoFallbackRef.current = true;
-      setTrackId("field");
+      swapTrack("field");
       persistTrackSelection("field");
       return;
     }
     setLoadError(true);
-  }, [trackId, persistTrackSelection]);
+  }, [trackId, persistTrackSelection, swapTrack]);
 
-  const onChangeTrack = useCallback((id) => {
-    if (!isValidTrackId(id)) return;
-    setLoadError(false);
-    autoFallbackRef.current = false;
-    setTrackId(id);
-    persistTrackSelection(id);
-  }, [persistTrackSelection]);
+  const onChangeTrack = useCallback(
+    (id) => {
+      if (!isValidTrackId(id)) return;
+      persistTrackSelection(id);
+      if (!isMoeFieldPath(pathname)) {
+        trackIdRef.current = id;
+        setTrackId(id);
+        return;
+      }
+      fieldAutoRef.current = false;
+      swapTrack(id);
+    },
+    [pathname, persistTrackSelection, swapTrack]
+  );
 
   const toggle = useCallback(() => {
     if (loadError) return;
     setPlaying((p) => !p);
   }, [loadError]);
 
+  const pauseBgmImmediate = useCallback(() => {
+    cancelFade(fadeRef);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      applyBgmVolume(audio, 0);
+    }
+    setPlaying(false);
+  }, []);
+
   const startBgm = useCallback(() => {
-    if (loadError) return;
+    if (loadError || fieldRestRef.current) return;
     setNeedsGesture(false);
     setPlaying(true);
     const a = audioRef.current;
     if (!a) return;
+    if (!a.src) {
+      a.src = pathForTrackId(trackIdRef.current);
+      a.loop = true;
+    }
     applyBgmVolume(a, volumeRef.current);
     void a.play().catch(() => {
       setPlaying(false);
@@ -197,12 +290,38 @@ export default function AmbientBgm() {
     });
   }, [loadError]);
 
+  /** メニュー画面は無音（フィールド退出時に BGM を止める） */
+  const silenceMenuBgm = useCallback(() => {
+    fieldAutoRef.current = false;
+    fieldCombatRef.current = false;
+    fieldRestRef.current = false;
+    const audio = audioRef.current;
+    if (audio && playing && audio.volume > 0.001) {
+      fadeVolume(audio, audio.volume, 0, MOE_BGM_FADE_MS, () => {
+        audio.pause();
+        setPlaying(false);
+      });
+      return;
+    }
+    if (audio) audio.pause();
+    setPlaying(false);
+  }, [fadeVolume, playing]);
+
   useEffect(() => {
     const a = audioRef.current;
     if (!a || loadError) return;
-    applyBgmVolume(a, volumeRef.current);
     if (playing) {
-      void a.play()
+      if (fieldRestRef.current) {
+        a.pause();
+        return;
+      }
+      if (!a.src) {
+        a.src = pathForTrackId(trackIdRef.current);
+        a.loop = true;
+      }
+      applyBgmVolume(a, volumeRef.current);
+      void a
+        .play()
         .then(() => setNeedsGesture(false))
         .catch(() => {
           setPlaying(false);
@@ -211,48 +330,117 @@ export default function AmbientBgm() {
     } else {
       a.pause();
     }
-  }, [playing, loadError, activeSrc]);
+  }, [playing, loadError]);
 
-  /** MOEフィールド入室時のみ自動再生（メニューでは鳴らさない） */
+  /** メニュー＝保存曲／デフォルト、MOEフィールド＝面ごとの自動BGM */
   useEffect(() => {
     if (!audioMounted || loadError) return;
     if (isMoeFieldPath(pathname)) {
-      startBgm();
+      fieldAutoRef.current = true;
+      if (!fieldRestRef.current) {
+        fieldZoneSlotRef.current = "bisk";
+        fieldCombatRef.current = false;
+        applyFieldAutoTrack();
+        startBgm();
+      }
     } else {
-      setPlaying(false);
+      silenceMenuBgm();
       setNeedsGesture(false);
     }
-  }, [pathname, audioMounted, loadError, startBgm]);
+  }, [
+    pathname,
+    audioMounted,
+    loadError,
+    startBgm,
+    silenceMenuBgm,
+    applyFieldAutoTrack,
+  ]);
 
-  /** 「MOEのフィールドへ行く」クリック直後（ユーザー操作） */
+  /** 「MOEのフィールドへ行く」クリック直後 — 自動再生アンロック（曲切替は pathname） */
   useEffect(() => {
     const onMoeFieldStart = () => {
-      try {
-        const saved = window.localStorage.getItem(STORAGE_KEY);
-        if (!saved || !isValidTrackId(saved)) {
-          setTrackId("field");
-        }
-      } catch {
-        /* ignore */
-      }
-      startBgm();
+      if (!fieldRestRef.current) startBgm();
     };
     window.addEventListener(MOE_FIELD_BGM_EVENT, onMoeFieldStart);
     return () =>
       window.removeEventListener(MOE_FIELD_BGM_EVENT, onMoeFieldStart);
   }, [startBgm]);
 
-  const statusLine = isLocalTrackId(trackId)
-    ? `マイ曲：${pathForTrackId(trackId)}（無い場合はフィールド曲へ自動切替）`
-    : `フリー曲：${pathForTrackId(trackId)}`;
+  /** マップ面・戦闘 BGM */
+  useEffect(() => {
+    const onZone = (e) => {
+      const mapSlotId = e.detail?.mapSlotId ?? null;
+      if (!mapSlotId || mapSlotId === fieldZoneSlotRef.current) return;
+      fieldZoneSlotRef.current = mapSlotId;
+      if (!fieldAutoRef.current || fieldCombatRef.current || fieldRestRef.current)
+        return;
+      applyFieldAutoTrack(true, { fadeMs: 0 });
+    };
+    const onCombat = (e) => {
+      const active = Boolean(e.detail?.active);
+      if (active === fieldCombatRef.current) return;
+      fieldCombatRef.current = active;
+      if (!fieldAutoRef.current || fieldRestRef.current) return;
+      applyFieldAutoTrack(true, {
+        fadeMs: 0,
+        fadeOutMs: active ? 0 : MOE_BGM_FADE_MS,
+      });
+    };
+    const onRest = (e) => {
+      const active = Boolean(e.detail?.active);
+      if (active === fieldRestRef.current) return;
+      fieldRestRef.current = active;
+      if (active) {
+        if (MOE_BGM_REST_STOP_MS <= 0) {
+          pauseBgmImmediate();
+        } else {
+          const audio = audioRef.current;
+          cancelFade(fadeRef);
+          if (audio && playing) {
+            fadeVolume(audio, audio.volume, 0, MOE_BGM_REST_STOP_MS, () => {
+              audio.pause();
+              setPlaying(false);
+            });
+          } else {
+            pauseBgmImmediate();
+          }
+        }
+        return;
+      }
+      if (!fieldAutoRef.current) {
+        const audio = audioRef.current;
+        if (audio) {
+          applyBgmVolume(audio, volumeRef.current);
+          setPlaying(true);
+        }
+        return;
+      }
+      setPlaying(true);
+      applyFieldAutoTrack(true, { fadeMs: MOE_BGM_FADE_MS });
+    };
+    window.addEventListener(MOE_FIELD_BGM_ZONE_EVENT, onZone);
+    window.addEventListener(MOE_FIELD_BGM_COMBAT_EVENT, onCombat);
+    window.addEventListener(MOE_FIELD_BGM_REST_EVENT, onRest);
+    return () => {
+      window.removeEventListener(MOE_FIELD_BGM_ZONE_EVENT, onZone);
+      window.removeEventListener(MOE_FIELD_BGM_COMBAT_EVENT, onCombat);
+      window.removeEventListener(MOE_FIELD_BGM_REST_EVENT, onRest);
+    };
+  }, [applyFieldAutoTrack, fadeVolume, pauseBgmImmediate, playing]);
+
+  useEffect(() => () => cancelFade(fadeRef), []);
+
+  const statusLine = isMoeFieldPath(pathname)
+    ? isLocalTrackId(trackId)
+      ? `マイ曲：${pathForTrackId(trackId)}（無い場合はフィールド曲へ自動切替）`
+      : `フリー曲：${pathForTrackId(trackId)}`
+    : "メニューは無音 · フィールドで BGM が鳴ります";
 
   return (
     <>
       {audioMounted ? (
         <audio
-          key={activeSrc}
           ref={bindAudioRef}
-          src={activeSrc}
           loop
           preload="metadata"
           onError={handleAudioError}

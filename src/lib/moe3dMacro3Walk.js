@@ -29,6 +29,21 @@ function terrainRaycastTargets(terrainGroup) {
   if (!terrainGroup) return [];
   const cached = terrainGroup.userData?.moeTerrainRaycastMeshes;
   if (cached) return cached;
+  return moe3dRebuildTerrainRaycastCache(terrainGroup);
+}
+
+/** GLB 追加・予約タイル配置後に呼ぶ（キャッシュが古いと足元レイが空振りする） */
+export function moe3dInvalidateTerrainRaycastCache(terrainGroup) {
+  if (!terrainGroup?.userData) return;
+  delete terrainGroup.userData.moeTerrainRaycastMeshes;
+}
+
+/**
+ * @param {THREE.Object3D} terrainGroup
+ * @returns {THREE.Mesh[]}
+ */
+export function moe3dRebuildTerrainRaycastCache(terrainGroup) {
+  if (!terrainGroup) return [];
   const meshes = [];
   terrainGroup.traverse((obj) => {
     if (obj.isMesh) meshes.push(obj);
@@ -87,6 +102,65 @@ export function moe3dPickWalkableTerrainY(hits, currentFootY, maxClimb) {
   }
   if (bestY > -Infinity) return bestY;
   return currentFootY;
+}
+
+/**
+ * 室内 GLB 向け — 法線が上向きの面だけから足元を選ぶ（天井レイを除外）
+ * @param {{ point: { y: number }, normal?: { y: number } }[]} hits
+ * @param {number} [maxY]
+ */
+export function moe3dPickFloorTerrainY(hits, maxY = Infinity) {
+  if (!hits?.length) return null;
+  let bestY = -Infinity;
+  for (const hit of hits) {
+    const ny = hit.normal?.y ?? 0;
+    if (ny < 0.45) continue;
+    const y = hit.point.y;
+    if (y > maxY + 1e-3) continue;
+    if (y > bestY) bestY = y;
+  }
+  return bestY > -Infinity ? bestY : null;
+}
+
+/**
+ * 転送直後向け — 上階床を避けて最も低い床面を選ぶ
+ * @param {{ point: { y: number }, normal?: { y: number } }[]} hits
+ * @param {number} [minY]
+ * @param {number} [maxY]
+ */
+export function moe3dPickLowestFloorTerrainY(hits, minY = -Infinity, maxY = Infinity) {
+  if (!hits?.length) return null;
+  let bestY = Infinity;
+  for (const hit of hits) {
+    const ny = hit.normal?.y ?? 0;
+    if (ny < 0.45) continue;
+    const y = hit.point.y;
+    if (y < minY - 1e-3 || y > maxY + 1e-3) continue;
+    if (y < bestY) bestY = y;
+  }
+  return bestY < Infinity ? bestY : null;
+}
+
+/**
+ * @param {THREE.Raycaster} raycaster
+ * @param {THREE.Object3D} terrainGroup
+ * @param {number} x
+ * @param {number} z
+ * @param {{ maxY?: number, minY?: number, preferLowest?: boolean }} [opts]
+ */
+export function moe3dTerrainFloorGroundY(
+  raycaster,
+  terrainGroup,
+  x,
+  z,
+  opts = {}
+) {
+  const { maxY = Infinity, minY = -Infinity, preferLowest = false } = opts;
+  const hits = terrainHits(raycaster, terrainGroup, x, z);
+  if (preferLowest) {
+    return moe3dPickLowestFloorTerrainY(hits, minY, maxY);
+  }
+  return moe3dPickFloorTerrainY(hits, maxY);
 }
 
 /**

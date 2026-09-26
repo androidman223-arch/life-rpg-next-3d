@@ -225,7 +225,7 @@ export function activateAtrumPetSkill(skill, ctx) {
     }
     const seq = resolveMoeDuelSkillSequence("elemental_atrum", skill);
     if (seq) {
-      ctx.scheduleMoeDuelSkillHits(d.enemyId, seq);
+      ctx.scheduleMoeDuelSkillHits(d.enemyId, seq, skill.name ?? "禁断魔法");
       return {
         handled: true,
         skillToast: "禁断魔法のページ！",
@@ -242,7 +242,7 @@ export function activateAtrumPetSkill(skill, ctx) {
     }
     const seq = resolveMoeDuelSkillSequence("elemental_atrum", skill);
     if (seq) {
-      ctx.scheduleMoeDuelSkillHits(d.enemyId, seq);
+      ctx.scheduleMoeDuelSkillHits(d.enemyId, seq, skill.name ?? "アタック");
       return { handled: true, skillToast: "アタック！" };
     }
   }

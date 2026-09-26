@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import { getLifeRpgTrainingExpConfig } from "@/lib/lifeRpgTrainingExpBridge";
 
-const SCRIPT_SRC = "/training-exp-system/training-exp-system.js?v=6";
-const CSS_HREF = "/training-exp-system/training-exp-system.css?v=6";
+const SCRIPT_SRC = "/training-exp-system/training-exp-system.js?v=8";
+const CSS_HREF = "/training-exp-system/training-exp-system.css?v=12";
 
 let scriptLoadPromise = null;
 

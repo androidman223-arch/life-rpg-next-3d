@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import {
   buildMoeEnemyLiveDetectionSnapshot,
   buildMoeEnemyStatSearchView,
   formatMoeEnemyStealthNote,
   moeEnemyLiveHearingReach,
+  MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY,
 } from "@/lib/moeEnemyStatSearch";
 
 const WINDOW_W = 168;
@@ -32,20 +34,22 @@ export default function MoeEnemyStatSearchPanel({
   enemyFieldSyncRef,
   enemyDetectionOptsRef,
 }) {
-  const [pos, setPos] = useState({ x: 8, y: 120 });
   const [liveDetection, setLiveDetection] = useState(null);
   const [liveChaseAggro, setLiveChaseAggro] = useState(false);
   const [liveStealthNote, setLiveStealthNote] = useState(null);
   const [liveHearingReach, setLiveHearingReach] = useState(null);
-  const sizeRef = useRef({ w: WINDOW_W, h: 120 });
-  const view = buildMoeEnemyStatSearchView(enemy);
-
-  useEffect(() => {
-    setPos({
+  const getDefaultPos = useCallback(
+    () => ({
       x: Math.max(8, window.innerWidth - WINDOW_W - 12),
       y: 120,
-    });
-  }, []);
+    }),
+    []
+  );
+  const { pos, sizeRef, onDragPointerDown } = useMoeDraggablePos(
+    MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY,
+    getDefaultPos
+  );
+  const view = buildMoeEnemyStatSearchView(enemy);
 
   useEffect(() => {
     if (!open) return;
@@ -114,51 +118,10 @@ export default function MoeEnemyStatSearchPanel({
     enemyFacingYawRef,
     enemyChaseRuntimeRef,
     enemyDetectionOptsRef,
+    view?.detection,
   ]);
 
-  const clampPos = useCallback((x, y) => {
-    const { w, h } = sizeRef.current;
-    return {
-      x: Math.max(4, Math.min(window.innerWidth - w - 4, x)),
-      y: Math.max(4, Math.min(window.innerHeight - h - 4, y)),
-    };
-  }, []);
-
-  const onHeaderPointerDown = useCallback(
-    (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const drag = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        ox: pos.x,
-        oy: pos.y,
-      };
-      const onMove = (ev) => {
-        if (ev.pointerId !== drag.pointerId) return;
-        setPos(
-          clampPos(
-            drag.ox + ev.clientX - drag.startX,
-            drag.oy + ev.clientY - drag.startY
-          )
-        );
-      };
-      const onUp = (ev) => {
-        if (ev.pointerId !== drag.pointerId) return;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onUp);
-    },
-    [clampPos, pos]
-  );
-
-  if (!open || !view) return null;
+  if (!open || !view || pos == null) return null;
 
   const hpPct = Math.max(
     0,
@@ -181,7 +144,7 @@ export default function MoeEnemyStatSearchPanel({
       <div className="overflow-hidden rounded-[4px] border border-violet-300/80 bg-black shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
         <div
           className="flex cursor-grab touch-none items-center justify-between gap-1 bg-gradient-to-b from-violet-600 to-violet-900 px-1.5 py-0.5 active:cursor-grabbing"
-          onPointerDown={onHeaderPointerDown}
+          onPointerDown={onDragPointerDown}
         >
           <p className="min-w-0 truncate text-[9px] font-bold text-white">
             🔍 敵ステサーチ

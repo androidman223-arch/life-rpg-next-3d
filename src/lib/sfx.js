@@ -33,6 +33,19 @@ function getCtx() {
   return ctx;
 }
 
+/** @returns {AudioContext | null} */
+export function getSharedAudioContext() {
+  return getCtx();
+}
+
+/** ユーザー操作直後に await してから Web Audio を鳴らす */
+export async function resumeSharedAudioContext() {
+  const c = getCtx();
+  if (!c) return null;
+  if (c.state === "suspended") await c.resume();
+  return c;
+}
+
 function reducedMotion() {
   return typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;

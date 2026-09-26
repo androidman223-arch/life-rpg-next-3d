@@ -5,13 +5,11 @@ import {
   MOE_HATIIL_DESERT_MOUNTAINS,
   MOE_NEOUKU_MOUNTAIN_MOUNTAINS,
   MOE_NEOUKU_PLATEAU_MOUNTAINS,
-  MOE_SULFUR_MINE_MOUNTAINS,
 } from "./moe3dMacro3SimpleMountain.js";
 
 /** マクロ３ 簡易山ありの面 */
 export const MOE_MACRO3_MOUNTAIN_SLOT_IDS = new Set([
   "desert_preview",
-  "sulfur_mine",
   "hatiil_desert",
   "neoku_mountain",
   "neoku_plateau",
@@ -25,7 +23,7 @@ export const MOE_MACRO3_MOUNTAIN_SLOT_IDS = new Set([
  */
 export const MOE_MACRO3_MOUNTAIN_SPECS_BY_SLOT = {
   desert_preview: MOE_DESERT_PREVIEW_MOUNTAINS,
-  sulfur_mine: MOE_SULFUR_MINE_MOUNTAINS,
+  sulfur_mine: [],
   hatiil_desert: MOE_HATIIL_DESERT_MOUNTAINS,
   neoku_mountain: MOE_NEOUKU_MOUNTAIN_MOUNTAINS,
   neoku_plateau: MOE_NEOUKU_PLATEAU_MOUNTAINS,

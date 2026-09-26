@@ -8,8 +8,17 @@ import {
   moeFieldPetDamageFromLevel,
   moeWikiFromAreaGuideRow,
 } from "@/data/moeMonsterFieldRegistry";
+import {
+  MOE_ELAN_PALACE_MAZE_REF_TILE_D,
+  MOE_ELAN_PALACE_MAZE_REF_TILE_W,
+  sulfurMineMazeSpawnNorm,
+  sulfurMineMazeSpawnPlan,
+} from "@/lib/moe3dSulfurMineMazeLayout";
 
 export const MOE_SULFUR_MINE_FIELD_ENABLED = true;
+
+const REF_TW = MOE_ELAN_PALACE_MAZE_REF_TILE_W;
+const REF_TD = MOE_ELAN_PALACE_MAZE_REF_TILE_D;
 
 /**
  * @param {object} spec
@@ -98,57 +107,23 @@ export const MOE_SULFUR_MINE_PLANNED_REGISTRY = [
   }),
 ];
 
-/** スルト鉱山タイル内湧き（tx/tz · 0..1 · 丘中心 0.5+x, 0.5+z に合わせる） */
-export const MOE_SULFUR_MINE_SPAWN_SPECS = [
-  {
+/** スルト鉱山 — 火竜神殿迷路区画に沿った湧き */
+export const MOE_SULFUR_MINE_SPAWN_SPECS = sulfurMineMazeSpawnPlan(
+  REF_TW,
+  REF_TD
+).map((entry) => {
+  const { tx, tz } = sulfurMineMazeSpawnNorm(entry, REF_TW, REF_TD);
+  const variant = entry.variant ?? "a";
+  const modelVariantId = `${entry.key}_${variant}`;
+  return {
     mapSlotId: "sulfur_mine",
-    key: "elan_knight_white",
-    tx: 0.26,
-    tz: 0.55,
-    modelVariantId: "elan_knight_white_a",
-    slotInZone: 0,
-  },
-  {
-    mapSlotId: "sulfur_mine",
-    key: "elan_knight_black",
-    tx: 0.74,
-    tz: 0.45,
-    modelVariantId: "elan_knight_black_a",
-    slotInZone: 0,
-  },
-  {
-    mapSlotId: "sulfur_mine",
-    key: "salamander",
-    tx: 0.5,
-    tz: 0.82,
-    modelVariantId: "salamander_a",
-    slotInZone: 0,
-  },
-  {
-    mapSlotId: "sulfur_mine",
-    key: "elan_knight_white",
-    tx: 0.22,
-    tz: 0.5,
-    modelVariantId: "elan_knight_white_b",
-    slotInZone: 1,
-  },
-  {
-    mapSlotId: "sulfur_mine",
-    key: "elan_knight_black",
-    tx: 0.78,
-    tz: 0.4,
-    modelVariantId: "elan_knight_black_b",
-    slotInZone: 1,
-  },
-  {
-    mapSlotId: "sulfur_mine",
-    key: "salamander",
-    tx: 0.56,
-    tz: 0.78,
-    modelVariantId: "salamander_b",
-    slotInZone: 1,
-  },
-];
+    key: entry.key,
+    tx,
+    tz,
+    modelVariantId,
+    slotInZone: entry.slotInZone ?? 0,
+  };
+});
 
 export function moeSulfurMineActiveFieldEntries() {
   if (!MOE_SULFUR_MINE_FIELD_ENABLED) return [];

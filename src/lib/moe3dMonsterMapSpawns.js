@@ -2,18 +2,36 @@ import {
   moe3dMapSlotById,
   moe3dTileIndexWorldRect,
 } from "@/lib/moe3dWorldLayout";
-import { moe3dDesertPreviewTileIndex } from "@/lib/moe3dDesertPreviewTile";
 import {
   MOE_3D_LEGACY_TILES_X,
   MOE_3D_LEGACY_TILES_Z,
-} from "@/lib/moeField3DModels";
+  moe3dDesertPreviewTileIndex,
+} from "@/lib/moe3dLayoutConstants";
 import { moeMonsterFieldBase } from "@/data/moeMonsterFieldRegistry";
 import { moeHatiilDesertActiveSpawnSpecs } from "@/data/maps/moeHatiilDesertPlanned";
 import { moeAlbeezForestActiveSpawnSpecs } from "@/data/maps/moeAlbeezForestPlanned";
 import { moeElanPalaceActiveSpawnSpecs } from "@/data/maps/moeElanPalacePlanned";
 import { moeNeokuMountainActiveSpawnSpecs } from "@/data/maps/moeNeokuMountainPlanned";
+import { moeNeokuPlateauActiveSpawnSpecs } from "@/data/maps/moeNeokuPlateauPlanned";
+import { moeDarinMountainActiveSpawnSpecs } from "@/data/maps/moeDarinMountainPlanned";
+import { moeEisisCaveActiveSpawnSpecs } from "@/data/maps/moeEisisCavePlanned";
+import { moeElvinKeikokuActiveSpawnSpecs } from "@/data/maps/moeElvinKeikokuPlanned";
+import { moeElvinMountainsActiveSpawnSpecs } from "@/data/maps/moeElvinMountainsPlanned";
+import { moeDragonValleyActiveSpawnSpecs } from "@/data/maps/moeDragonValleyPlanned";
+import { moeMutumCatacombActiveSpawnSpecs } from "@/data/maps/moeMutumCatacombPlanned";
 import { moeSulfurMineActiveSpawnSpecs } from "@/data/maps/moeSulfurMinePlanned";
+import { moeBiskActiveSpawnSpecs } from "@/data/maps/moeBiskPlanned";
+import { moeYugCoastActiveSpawnSpecs } from "@/data/maps/moeYugCoastPlanned";
+import { moeSolesValleyActiveSpawnSpecs } from "@/data/maps/moeSolesValleyPlanned";
+import { moeGeoAbyssActiveSpawnSpecs } from "@/data/maps/moeGeoAbyssPlanned";
+import { moeMitoyaActiveSpawnSpecs } from "@/data/maps/moeMitoyaGreatTreePlanned";
 import { MOE_MACRO1_PHASE3_SPAWN_SPECS } from "@/data/moeMacro1Phase3Spawns";
+import { moe3dClearSpawnFromAltarPlayer } from "@/lib/moe3dAltarWarp";
+import {
+  MOE_ELVIN_KEIKOKU_MAP_SLOT_ID,
+  moe3dElvinKeikokuSummitSpawnNorm,
+  moe3dElvinKeikokuTyrantSpawnWorld,
+} from "@/lib/moe3dElvinValleyGlb";
 import {
   macro2L3PlayerClearDist,
   macro2L3RespawnMargin,
@@ -23,6 +41,23 @@ import {
 
 function moe3dYawFaceTargetLite(fromX, fromZ, toX, toZ) {
   return Math.atan2(toX - fromX, toZ - fromZ);
+}
+
+/**
+ * @param {{ mapSlotId: string, key: string, tx: number, tz: number }} spec
+ * @param {number} tileW
+ * @param {number} tileD
+ */
+function moe3dResolvedSpawnNorm(spec, tileW, tileD) {
+  if (
+    spec.mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID &&
+    spec.key === "tyrant_gryphon" &&
+    tileW &&
+    tileD
+  ) {
+    return moe3dElvinKeikokuSummitSpawnNorm(tileW, tileD);
+  }
+  return { tx: spec.tx, tz: spec.tz };
 }
 
 /** glb 正面軸補正（索敵扇用 · moeField3DModels と同期） */
@@ -130,6 +165,42 @@ export const MOE_MONSTER_FIELD_SPAWN_SPECS = [
   // ネオク山 — ネオクオルヴァン·ノッカー
   ...moeNeokuMountainActiveSpawnSpecs(),
 
+  // ネオク高原
+  ...moeNeokuPlateauActiveSpawnSpecs(),
+
+  // ダーイン山
+  ...moeDarinMountainActiveSpawnSpecs(),
+
+  // エイシス・ケイブ
+  ...moeEisisCaveActiveSpawnSpecs(),
+
+  // 新エルビン渓谷（GLB）
+  ...moeElvinKeikokuActiveSpawnSpecs(),
+
+  // エルビン山脈
+  ...moeElvinMountainsActiveSpawnSpecs(),
+
+  // 飛竜の谷
+  ...moeDragonValleyActiveSpawnSpecs(),
+
+  // ムトゥーム地下墓地
+  ...moeMutumCatacombActiveSpawnSpecs(),
+
+  // 城下町ビスク — イクシオン ウォーター
+  ...moeBiskActiveSpawnSpecs(),
+
+  // AGE · ユグ海岸 — 海ヘビ
+  ...moeYugCoastActiveSpawnSpecs(),
+
+  // AGE · ソレス渓谷 — レスクール ハウンド
+  ...moeSolesValleyActiveSpawnSpecs(),
+
+  // AGE · ゲオ深淵3面 — サラマンダー stub
+  ...moeGeoAbyssActiveSpawnSpecs(),
+
+  // AGE · ミトヤの大樹 — トレント stub
+  ...moeMitoyaActiveSpawnSpecs(),
+
   // マクロ１ · 第3フェーズ · 1サイクル目（war_age 除外14面）
   ...MOE_MACRO1_PHASE3_SPAWN_SPECS,
 ];
@@ -157,18 +228,40 @@ export function moe3dMonsterFieldSpawnPoints(tileW, tileD) {
   /** @type {{ key: string, mapSlotId: string, modelVariantId?: string, slotInZone: number, x: number, y: number }[]} */
   const out = [];
   for (const spec of MOE_MONSTER_FIELD_SPAWN_SPECS) {
+    if (
+      spec.mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID &&
+      spec.key === "tyrant_gryphon"
+    ) {
+      const pos = moe3dElvinKeikokuTyrantSpawnWorld();
+      out.push({
+        key: spec.key,
+        mapSlotId: spec.mapSlotId,
+        modelVariantId: spec.modelVariantId,
+        slotInZone: spec.slotInZone ?? 0,
+        x: pos.x,
+        y: pos.y,
+        groundY: pos.groundY,
+      });
+      continue;
+    }
     const rect = moe3dMapSlotWorldRect(spec.mapSlotId, tileW, tileD);
     if (!rect) continue;
     const w = rect.maxX - rect.minX;
     const d = rect.maxZ - rect.minZ;
-    const tuned = macro2L3TunedSpawnCoords(spec.tx, spec.tz, spec.mapSlotId);
+    const norm = moe3dResolvedSpawnNorm(spec, tileW, tileD);
+    const tuned = macro2L3TunedSpawnCoords(norm.tx, norm.tz, spec.mapSlotId);
+    const cleared = moe3dClearSpawnFromAltarPlayer(
+      tuned.tx,
+      tuned.tz,
+      spec.mapSlotId
+    );
     out.push({
       key: spec.key,
       mapSlotId: spec.mapSlotId,
       modelVariantId: spec.modelVariantId,
       slotInZone: spec.slotInZone ?? 0,
-      x: rect.minX + w * tuned.tx,
-      y: rect.minZ + d * tuned.tz,
+      x: rect.minX + w * cleared.tx,
+      y: rect.minZ + d * cleared.tz,
     });
   }
   return out;
@@ -280,18 +373,49 @@ export function moe3dIsMapSlotFieldEnemy(en) {
   return Boolean(area && moe3dMonsterFieldMapSlotIds().includes(area));
 }
 
-/** @param {string} mapSlotId @param {string} key @param {number} [slotInZone=0] */
-export function moe3dMonsterFieldSpawnWorld(mapSlotId, key, slotInZone, tileW, tileD) {
-  const spec = moe3dMonsterFieldSpawnSpec(mapSlotId, key, slotInZone);
-  if (!spec) return null;
+/**
+ * マップ面内の正規化座標 → ワールド xy
+ * @param {string} mapSlotId
+ * @param {number} tx
+ * @param {number} tz
+ */
+export function moe3dMapSlotNormSpawnPosition(mapSlotId, tx, tz, tileW, tileD) {
   const rect = moe3dMapSlotWorldRect(mapSlotId, tileW, tileD);
   if (!rect) return null;
   const w = rect.maxX - rect.minX;
   const d = rect.maxZ - rect.minZ;
-  const tuned = macro2L3TunedSpawnCoords(spec.tx, spec.tz, mapSlotId);
+  const tuned = macro2L3TunedSpawnCoords(tx, tz, mapSlotId);
+  const cleared = moe3dClearSpawnFromAltarPlayer(tuned.tx, tuned.tz, mapSlotId);
   return {
-    x: rect.minX + w * tuned.tx,
-    y: rect.minZ + d * tuned.tz,
+    x: rect.minX + w * cleared.tx,
+    y: rect.minZ + d * cleared.tz,
+  };
+}
+
+/** @param {string} mapSlotId @param {string} key @param {number} [slotInZone=0] */
+export function moe3dMonsterFieldSpawnWorld(mapSlotId, key, slotInZone, tileW, tileD) {
+  const spec = moe3dMonsterFieldSpawnSpec(mapSlotId, key, slotInZone);
+  if (!spec) return null;
+  if (
+    mapSlotId === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID &&
+    key === "tyrant_gryphon"
+  ) {
+    return moe3dElvinKeikokuTyrantSpawnWorld();
+  }
+  const rect = moe3dMapSlotWorldRect(mapSlotId, tileW, tileD);
+  if (!rect) return null;
+  const w = rect.maxX - rect.minX;
+  const d = rect.maxZ - rect.minZ;
+  const norm = moe3dResolvedSpawnNorm(spec, tileW, tileD);
+  const tuned = macro2L3TunedSpawnCoords(norm.tx, norm.tz, mapSlotId);
+  const cleared = moe3dClearSpawnFromAltarPlayer(
+    tuned.tx,
+    tuned.tz,
+    mapSlotId
+  );
+  return {
+    x: rect.minX + w * cleared.tx,
+    y: rect.minZ + d * cleared.tz,
   };
 }
 

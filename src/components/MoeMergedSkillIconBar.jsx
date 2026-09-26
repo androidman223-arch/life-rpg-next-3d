@@ -118,7 +118,7 @@ export default function MoeMergedSkillIconBar({
     >
       <div className="overflow-hidden rounded-[5px] border border-slate-300/85 bg-black shadow-[0_2px_10px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)]">
         <div
-          className={`cursor-grab touch-none bg-gradient-to-b px-2 py-0.5 active:cursor-grabbing ${headerGradient}`}
+          className={`cursor-grab touch-none bg-gradient-to-b px-1 py-px active:cursor-grabbing ${headerGradient}`}
           onPointerDown={onDragPointerDown}
           title="ドラッグで移動"
         >
@@ -158,7 +158,7 @@ export default function MoeMergedSkillIconBar({
               ? playerRow.map((slot, i) => {
                   const onCooldown =
                     slot.cooldownSec !== null && slot.cooldownSec !== undefined;
-                  const alwaysClickable = slot.slotKey === "condense_mind";
+                  const alwaysClickable = slot.slotKey === "jiriki_seiran";
                   const disabled =
                     (slot.disabled || onCooldown) && !alwaysClickable;
                   const slotReorder =
@@ -214,6 +214,15 @@ export default function MoeMergedSkillIconBar({
                             {slot.cooldownSec}
                           </span>
                         )}
+                        {!onCooldown && slot.subLabel ? (
+                          <span
+                            className={`pointer-events-none absolute inset-x-0 bottom-0 bg-black/35 text-center text-[5px] font-bold tabular-nums leading-none ${
+                              slot.unusable ? "text-zinc-400" : "text-fuchsia-100/90"
+                            }`}
+                          >
+                            {slot.subLabel}
+                          </span>
+                        ) : null}
                       </button>
                     </MoeCompactSkillTip>
                   );
@@ -257,6 +266,13 @@ export default function MoeMergedSkillIconBar({
                         <span className="pointer-events-none flex h-full w-full items-center justify-center text-[17px] leading-none">
                           {filled ? icon : "·"}
                         </span>
+                        {usable && skill?.skillSubInfo ? (
+                          <span
+                            className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/35 text-center text-[5px] font-bold leading-none text-amber-100/90"
+                          >
+                            {skill.skillSubInfo}
+                          </span>
+                        ) : null}
                       </button>
                     </MoeCompactSkillTip>
                   );

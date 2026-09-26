@@ -2,10 +2,12 @@
  * MOE プレイヤー隠密 — 忍び足・隠れ蓑（索敵第3段）
  */
 
+import { moeStealthVisualAvoidRate } from "./moePlayerSkillSuccessRate.js";
+
 /** 忍び足 — 足音は感知されない（聴覚索敵オフ） */
 export const MOE_SHINOBIASHI_SOUND_MULT = 0;
 
-export const MOE_KAKUREMINO_DURATION_SEC = 5;
+export const MOE_KAKUREMINO_DURATION_SEC = 7;
 export const MOE_KAKUREMINO_COOLDOWN_SEC = 12;
 export const MOE_KAKUREMINO_PLAYER_OPACITY = 0.32;
 
@@ -78,18 +80,29 @@ export function activateMoeKakuremino(nowMs = performance.now()) {
  *   playerMoving?: boolean,
  *   shinobiashiOn?: boolean,
  *   kakureminoUntilMs?: number,
+ *   stealthProficiency?: number,
+ *   stealthRequiredLevel?: number,
  *   nowMs?: number,
  * }} p
  */
 export function buildMoeEnemyDetectionOpts(p) {
   const nowMs = p.nowMs ?? performance.now();
   const stealthFull = isMoeKakureminoActive(p.kakureminoUntilMs ?? 0, nowMs);
+  const shinobiashiOn = Boolean(p.shinobiashiOn) && !stealthFull;
+  const stealthVisualAvoidPct = shinobiashiOn
+    ? moeStealthVisualAvoidRate(
+        p.stealthProficiency ?? 0,
+        p.stealthRequiredLevel ?? 10
+      )
+    : 0;
   return {
     playerMoving: Boolean(p.playerMoving),
     stealthFull,
+    shinobiashiOn,
+    stealthVisualAvoidPct,
     soundMult: stealthFull
       ? 0
-      : p.shinobiashiOn
+      : shinobiashiOn
         ? MOE_SHINOBIASHI_SOUND_MULT
         : 1,
   };

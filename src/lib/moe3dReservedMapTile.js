@@ -10,13 +10,24 @@ import { appendMoe3dMacro2L3SpawnPads } from "@/lib/moe3dMacro2L3Spawns";
 import { resetMoe3dMacro3L4Fx } from "@/lib/moe3dMacro3L4Fx";
 import { MOE_MONSTER_FIELD_SPAWN_SPECS } from "@/lib/moe3dMonsterMapSpawns";
 import { MOE_TERRAIN_BUFFER_PATHS_ENABLED } from "@/lib/moe3dTerrainFeatures";
+import {
+  appendElanPalaceMazeMeshes,
+  resetElanPalaceMazeFx,
+} from "@/lib/moe3dElanPalaceMaze";
+import {
+  appendSulfurMineMazeMeshes,
+  resetSulfurMineMazeFx,
+} from "@/lib/moe3dSulfurMineMaze";
+import { moe3dInvalidateTerrainRaycastCache } from "@/lib/moe3dMacro3Walk";
+import { MOE_ELVIN_KEIKOKU_MAP_SLOT_ID } from "@/lib/moe3dElvinValleyGlb";
+import { MOE_SULFUR_KAZAN_MAP_SLOT_ID } from "@/lib/moe3dSulfurKazanTemple";
 
 const SLOT_VISUALS = {
   bisk: {
     ground: 0x94a3b8,
     accent: 0x64748b,
     rim: 0xcbd5e1,
-    subtitle: "未実装 · 予約",
+    subtitle: "マクロ１ · イクシオン ウォーター",
   },
   meerim_coast: {
     ground: 0xd4b896,
@@ -34,19 +45,19 @@ const SLOT_VISUALS = {
     ground: 0x78716c,
     accent: 0x44403c,
     rim: 0xa8a29e,
-    subtitle: "未実装 · 予約",
+    subtitle: "マクロ１+L3 · サスール·ソイル·ウルフ",
   },
   sulfur_mine: {
-    ground: 0x57534e,
-    accent: 0xeab308,
-    rim: 0xfde047,
-    subtitle: "マクロ３+L3 · 白骨·黒骨·サラマンダー",
+    ground: 0x2a1810,
+    accent: 0xb91c1c,
+    rim: 0xfca5a5,
+    subtitle: "マクロ１+L3 · 火竜神殿迷路",
   },
   darin_mountain: {
     ground: 0x57534e,
     accent: 0x292524,
     rim: 0xa3a3a3,
-    subtitle: "L6〜L8 主峰",
+    subtitle: "マクロ１+L3 · ラット·オーク",
   },
   lexur_hills: {
     ground: 0xc4b5fd,
@@ -88,7 +99,7 @@ const SLOT_VISUALS = {
     ground: 0x7dd3fc,
     accent: 0x0369a1,
     rim: 0xbae6fd,
-    subtitle: "将来 · 予約",
+    subtitle: "マクロ１+L3 · ラット·イクシオン·蜘蛛",
   },
   hatiil_desert: {
     ground: 0xd4a574,
@@ -112,13 +123,25 @@ const SLOT_VISUALS = {
     ground: 0xfb923c,
     accent: 0xc2410c,
     rim: 0xfed7aa,
-    subtitle: "アルター転送 · 公式湧き未配置",
+    subtitle: "マクロ１+L3 · ヤングオルヴァン·ノッカー",
+  },
+  dragon_valley: {
+    ground: 0x6d28d9,
+    accent: 0x4c1d95,
+    rim: 0xc4b5fd,
+    subtitle: "マクロ１+L2 · ワイルドオルヴァン·スカイドラゴン",
   },
   elan_palace: {
-    ground: 0xfcd34d,
-    accent: 0xa16207,
-    rim: 0xfef08a,
+    ground: 0xe8e4dc,
+    accent: 0xd8d4cc,
+    rim: 0xf0ece4,
     subtitle: "マクロ１+L3 · 白骨·黒骨",
+  },
+  mutum_catacomb: {
+    ground: 0x44403c,
+    accent: 0x292524,
+    rim: 0x78716c,
+    subtitle: "マクロ１+L3 · ゾンビ·レイス·ロッソ",
   },
   war_age: {
     ground: 0xef4444,
@@ -131,6 +154,18 @@ const SLOT_VISUALS = {
     accent: 0x4d7c0f,
     rim: 0xd9f99d,
     subtitle: "アルター転送 · ワープ pad",
+  },
+  sulfur_kazan_temple: {
+    ground: 0x2a1810,
+    accent: 0xdc2626,
+    rim: 0xfca5a5,
+    subtitle: "新マップ · 火竜神殿 GLB",
+  },
+  elvin_keikoku: {
+    ground: 0x4ade80,
+    accent: 0x166534,
+    rim: 0x86efac,
+    subtitle: "新マップ · 渓谷 GLB",
   },
 };
 
@@ -145,7 +180,13 @@ export function buildMoe3dReservedMapTile(tileW, tileD, slot) {
   root.name = `reserved-map-${slot.id}`;
 
   const vis = SLOT_VISUALS[slot.id] ?? SLOT_VISUALS.mainland_connector;
-  const isFuture = (slot.buildPhase ?? 1) >= 3;
+  const hasPlayableGeometry =
+    slot.id === "elan_palace" ||
+    slot.id === "sulfur_mine" ||
+    slot.id === MOE_SULFUR_KAZAN_MAP_SLOT_ID ||
+    slot.id === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID;
+  const isFuture =
+    !hasPlayableGeometry && (slot.buildPhase ?? 1) >= 3;
 
   const groundMat = new THREE.MeshStandardMaterial({
     color: vis.ground,
@@ -169,7 +210,13 @@ export function buildMoe3dReservedMapTile(tileW, tileD, slot) {
   base.receiveShadow = true;
   root.add(base);
 
-  if (slot.id !== "mainland_connector") {
+  if (
+    slot.id !== "mainland_connector" &&
+    slot.id !== "elan_palace" &&
+    slot.id !== "sulfur_mine" &&
+    slot.id !== MOE_SULFUR_KAZAN_MAP_SLOT_ID &&
+    slot.id !== MOE_ELVIN_KEIKOKU_MAP_SLOT_ID
+  ) {
     const pad = new THREE.Mesh(
       new THREE.BoxGeometry(tileW * 0.72, 0.06, tileD * 0.52),
       accentMat
@@ -189,11 +236,14 @@ export function buildMoe3dReservedMapTile(tileW, tileD, slot) {
 
   const kanbanTitle = slot.nameJa ?? slot.shortLabel ?? slot.id;
   const kanbanSub =
-    slot.id === "mainland_connector"
-      ? "試作 ↔ ビスク"
-      : slot.warpOnly
-        ? "アルター転送"
-        : vis.subtitle;
+    slot.id === MOE_SULFUR_KAZAN_MAP_SLOT_ID ||
+    slot.id === MOE_ELVIN_KEIKOKU_MAP_SLOT_ID
+      ? "【新マップ】"
+      : slot.id === "mainland_connector"
+        ? "試作 ↔ ビスク"
+        : slot.warpOnly
+          ? "アルター転送"
+          : vis.subtitle;
   const sign = buildMoe3dKanbanSign(kanbanTitle, kanbanSub, {
     scale: Math.min(1.05, tileW / 48),
     boardW: Math.min(tileW * 0.42, 3.1),
@@ -213,6 +263,13 @@ export function buildMoe3dReservedMapTile(tileW, tileD, slot) {
   );
   rim.position.y = 0.03;
   root.add(rim);
+
+  if (slot.id === "elan_palace") {
+    appendElanPalaceMazeMeshes(root, tileW, tileD);
+  }
+  if (slot.id === "sulfur_mine") {
+    appendSulfurMineMazeMeshes(root, tileW, tileD);
+  }
 
   root.userData.reservedMap = {
     id: slot.id,
@@ -235,6 +292,8 @@ export function buildMoe3dReservedMapTile(tileW, tileD, slot) {
  */
 export function addMoe3dReservedMapTiles(terrainGroup, tileW, tileD, slots, onEach) {
   resetMoe3dMacro3L4Fx();
+  resetElanPalaceMazeFx();
+  resetSulfurMineMazeFx();
   for (const slot of slots) {
     const tile = buildMoe3dReservedMapTile(tileW, tileD, slot);
     moe3dApplyMapTileScale(tile);
@@ -253,4 +312,5 @@ export function addMoe3dReservedMapTiles(terrainGroup, tileW, tileD, slots, onEa
     terrainGroup.add(tile);
     onEach?.(tile, slot);
   }
+  moe3dInvalidateTerrainRaycastCache(terrainGroup);
 }

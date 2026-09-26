@@ -3,6 +3,7 @@
  * null はトーストのみ。倍率は可能な限り moePets のスキル行と揃える。
  */
 
+import { resolvePhoenixHabitAscensionSequence } from "../lib/moePhoenixHabitAscension.js";
 import { getSunSpirit16BeatComboParams } from "./moePets";
 
 /**
@@ -212,13 +213,16 @@ export function resolveMoeDuelSkillSequence(petId, skill) {
       return null;
     }
     if (skill.id === "phoenix_ultimate_sleep") {
-      return magHit(skill.combatMagicRatio ?? 0.95, false);
+      return null;
     }
     if (skill.id === "phoenix_life_burst") {
       return null;
     }
+    if (skill.id === "phoenix_habit_ascension") {
+      return resolvePhoenixHabitAscensionSequence(skill);
+    }
     if (skill.id === "phoenix_scorching_sky") {
-      return fixedDamageHits(1, skill.combatFixedDamage ?? 100, 0);
+      return null;
     }
     if (skill.id === "phoenix_purify_rebirth") {
       return fixedDamageHits(

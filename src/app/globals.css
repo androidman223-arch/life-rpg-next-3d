@@ -136,6 +136,22 @@ body {
   animation: moe-heal-popup-rise 2.4s ease-out forwards;
 }
 
+@keyframes moe-pet-sleep-zzz {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.moe-pet-sleep-zzz {
+  animation: moe-pet-sleep-zzz 1.6s ease-in-out infinite;
+}
+
 @keyframes moe-tenth-level-banner {
   0%,
   100% {
@@ -177,6 +193,38 @@ body {
 
 .moe-tenth-banner-rise {
   animation: moe-tenth-banner-rise 1s ease-out forwards;
+}
+
+/* 技② Lvアップ — 中央からこちらへ拡大 */
+@keyframes moe-skill2-level-up-zoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.28);
+    filter: blur(2px);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(0.92);
+    filter: blur(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+.moe-skill2-level-up-zoom {
+  animation: moe-skill2-level-up-zoom var(--moe-skill2-level-up-dur, 2.6s)
+    cubic-bezier(0.22, 0.85, 0.32, 1) forwards;
+  will-change: transform, opacity;
 }
 
 @keyframes moe-pet-celebrate-bounce {

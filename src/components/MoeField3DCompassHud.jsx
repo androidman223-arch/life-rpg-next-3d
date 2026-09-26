@@ -7,8 +7,8 @@ function formatMoe3dCoordAxis(value) {
   return n < 0 ? `-${Math.abs(n)}` : `${n}`;
 }
 
-function formatMoe3dCoordLabel(x, y) {
-  return `x${formatMoe3dCoordAxis(x)} y${formatMoe3dCoordAxis(y)}`;
+function formatMoe3dCoordLabel(x, y, groundZ) {
+  return `x${formatMoe3dCoordAxis(x)} y${formatMoe3dCoordAxis(y)} z${formatMoe3dCoordAxis(groundZ)}`;
 }
 
 /** 内部座標（+z＝南）→ HUD 表示（下＝−y） */
@@ -17,19 +17,25 @@ function moe3dHudDisplayY(worldY) {
 }
 
 /**
- * 3Dフィールド左上 HUD — コンパス（北＝赤針）· タップで xy 座標表示
- * @param {{ playerX: number, playerY: number, yaw: number }} props
+ * 3Dフィールド左上 HUD — コンパス（北＝赤針）· タップで xyz 座標表示
+ * @param {{ playerX: number, playerY: number, yaw: number, playerGroundYRef?: React.MutableRefObject<{ current: number } | null> }} props
  */
-export default function MoeField3DCompassHud({ playerX, playerY, yaw }) {
+export default function MoeField3DCompassHud({
+  playerX,
+  playerY,
+  yaw,
+  playerGroundYRef,
+}) {
   const toastTimerRef = useRef(null);
   const [coordLabel, setCoordLabel] = useState(null);
   const displayY = moe3dHudDisplayY(playerY);
 
   const showCoordLabel = useCallback(() => {
-    setCoordLabel(formatMoe3dCoordLabel(playerX, displayY));
+    const groundZ = playerGroundYRef?.current?.current ?? 0;
+    setCoordLabel(formatMoe3dCoordLabel(playerX, displayY, groundZ));
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setCoordLabel(null), 3200);
-  }, [playerX, displayY]);
+  }, [playerX, displayY, playerGroundYRef]);
 
   useEffect(
     () => () => {
@@ -49,8 +55,8 @@ export default function MoeField3DCompassHud({ playerX, playerY, yaw }) {
         type="button"
         onClick={showCoordLabel}
         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 bg-slate-900/90 shadow-inner transition hover:border-amber-300/50 hover:bg-slate-800/95 active:scale-95"
-        title="クリックで座標表示"
-        aria-label="コンパス — クリックで座標"
+        title="クリックで x y z 座標表示"
+        aria-label="コンパス — クリックで x y z 座標"
       >
         <svg
           viewBox="0 0 44 44"
@@ -119,14 +125,14 @@ export default function MoeField3DCompassHud({ playerX, playerY, yaw }) {
 
       {coordLabel ? (
         <p
-          className="max-w-[4.5rem] text-center text-[10px] font-bold tabular-nums leading-tight tracking-tight text-amber-200"
+          className="max-w-[7.5rem] text-center text-[10px] font-bold tabular-nums leading-tight tracking-tight text-amber-200"
           role="status"
         >
           {coordLabel}
         </p>
       ) : (
-        <p className="max-w-[4.5rem] text-center text-[7px] font-bold leading-tight text-white/40">
-          タップ＝座標
+        <p className="max-w-[7.5rem] text-center text-[7px] font-bold leading-tight text-white/40">
+          タップ＝xyz
         </p>
       )}
     </div>

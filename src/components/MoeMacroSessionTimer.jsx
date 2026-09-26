@@ -111,7 +111,7 @@ export default function MoeMacroSessionTimer({ onFinished }) {
           1秒ごとにカウントダウン · 0:00 で終了
         </p>
       ) : (
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-6 gap-1">
           {MOE_MACRO_TIMER_PRESET_MINUTES.map((m) => (
             <button
               key={m}

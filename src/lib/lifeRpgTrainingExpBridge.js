@@ -3,6 +3,14 @@
  * 公開時: public/training-exp-system/ と本ファイル・TrainingExpPanel を削除
  */
 import { addGameExp } from "@/lib/gameStatus";
+import { MOE_PHOENIX_SKILL_GET_CATALOG } from "@/data/moePhoenixSkillGetCatalog";
+import {
+  getMoePhoenixTrainingDefaultMemos,
+  MOE_PHOENIX_BUTTON_SUB_HINT,
+  MOE_PHOENIX_REFLECTION_PLACEHOLDER,
+  MOE_PHOENIX_REFLECTION_KINDS,
+} from "@/lib/moePhoenixTrainingMemos";
+import { loadPlayerExperienceTrack } from "@/lib/moePlayerExperience";
 
 const GAME_ID = "life_rpg_next_3d";
 
@@ -25,12 +33,8 @@ const MILESTONES = [
   },
 ];
 
-const DEFAULT_MEMOS = {
-  self: "",
-  blame: "",
-  task: "",
-  habit: "",
-};
+/** 鳳凰修行① — 知恵・整える（UIラベルは training-exp-system 側） */
+const DEFAULT_MEMOS = getMoePhoenixTrainingDefaultMemos();
 
 function formatDuration(sec) {
   const s = Math.max(0, Math.floor(sec));
@@ -68,7 +72,16 @@ export function getLifeRpgTrainingExpConfig(hooks = {}) {
       todo: `${GAME_ID}_training_todo_v1`,
     },
     milestones: MILESTONES,
+    phoenixSkillGetCatalog: MOE_PHOENIX_SKILL_GET_CATALOG,
+    getPhoenixPracticeLevel() {
+      return loadPlayerExperienceTrack("phoenix").level ?? 0;
+    },
     defaultMemos: DEFAULT_MEMOS,
+    phoenixUi: {
+      buttonSubHint: MOE_PHOENIX_BUTTON_SUB_HINT,
+      reflectionPlaceholder: MOE_PHOENIX_REFLECTION_PLACEHOLDER,
+      reflectionKinds: MOE_PHOENIX_REFLECTION_KINDS,
+    },
     formatDuration,
     hasCompanion() {
       return false;

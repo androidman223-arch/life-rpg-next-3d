@@ -3,6 +3,8 @@
  */
 
 import { MOE_AGE_MAP_SLOT_IDS } from "@/lib/moe3dMacro2AgeConstants";
+import { moe3dIsOnElvinKeikokuField } from "@/lib/moe3dElvinValleyGlb";
+import { moe3dIsOnSulfurKazanField } from "@/lib/moe3dSulfurKazanTemple";
 import { MOE_3D_WORLD_MAP_REGISTRY } from "@/lib/moe3dWorldLayout";
 import { moe3dClampToPlayBounds } from "@/lib/moeField3DModels";
 import { moe3dMapSlotWorldRect } from "@/lib/moe3dMonsterMapSpawns";
@@ -58,6 +60,13 @@ export function moe3dClampFieldPlayPosition(
   tileD,
   margin = 1.5
 ) {
+  // GLB マップはタイル矩形内で歩行。全体 terrain bbox で切らない
+  if (tileW && tileD && moe3dIsOnSulfurKazanField(x, z, tileW, tileD)) {
+    return { x, y: z };
+  }
+  if (tileW && tileD && moe3dIsOnElvinKeikokuField(x, z, tileW, tileD)) {
+    return { x, y: z };
+  }
   if (tileW && tileD) {
     const slotId = moe3dMapSlotAtWorldPos(x, z, tileW, tileD);
     if (slotId && MOE_AGE_MAP_SLOT_IDS.has(slotId)) {

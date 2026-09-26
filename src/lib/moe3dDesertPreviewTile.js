@@ -1,16 +1,11 @@
 import { buildMoe3dDesertPreviewTile as buildMacro2DesertPreviewTile } from "@/lib/moe3dMacro2L1Tiles";
+import { moe3dDesertPreviewTileIndex } from "@/lib/moe3dLayoutConstants";
+
+export { moe3dDesertPreviewTileIndex };
 
 /** 砂漠プレビュー — マクロ２ L1 地形（`moe3dMacro2L1Tiles.js`） */
 export function buildMoe3dDesertPreviewTile(tileW, tileD) {
   return buildMacro2DesertPreviewTile(tileW, tileD);
-}
-
-/** 砂漠プレビュー面のローカル配置（既存タイル列の東） */
-export function moe3dDesertPreviewTileIndex(tilesX, _tilesZ) {
-  return {
-    ix: tilesX,
-    iz: 2,
-  };
 }
 
 /** 砂漠面に展示する敵（サンドワーム · スコーピオン） */

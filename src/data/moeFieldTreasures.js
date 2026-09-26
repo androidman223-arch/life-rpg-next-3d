@@ -127,11 +127,6 @@ export function createMoeFieldTreasureDrop(
   };
 }
 
-/** @deprecated createMoeFieldTreasureDrop を使用 */
-export function createMoeOrcTreasureDrop(id, x, y, sourceEnemyKey = "orc_infantry") {
-  return createMoeFieldTreasureDrop(id, x, y, sourceEnemyKey);
-}
-
 /**
  * 撃破した敵のそばに宝を落とす座標（ペット位置ではなく敵基準）
  * @param {{ x: number, y: number }} enemyPos
@@ -208,7 +203,3 @@ export function isGustavJuniorTreasure(tr) {
   );
 }
 
-/** @deprecated isGustavJuniorTreasure を使用 */
-export function isGustavShinsokuTreasure(tr) {
-  return isGustavJuniorTreasure(tr);
-}

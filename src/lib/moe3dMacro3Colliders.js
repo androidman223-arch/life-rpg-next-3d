@@ -2,7 +2,7 @@ import {
   MOE_3D_TILE_SPACING,
   MOE_3D_LEGACY_TILES_X,
   MOE_3D_LEGACY_TILES_Z,
-} from "@/lib/moeField3DModels";
+} from "@/lib/moe3dLayoutConstants";
 import { moe3dDesertPreviewTileIndex } from "@/lib/moe3dDesertPreviewTile";
 import {
   MOE_DARIN_MOUNTAIN_MOUNTAINS,
@@ -11,11 +11,11 @@ import {
   MOE_HATIIL_DESERT_MOUNTAINS,
   MOE_NEOUKU_MOUNTAIN_MOUNTAINS,
   MOE_NEOUKU_PLATEAU_MOUNTAINS,
-  MOE_SULFUR_MINE_MOUNTAINS,
   moeGreenColliderSpecs,
 } from "@/lib/moe3dMacro3SimpleMountain";
 import { MOE_GREEN_COLLIDER_OUTSET } from "@/lib/moe3dMacro3Constants";
 import { MOE_MACRO3_MOUNTAIN_SLOT_IDS } from "@/lib/moe3dMacro3MountainRegistry";
+import { MOE_AGE_MAP_SLOT_IDS } from "@/lib/moe3dMacro2AgeConstants";
 import { moe3dSpawnBesideMapAltar } from "@/lib/moe3dAltarWarp";
 import {
   moe3dMapSlotById,
@@ -34,14 +34,13 @@ export {
 };
 
 /** アルタースポーン付近で山コライダーを無視する半径（ワールド） */
-const ALTAR_SPAWN_COLLIDER_BYPASS_RADIUS = 3;
+const ALTAR_SPAWN_COLLIDER_BYPASS_RADIUS = 7;
 /** スポーン円がコライダー内か判定するプレイヤー半径 */
 const ALTAR_SPAWN_BODY_RADIUS = 0.6;
 
 /** @type {Record<string, import("@/lib/moe3dMacro3SimpleMountain.js").MoeSimpleMountainSpec[]>} */
 const SLOT_MOUNTAINS = {
   desert_preview: MOE_DESERT_PREVIEW_MOUNTAINS,
-  sulfur_mine: MOE_SULFUR_MINE_MOUNTAINS,
   hatiil_desert: MOE_HATIIL_DESERT_MOUNTAINS,
   neoku_mountain: MOE_NEOUKU_MOUNTAIN_MOUNTAINS,
   neoku_plateau: MOE_NEOUKU_PLATEAU_MOUNTAINS,
@@ -56,6 +55,11 @@ const DESERT_PIT_COLLIDER = {
   rx: 0.12 * MOE_GREEN_COLLIDER_OUTSET,
   rz: 0.12 * MOE_GREEN_COLLIDER_OUTSET,
   height: 1.0,
+};
+
+/** AGE プロップ用 円柱コライダー（tx/tz 正規化 · rx/rz 半径） */
+const AGE_PROP_COLUMN_COLLIDERS = {
+  mitoya_great_tree: [{ cx: 0.38, cz: 0.44, rx: 0.14, rz: 0.14 }],
 };
 
 /**
@@ -191,11 +195,6 @@ export function moe3dMacro3FilterAltarSpawnColliders(
   );
 }
 
-/** @deprecated desert_preview 専用 — moe3dMacro3WorldCollidersAt を使用 */
-export function moe3dDesertPreviewWorldColliders(tileW, tileD) {
-  return moe3dMacro3WorldCollidersForSlot("desert_preview", tileW, tileD);
-}
-
 /**
  * プレイヤー位置のマクロ３タイル上なら緑コライダー一覧
  * @param {number} px
@@ -203,10 +202,38 @@ export function moe3dDesertPreviewWorldColliders(tileW, tileD) {
  * @param {number} tileW
  * @param {number} tileD
  */
+function moe3dAgePropWorldCollidersForSlot(mapSlotId, tileW, tileD) {
+  const specs = AGE_PROP_COLUMN_COLLIDERS[mapSlotId];
+  if (!specs?.length) return [];
+  const frame = moe3dMacro3TileFrame(mapSlotId, tileW, tileD);
+  if (!frame) return [];
+  const sx = MOE_3D_TILE_SPACING;
+  return specs.map((spec) => ({
+    cx: frame.rootX + frame.tileW * sx * spec.cx,
+    cz: frame.rootZ + frame.tileD * sx * spec.cz,
+    rx: frame.tileW * sx * spec.rx,
+    rz: frame.tileD * sx * spec.rz,
+  }));
+}
+
 export function moe3dMacro3WorldCollidersAt(px, pz, tileW, tileD) {
   for (const slotId of MOE_MACRO3_MOUNTAIN_SLOT_IDS) {
     if (moe3dIsInMacro3Tile(px, pz, slotId, tileW, tileD)) {
       const colliders = moe3dMacro3WorldCollidersForSlot(slotId, tileW, tileD);
+      return moe3dMacro3FilterAltarSpawnColliders(
+        slotId,
+        colliders,
+        tileW,
+        tileD,
+        px,
+        pz
+      );
+    }
+  }
+  for (const slotId of MOE_AGE_MAP_SLOT_IDS) {
+    if (!AGE_PROP_COLUMN_COLLIDERS[slotId]) continue;
+    if (moe3dIsInMacro3Tile(px, pz, slotId, tileW, tileD)) {
+      const colliders = moe3dAgePropWorldCollidersForSlot(slotId, tileW, tileD);
       return moe3dMacro3FilterAltarSpawnColliders(
         slotId,
         colliders,

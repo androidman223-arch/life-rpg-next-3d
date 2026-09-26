@@ -76,10 +76,31 @@ function buildMacro2L4Fx(slotId, tileW, tileD) {
   g.name = `macro2-l4-${slotId}`;
 
   switch (slotId) {
-    case "lexur_hills":
+    case "lexur_hills": {
       addMist(g, slotId, tileW, tileD, 0xc4b5fd, 24);
       addFlickerLight(g, 0, 1.2, 0, 0xa78bfa, 0.35);
+      const { points, positions, count: n } = makeParticles(
+        16,
+        (c, pos) => {
+          for (let i = 0; i < c; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * tileW * 0.6;
+            pos[i * 3 + 1] = 1.0 + Math.random() * 1.6;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * tileD * 0.6;
+          }
+        },
+        particleMat(0xe9d5ff, 0.36)
+      );
+      g.add(points);
+      updaters.push((dt, t) => {
+        for (let i = 0; i < n; i++) {
+          positions[i * 3] += Math.sin(t * 0.6 + i) * dt * 0.22;
+          positions[i * 3 + 2] += Math.cos(t * 0.5 + i * 0.8) * dt * 0.18;
+          positions[i * 3 + 1] += Math.sin(t * 2 + i) * dt * 0.04;
+        }
+        points.geometry.attributes.position.needsUpdate = true;
+      });
       break;
+    }
     case "meerim_coast": {
       const { points, positions, count: n } = makeParticles(
         20,
@@ -124,11 +145,35 @@ function buildMacro2L4Fx(slotId, tileW, tileD) {
       });
       break;
     }
-    case "garm_corridor":
+    case "garm_corridor": {
       addFlickerLight(g, -tileW * 0.2, 1.8, -tileD * 0.15, 0xc4b5fd, 0.5);
       addFlickerLight(g, tileW * 0.2, 1.8, tileD * 0.1, 0xa78bfa, 0.45);
       addMist(g, slotId, tileW, tileD, 0x8b5cf6, 12);
+      const { points, positions, count: n } = makeParticles(
+        24,
+        (c, pos) => {
+          for (let i = 0; i < c; i++) {
+            const side = i % 2 === 0 ? -1 : 1;
+            pos[i * 3] = side * tileW * (0.12 + Math.random() * 0.08);
+            pos[i * 3 + 1] = 0.8 + Math.random() * 1.4;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * tileD * 0.75;
+          }
+        },
+        particleMat(0xfbbf24, 0.48)
+      );
+      g.add(points);
+      updaters.push((dt, t) => {
+        for (let i = 0; i < n; i++) {
+          positions[i * 3 + 1] += dt * (0.35 + (i % 3) * 0.08);
+          positions[i * 3 + 2] += Math.sin(t * 1.4 + i) * dt * 0.18;
+          if (positions[i * 3 + 1] > 2.8) {
+            positions[i * 3 + 1] = 0.75 + Math.random() * 0.35;
+          }
+        }
+        points.geometry.attributes.position.needsUpdate = true;
+      });
       break;
+    }
     case "ilvana_valley": {
       const stream = new THREE.Mesh(
         new THREE.PlaneGeometry(tileW * 0.16, tileD * 0.75),
@@ -148,9 +193,32 @@ function buildMacro2L4Fx(slotId, tileW, tileD) {
       addMist(g, slotId, tileW, tileD, 0x22d3ee, 14);
       break;
     }
-    case "desert_preview":
+    case "desert_preview": {
       addMist(g, slotId, tileW, tileD, 0xfcd34d, 16);
+      const { points, positions, count: n } = makeParticles(
+        20,
+        (c, pos) => {
+          for (let i = 0; i < c; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * tileW * 0.7;
+            pos[i * 3 + 1] = 0.2 + Math.random() * 0.25;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * tileD * 0.7;
+          }
+        },
+        particleMat(0xf97316, 0.28)
+      );
+      g.add(points);
+      updaters.push((dt, t) => {
+        for (let i = 0; i < n; i++) {
+          positions[i * 3 + 1] += dt * (0.55 + (i % 4) * 0.12);
+          positions[i * 3] += Math.sin(t * 1.8 + i) * dt * 0.08;
+          if (positions[i * 3 + 1] > 2.2) {
+            positions[i * 3 + 1] = 0.18 + Math.random() * 0.2;
+          }
+        }
+        points.geometry.attributes.position.needsUpdate = true;
+      });
       break;
+    }
     case "slorim_plain": {
       const { points, positions, count: n } = makeParticles(
         22,

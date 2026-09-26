@@ -12,7 +12,19 @@ import { moeHatiilDesertActiveFieldEntries } from "@/data/maps/moeHatiilDesertPl
 import { moeAlbeezForestActiveFieldEntries } from "@/data/maps/moeAlbeezForestPlanned";
 import { moeElanPalaceActiveFieldEntries } from "@/data/maps/moeElanPalacePlanned";
 import { moeNeokuMountainActiveFieldEntries } from "@/data/maps/moeNeokuMountainPlanned";
+import { moeNeokuPlateauActiveFieldEntries } from "@/data/maps/moeNeokuPlateauPlanned";
+import { moeDarinMountainActiveFieldEntries } from "@/data/maps/moeDarinMountainPlanned";
+import { moeEisisCaveActiveFieldEntries } from "@/data/maps/moeEisisCavePlanned";
+import { moeElvinKeikokuActiveFieldEntries } from "@/data/maps/moeElvinKeikokuPlanned";
+import { moeElvinMountainsActiveFieldEntries } from "@/data/maps/moeElvinMountainsPlanned";
+import { moeDragonValleyActiveFieldEntries } from "@/data/maps/moeDragonValleyPlanned";
+import { moeMutumCatacombActiveFieldEntries } from "@/data/maps/moeMutumCatacombPlanned";
 import { moeSulfurMineActiveFieldEntries } from "@/data/maps/moeSulfurMinePlanned";
+import { moeBiskActiveFieldEntries } from "@/data/maps/moeBiskPlanned";
+import { moeYugCoastActiveFieldEntries } from "@/data/maps/moeYugCoastPlanned";
+import { moeSolesValleyActiveFieldEntries } from "@/data/maps/moeSolesValleyPlanned";
+import { moeGeoAbyssActiveFieldEntries } from "@/data/maps/moeGeoAbyssPlanned";
+import { moeMitoyaActiveFieldEntries } from "@/data/maps/moeMitoyaGreatTreePlanned";
 
 /** @param {{ mp: number, attack: number, defense: number, hit: number, magic?: number }} row */
 export function moeWikiFromAreaGuideRow(row) {
@@ -77,6 +89,7 @@ function buildMonsterFieldEntry(spec) {
     mapSlotId: spec.mapSlotId,
     modelFile: spec.modelFile,
     fieldBoss: spec.fieldBoss ?? false,
+    superBoss: spec.superBoss ?? false,
   };
   return {
     ...entry,
@@ -306,6 +319,40 @@ export const MOE_MONSTER_FIELD_REGISTRY = [
     modelFile: "ElvinBisonA.glb",
     petDamage: 38,
   }),
+  buildMonsterFieldEntry({
+    key: "mountain_bison",
+    familyId: "mountain_bison",
+    name: "マウンテンバイソン",
+    level: 18.4,
+    areaHp: 67,
+    areaRow: { mp: 0.5, attack: 18.0, defense: 21.5, hit: 18.0, magic: 9.0 },
+    attackInterval: 72.0,
+    captureLife: "—",
+    skills: ["パワー チャージ"],
+    emoji: "🐂",
+    color: "bg-stone-600 border-stone-800",
+    mapSlotId: "elvin_valley",
+    modelFile: "MountainBison.glb",
+    petDamage: 18,
+    fieldBoss: true,
+  }),
+  buildMonsterFieldEntry({
+    key: "rough_bison",
+    familyId: "rough_bison",
+    name: "荒くれバイソン",
+    level: 34.6,
+    areaHp: 180,
+    areaRow: { mp: 0.5, attack: 34.0, defense: 40.5, hit: 34.0, magic: 17.0 },
+    attackInterval: 128.0,
+    captureLife: "—",
+    skills: ["ホーン チャージ"],
+    emoji: "🦬",
+    color: "bg-amber-950 border-stone-900",
+    mapSlotId: "elvin_valley",
+    modelFile: "RoughBison.glb",
+    petDamage: 35,
+    fieldBoss: true,
+  }),
 
   // ── ガルム回廊 / イルヴァーナ渓谷 ──
   buildMonsterFieldEntry({
@@ -529,6 +576,18 @@ export function moeMonsterFieldAllEntries() {
     ...moeElanPalaceActiveFieldEntries(),
     ...moeAlbeezForestActiveFieldEntries(),
     ...moeNeokuMountainActiveFieldEntries(),
+    ...moeNeokuPlateauActiveFieldEntries(),
+    ...moeDarinMountainActiveFieldEntries(),
+    ...moeEisisCaveActiveFieldEntries(),
+    ...moeElvinKeikokuActiveFieldEntries(),
+    ...moeElvinMountainsActiveFieldEntries(),
+    ...moeDragonValleyActiveFieldEntries(),
+    ...moeMutumCatacombActiveFieldEntries(),
+    ...moeBiskActiveFieldEntries(),
+    ...moeYugCoastActiveFieldEntries(),
+    ...moeSolesValleyActiveFieldEntries(),
+    ...moeGeoAbyssActiveFieldEntries(),
+    ...moeMitoyaActiveFieldEntries(),
   ];
 }
 
@@ -556,6 +615,18 @@ export function moeMonsterFieldBase(key) {
     moeElanPalaceActiveFieldEntries().find((e) => e.key === key) ??
     moeAlbeezForestActiveFieldEntries().find((e) => e.key === key) ??
     moeNeokuMountainActiveFieldEntries().find((e) => e.key === key) ??
+    moeNeokuPlateauActiveFieldEntries().find((e) => e.key === key) ??
+    moeDarinMountainActiveFieldEntries().find((e) => e.key === key) ??
+    moeEisisCaveActiveFieldEntries().find((e) => e.key === key) ??
+    moeElvinKeikokuActiveFieldEntries().find((e) => e.key === key) ??
+    moeElvinMountainsActiveFieldEntries().find((e) => e.key === key) ??
+    moeDragonValleyActiveFieldEntries().find((e) => e.key === key) ??
+    moeMutumCatacombActiveFieldEntries().find((e) => e.key === key) ??
+    moeBiskActiveFieldEntries().find((e) => e.key === key) ??
+    moeYugCoastActiveFieldEntries().find((e) => e.key === key) ??
+    moeSolesValleyActiveFieldEntries().find((e) => e.key === key) ??
+    moeGeoAbyssActiveFieldEntries().find((e) => e.key === key) ??
+    moeMitoyaActiveFieldEntries().find((e) => e.key === key) ??
     null
   );
 }

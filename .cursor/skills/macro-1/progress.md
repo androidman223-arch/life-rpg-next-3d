@@ -6,9 +6,9 @@
 
 - **指令:** **戦乱時代（`war_age`）以外 · すべてのエリア** に公式敵を追加
 - **対象:** 全 **23面**（`MOE_3D_WORLD_MAP_REGISTRY` − `war_age`）
-- **状態:** **9/23**（本編9面のみ湧き済み）· 第3フェーズ **未配置**
+- **状態:** **10/23**（本編9面 + ビスク）· 第3フェーズ **進行中**
 - **除外:** `war_age` — 敵追加しない
-- **次:** Wiki 調査 → 公式湧きどおりに `#10 bisk` から（**他マップ流用禁止**）
+- **次:** Wiki 調査 → `#11 mainland_connector` から（**他マップ流用禁止**）
 
 ### 第3フェーズ 1サイクル目 — ❌ 撤回（2026-09-11）
 
@@ -26,7 +26,7 @@ Wiki メモ: `src/data/moeMacro1Phase3AreaWiki.js` · 湧き: `moeMacro1Phase3Sp
 
 | # | mapSlotId | 名前 | 状態 |
 |---|-----------|------|------|
-| 10 | bisk | 城下町ビスク | Wiki未 |
+| 10 | bisk | 城下町ビスク | ✅ イクシオン ウォーター |
 | 11 | mainland_connector | 接続道 | Wiki未 |
 | 12 | legacy_buffer | 試作区バッファ | Wiki未 |
 | 13 | elvin_mountains | エルビン山脈 | Wiki未 |
@@ -157,14 +157,15 @@ Wiki: [スルト鉱山](https://wikiwiki.jp/moe-pet/エリアガイド/スルト
 
 ---
 
-## スルト鉱山（追加 · 2026-09-12 ✅）
+## プレイヤー召喚モデル（2026-09-15 ✅ · マクロ１手順）
 
-Wiki: [スルト鉱山](https://wikiwiki.jp/moe-pet/エリアガイド/スルト鉱山)
+フィールド敵ではなく **プレイヤー技②プレスキル** 用。スキル配線は別タスク。
 
-| 敵 | 表示名 | Lv / HP | GLB | 湧き |
-|----|--------|---------|-----|------|
-| エルアン ナイト（白） | 白骨 | 90.4 / 593.3 | WhiteA/B | 2 |
-| エルアン ナイト（黒） | 黒骨 | 108.4 / 853.8 | BlackA/B | 2 |
-| サラマンダー | — | 88.3 / 800.0 | SalamanderA/B | 2 |
+| スキル | モデル | GLB | 三角数 | アニメ |
+|--------|--------|-----|--------|--------|
+| 生活改鳳 `jiriki_kaihou` | 鳳凰（炎の大鳥） | `PlayerSummonPhoenix.glb` | ~1124 | 翼ばた・Snake互換 |
+| 自力整龍 `jiriki_seiryu` | 整龍（東洋碧玉龍） | `PlayerSummonDragon.glb` | ~1348 | 小翼・Snake互換 |
 
-- `moeSulfurMinePlanned.js` · 公式チェック `moeMacro1OfficialCheck.js` · `npm run smoke` ✅
+- ビルダー: `scripts/summons/` · 生成: `npm run generate:summons`
+- 参照: `src/data/moePlayerSummonModels.js`
+- ペットのフェニックスドラゴン（`DragonPhoenix.glb`）とは **別シルエット**

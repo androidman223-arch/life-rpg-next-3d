@@ -72,7 +72,7 @@ export const MOE_PLAYER_NINJA_SKILLS = [
     activation: "instant",
     iconComponent: "MoeKakureminoIcon",
     description:
-      "ネイチャーミミックのように体を消して約5秒歩ける。ヘイトを0にする。",
+      "ネイチャーミミックのように体を消して約7秒歩ける。ヘイトを0にする。",
     moeReference: "物まね・自然の真似（透明）",
     status: "done",
   },

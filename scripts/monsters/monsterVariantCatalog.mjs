@@ -1539,5 +1539,227 @@ export const MOE_MONSTER_VARIANTS = [
       "id": "nocker_b"
     },
     "anim": { "hasArms": true }
+  },
+  {
+    "id": "pygmy_gryphon_a",
+    "familyId": "pygmy_gryphon",
+    "file": "PygmyGryphonA.glb",
+    "nameJa": "ピグミー グリフォン",
+    "variantLabel": "金翼",
+    "builder": "pygmy_gryphon",
+    "variantIndex": 0,
+    "shapeNote": "エルビン山脈頂上 · サスール",
+    "macro1": true,
+    "palette": {
+      "body": 12078556,
+      "bodyDark": 8283750,
+      "bodyLight": 16764057,
+      "accent": 13395456,
+      "detail": 9127187,
+      "beak": 13932925,
+      "eye": 16776960,
+      "pupil": 6636321,
+      "id": "pygmy_gryphon_a"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "pygmy_gryphon_b",
+    "familyId": "pygmy_gryphon",
+    "file": "PygmyGryphonB.glb",
+    "nameJa": "ピグミー グリフォン",
+    "variantLabel": "褐翼",
+    "builder": "pygmy_gryphon",
+    "variantIndex": 1,
+    "shapeNote": "エルビン山脈 · 崖上",
+    "macro1": true,
+    "palette": {
+      "body": 9139029,
+      "bodyDark": 6052956,
+      "bodyLight": 13938163,
+      "accent": 12040119,
+      "detail": 7044436,
+      "beak": 10719828,
+      "eye": 16776960,
+      "pupil": 4408131,
+      "id": "pygmy_gryphon_b"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "soil_basilisk_a",
+    "familyId": "soil_basilisk",
+    "file": "SoilBasiliskA.glb",
+    "nameJa": "ソイル バジリスク",
+    "variantLabel": "土鱗",
+    "builder": "soil_basilisk",
+    "variantIndex": 0,
+    "shapeNote": "エルビン山脈 · 紅の剣士付近",
+    "macro1": true,
+    "palette": {
+      "body": 7044436,
+      "bodyDark": 4342338,
+      "bodyLight": 9139029,
+      "accent": 9127187,
+      "detail": 6052956,
+      "eye": 16776960,
+      "pupil": 1710618,
+      "id": "soil_basilisk_a"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "soil_basilisk_b",
+    "familyId": "soil_basilisk",
+    "file": "SoilBasiliskB.glb",
+    "nameJa": "ソイル バジリスク",
+    "variantLabel": "深土",
+    "builder": "soil_basilisk",
+    "variantIndex": 1,
+    "shapeNote": "エルビン山脈 · 岩棚",
+    "macro1": true,
+    "palette": {
+      "body": 5723991,
+      "bodyDark": 3355443,
+      "bodyLight": 7566195,
+      "accent": 7044436,
+      "detail": 4342338,
+      "eye": 16744448,
+      "pupil": 0,
+      "id": "soil_basilisk_b"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "wild_orvan_a",
+    "familyId": "wild_orvan",
+    "file": "WildOrvanA.glb",
+    "nameJa": "ワイルド オルヴァン",
+    "variantLabel": "紫竜",
+    "builder": "wild_orvan",
+    "variantIndex": 0,
+    "shapeNote": "飛竜の谷入口",
+    "macro1": true,
+    "palette": {
+      "body": 5921382,
+      "bodyDark": 3156543,
+      "bodyLight": 9480882,
+      "accent": 12040119,
+      "detail": 2368548,
+      "eye": 16744448,
+      "pupil": 0,
+      "id": "wild_orvan_a"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "wild_orvan_b",
+    "familyId": "wild_orvan",
+    "file": "WildOrvanB.glb",
+    "nameJa": "ワイルド オルヴァン",
+    "variantLabel": "深紫",
+    "builder": "wild_orvan",
+    "variantIndex": 1,
+    "shapeNote": "飛竜の谷 · 谷道",
+    "macro1": true,
+    "palette": {
+      "body": 3947580,
+      "bodyDark": 1710618,
+      "bodyLight": 7763574,
+      "accent": 10181046,
+      "detail": 1052688,
+      "eye": 16776960,
+      "pupil": 0,
+      "id": "wild_orvan_b"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "ancient_treant_a",
+    "familyId": "ancient_treant",
+    "file": "AncientTreantA.glb",
+    "nameJa": "エンシェント トレント",
+    "variantLabel": "古木",
+    "builder": "ancient_treant",
+    "variantIndex": 0,
+    "shapeNote": "飛竜の谷奥",
+    "macro1": true,
+    "palette": {
+      "body": 4433424,
+      "bodyDark": 2368548,
+      "bodyLight": 7059186,
+      "accent": 5025616,
+      "detail": 1710618,
+      "eye": 16776960,
+      "pupil": 0,
+      "id": "ancient_treant_a"
+    },
+    "anim": { "hasArms": true }
+  },
+  {
+    "id": "ancient_treant_b",
+    "familyId": "ancient_treant",
+    "file": "AncientTreantB.glb",
+    "nameJa": "エンシェント トレント",
+    "variantLabel": "苔木",
+    "builder": "ancient_treant",
+    "variantIndex": 1,
+    "shapeNote": "飛竜の谷 · 林間",
+    "macro1": true,
+    "palette": {
+      "body": 3364654,
+      "bodyDark": 1710618,
+      "bodyLight": 5793867,
+      "accent": 7044436,
+      "detail": 2368548,
+      "eye": 16744448,
+      "pupil": 0,
+      "id": "ancient_treant_b"
+    },
+    "anim": { "hasArms": true }
+  },
+  {
+    "id": "sky_dragon_a",
+    "familyId": "sky_dragon",
+    "file": "SkyDragonA.glb",
+    "nameJa": "スカイドラゴン",
+    "variantLabel": "蒼翼",
+    "builder": "sky_dragon",
+    "variantIndex": 0,
+    "shapeNote": "飛竜の谷 · 徘徊",
+    "macro1": true,
+    "palette": {
+      "body": 4886754,
+      "bodyDark": 2382063,
+      "bodyLight": 8900331,
+      "accent": 10181046,
+      "detail": 2631720,
+      "eye": 16776960,
+      "pupil": 1703936,
+      "id": "sky_dragon_a"
+    },
+    "anim": { "hasArms": false }
+  },
+  {
+    "id": "sky_dragon_b",
+    "familyId": "sky_dragon",
+    "file": "SkyDragonB.glb",
+    "nameJa": "スカイドラゴン",
+    "variantLabel": "紅翼",
+    "builder": "sky_dragon",
+    "variantIndex": 1,
+    "shapeNote": "飛竜の谷 · 高台",
+    "macro1": true,
+    "palette": {
+      "body": 9127187,
+      "bodyDark": 5712897,
+      "bodyLight": 13369344,
+      "accent": 16744448,
+      "detail": 4408131,
+      "eye": 16776960,
+      "pupil": 0,
+      "id": "sky_dragon_b"
+    },
+    "anim": { "hasArms": false }
   }
 ];

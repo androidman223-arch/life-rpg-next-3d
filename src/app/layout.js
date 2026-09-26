@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import AmbientBgm from "@/components/AmbientBgm";
+import MoeFieldPrefetchBoot from "@/components/MoeFieldPrefetchBoot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,6 +26,7 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <MoeFieldPrefetchBoot />
         <AmbientBgm />
       </body>
     </html>

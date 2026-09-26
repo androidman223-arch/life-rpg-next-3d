@@ -18,8 +18,8 @@ export const MACRO2_L3_ZONES = {
   slorim_plain: { altarTx: 0.5, altarTz: 0.5, altarR: 0.15, kanbanTz: 0.14, respawnMargin: 0.16, playerClear: 22 },
   ips_canyon: { altarTx: 0.5, altarTz: 0.52, altarR: 0.14, kanbanTz: 0.14, respawnMargin: 0.15, playerClear: 20 },
   hatiil_desert: { altarTx: 0.5, altarTz: 0.5, altarR: 0.14, kanbanTz: 0.14, respawnMargin: 0.15, playerClear: 22 },
-  sulfur_mine: { altarTx: 0.5, altarTz: 0.5, altarR: 0.14, kanbanTz: 0.14, respawnMargin: 0.15, playerClear: 22 },
-  elan_palace: { altarTx: 0.5, altarTz: 0.5, altarR: 0.13, kanbanTz: 0.14, respawnMargin: 0.14, playerClear: 20 },
+  sulfur_mine: { altarTx: 0.052, altarTz: 0.948, altarR: 0.1, kanbanTz: 0.14, respawnMargin: 0.12, playerClear: 20 },
+  elan_palace: { altarTx: 0.052, altarTz: 0.948, altarR: 0.1, kanbanTz: 0.14, respawnMargin: 0.12, playerClear: 20 },
   albeez_forest: { altarTx: 0.5, altarTz: 0.5, altarR: 0.14, kanbanTz: 0.14, respawnMargin: 0.15, playerClear: 20 },
   neoku_mountain: { altarTx: 0.5, altarTz: 0.5, altarR: 0.14, kanbanTz: 0.14, respawnMargin: 0.15, playerClear: 22 },
 };

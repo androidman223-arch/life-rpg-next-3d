@@ -12,6 +12,15 @@ export const MOE_MACRO1_FIELD_KEY_TO_WIKI_NAME = {
   elan_palace: {
     elan_knight_white: "白骨",
     elan_knight_black: "黒骨",
+    giant_destroyer: "ジャイアント デストロイヤー",
+    frost_wolf: "フロスト ウルフ",
+    gargoyle_lord: "ガーゴイル ロード",
+    gargoyle_lord_strong: "ガーゴイル ロード",
+    lizardman_soldier: "リザードマン ソルジャー",
+    lizardman_mage: "リザードマン メイジ",
+    lizardman_captain: "リザードマン キャプテン",
+    minotaur_boss: "ミノタウロス",
+    dullahan: "デュラハン",
   },
   albeez_forest: {
     riverside_crawler: "リバーサイド クローラー",
@@ -20,6 +29,47 @@ export const MOE_MACRO1_FIELD_KEY_TO_WIKI_NAME = {
   neoku_mountain: {
     neoku_orvan: "ネオク オルヴァン",
     nocker: "ノッカー",
+  },
+  neoku_plateau: {
+    young_orvan: "ヤング オルヴァン",
+    neoku_orvan_plateau: "ネオク オルヴァン",
+    guard_nocker: "ガード ノッカー",
+  },
+  darin_mountain: {
+    dain_rat: "ダーイン ラット",
+    dain_orc_guard: "オーク ガード",
+    dain_orc_elite: "オーク エリート",
+  },
+  eisis_cave: {
+    eisis_rat: "エイシス ラット",
+    eisis_ixion: "エイシス イクシオン",
+    great_tarantula: "グレイト タランチュラ",
+  },
+  elvin_mountains: {
+    elvin_mount_wolf: "エルビン ウルフ",
+    elvin_mount_bison: "エルビン バイソン 牡",
+    pygmy_gryphon: "ピグミー グリフォン",
+    soil_basilisk: "ソイル バジリスク",
+    auzun_bura: "アウズンブラ",
+  },
+  dragon_valley: {
+    wild_orvan: "ワイルド オルヴァン",
+    ancient_treant: "エンシェント トレント",
+    sky_dragon: "スカイドラゴン",
+  },
+  mutum_catacomb: {
+    mutum_zombie_rat: "ゾンビ ラット",
+    mutum_wraith_warrior: "レイス(戦士)",
+    mutum_rosso_fighter: "ロッソ ファイター",
+  },
+  bisk: {
+    bisk_ixion_water: "イクシオン ウォーター",
+  },
+  yug_coast: {
+    yug_sea_snake: "海ヘビ",
+  },
+  soles_valley: {
+    soles_rescue_hound: "レスクール ハウンド",
   },
 };
 

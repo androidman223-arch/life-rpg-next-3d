@@ -5,6 +5,8 @@ import MoeTeleportIcon from "@/components/icons/MoeTeleportIcon";
 import MoeShinsokuIcon from "@/components/icons/MoeShinsokuIcon";
 import MoeShinobiashiIcon from "@/components/icons/MoeShinobiashiIcon";
 import MoeKakureminoIcon from "@/components/icons/MoeKakureminoIcon";
+import MoeKintounIcon from "@/components/icons/MoeKintounIcon";
+import { getMoePlayerDragonSkill } from "@/data/moePlayerDragonSkills";
 import {
   MOE_PLAYER_SLOT_ICONS,
   MOE_PLAYER_SLOT_LABELS,
@@ -13,7 +15,14 @@ import {
   MOE_PLAYER_UTILITY_SLOT_ICONS,
   MOE_PLAYER_UTILITY_SLOT_LABELS,
 } from "@/data/moePlayerUtilitySkills";
+import { getMoePlayerPreSkillBySlotKey } from "@/data/moePlayerPreSkills";
+import { buildPlayerPreSkillUtilitySlotEntry } from "@/lib/moePlayerPreSkillUi";
 import { formatMoePetSkillDescription } from "@/lib/moePetSkillDescription";
+import {
+  moePlayerHealCooldownLabel,
+  moePlayerHealSkillTitle,
+} from "@/lib/moePlayerHealSkills";
+import { moePlayerRegenToggleTitle } from "@/lib/moePlayerRegenSkill";
 import {
   MOE_BANANA_MILK_STAMINA_REGEN_MULT,
   MOE_PLAYER_SPRINT_STAMINA_DRAIN_PER_SEC,
@@ -26,20 +35,28 @@ const NINJA_ICONS = {
   MoeKakureminoIcon,
 };
 
+const DRAGON_ICONS = {
+  MoeKintounIcon,
+};
+
 /**
  * @param {string|null} key
  * @param {import("@/data/moePlayerNinjaSkills").MoePlayerNinjaSkill|null} ninjaSkill
  */
-export function renderPlayerSlotIcon(key, ninjaSkill) {
+export function renderPlayerSlotIcon(key, ninjaSkill, dragonSkill = null) {
   if (!key) return "·";
   if (MOE_PLAYER_SLOT_ICONS[key]) {
     return MOE_PLAYER_SLOT_ICONS[key];
   }
-  if (ninjaSkill) {
-    const Icon = NINJA_ICONS[ninjaSkill.iconComponent];
+  const movementSkill = ninjaSkill ?? dragonSkill;
+  if (movementSkill) {
+    const Icon =
+      NINJA_ICONS[movementSkill.iconComponent] ??
+      DRAGON_ICONS[movementSkill.iconComponent];
     if (Icon) return <Icon size={22} />;
-    return ninjaSkill.icon ?? "✦";
+    return movementSkill.icon ?? "✦";
   }
+  if (key === "dragon_kintoun") return "☁️";
   return "·";
 }
 
@@ -64,11 +81,17 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
   const label = MOE_PLAYER_SLOT_LABELS[key] ?? key;
 
   if (key === "light") {
+    const cd = ctx.healCdSec.light ?? 0;
     return {
       slotKey: key,
       label,
       icon: renderPlayerSlotIcon(key, null),
-      title: `ライトヒール +${ctx.healAmountLight} HP`,
+      disabled: cd > 0,
+      cooldownSec: cd > 0 ? cd : null,
+      title:
+        cd > 0
+          ? moePlayerHealCooldownLabel("light")
+          : moePlayerHealSkillTitle("light"),
       onClick: ctx.onLight,
       reorderable: true,
     };
@@ -84,8 +107,8 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
       cooldownSec: cd > 0 ? cd : null,
       title:
         cd > 0
-          ? `ヒーリング · 待機中（${cd}秒）`
-          : `ヒーリング +${ctx.healAmountHeal} HP`,
+          ? moePlayerHealCooldownLabel("healing")
+          : moePlayerHealSkillTitle("healing"),
       onClick: ctx.onHeal,
       reorderable: true,
     };
@@ -101,20 +124,25 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
       cooldownSec: cd > 0 ? cd : null,
       title:
         cd > 0
-          ? `ヒーリングオール · 待機中（${cd}秒）`
-          : `ヒーリングオール +${ctx.healAmountAll} HP`,
+          ? moePlayerHealCooldownLabel("healAll")
+          : moePlayerHealSkillTitle("healAll"),
       onClick: ctx.onHealAll,
       reorderable: true,
     };
   }
 
   if (key === "regen") {
+    const cd = ctx.healCdSec?.regen ?? 0;
     return {
       slotKey: key,
       label,
       icon: renderPlayerSlotIcon(key, null),
       active: ctx.regenActive,
-      title: `2秒ごと HP+${ctx.petRegenHp} MP+${ctx.petRegenMp}（トグル）`,
+      cooldownSec: cd > 0 ? cd : null,
+      title:
+        cd > 0
+          ? `リジェネ · 待機中（${cd}秒）`
+          : moePlayerRegenToggleTitle(),
       onClick: ctx.onRegenToggle,
       reorderable: true,
     };
@@ -138,36 +166,6 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
         ? `バナナミルク効果中 — ${sprintHint}`
         : `バナナミルクを飲む — 走行中もスタミナ回復${MOE_BANANA_MILK_STAMINA_REGEN_MULT}倍（トグル）`,
       onClick: ctx.onBananaMilkToggle,
-      reorderable: true,
-    };
-  }
-
-  if (key === "condense_mind") {
-    const casterMp = ctx.playerMp ?? 0;
-    const mpCost = ctx.condenseMindMpCost ?? 34;
-    const targetLabel =
-      ctx.allyTarget === "player"
-        ? "プレイヤー"
-        : ctx.allyTarget === "pet"
-          ? "ペット"
-          : "対象";
-    const canUse = casterMp >= mpCost;
-    const active = Boolean(ctx.condenseMindActiveOnTarget);
-    return {
-      slotKey: key,
-      label,
-      icon: renderPlayerSlotIcon(key, null),
-      active,
-      disabled: false,
-      unusable: !canUse && !active,
-      title: active
-        ? `コンデンスマインド — ${targetLabel}にMP自然回復アップ中（約${ctx.condenseMindMpPerSec ?? 2}MP/秒）`
-        : !ctx.allyTarget
-          ? "プレイヤーまたはペットのステータスをクリックしてターゲット"
-          : casterMp < mpCost
-            ? `MPが足りません（消費${mpCost}）`
-            : `コンデンスマインド → ${targetLabel} · 消費${mpCost}`,
-      onClick: ctx.onCondenseMind,
       reorderable: true,
     };
   }
@@ -204,6 +202,23 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
         ? `テレポート詠唱中…（残り${remainSec ?? 0}秒）`
         : "詠唱してホームへテレポ",
       onClick: ctx.onTeleport,
+      reorderable: true,
+    };
+  }
+
+  if (key === "dragon_kintoun") {
+    const skill = ctx.dragonById?.dragon_kintoun ?? getMoePlayerDragonSkill(key);
+    const unlocked = Boolean(ctx.dragonById?.dragon_kintoun);
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null, unlocked ? skill : null),
+      disabled: !unlocked,
+      active: unlocked && Boolean(ctx.kintounOn),
+      title: unlocked
+        ? formatMoePetSkillDescription(skill)
+        : `筋斗雲（龍神Lv.${skill?.requiredDragonLevel ?? 80}でゲット）`,
+      onClick: () => unlocked && skill && ctx.onDragonSkill?.(skill),
       reorderable: true,
     };
   }
@@ -260,6 +275,10 @@ export function buildPlayerUtilitySkillSlotEntry(key, slotIndex, ctx) {
       title: `調査${slotNum}（空き）`,
       reorderable: false,
     };
+  }
+
+  if (getMoePlayerPreSkillBySlotKey(key)) {
+    return buildPlayerPreSkillUtilitySlotEntry(key, slotIndex, ctx);
   }
 
   const label = MOE_PLAYER_UTILITY_SLOT_LABELS[key] ?? key;

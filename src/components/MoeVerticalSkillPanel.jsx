@@ -3,11 +3,15 @@
 import { useCallback } from "react";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import { useMoeSkillSlotSwap } from "@/hooks/useMoeSkillSlotSwap";
+import { useMoeVerticalSkillPanelLayout } from "@/hooks/useMoeVerticalSkillPanelLayout";
+import { moeVerticalSkillLabelFontPx } from "@/lib/moeVerticalSkillPanelLayout";
 import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
 
 /** MOE風 — 枠からはみ出した文字は途中で切る（…なし） */
 const MOE_SKILL_LABEL_CLIP =
-  "block max-w-full overflow-hidden whitespace-nowrap px-0.5 leading-tight";
+  "block w-full max-w-full overflow-hidden whitespace-nowrap px-px leading-none";
+
+const MOE_VERTICAL_SLOT_DIVIDER = "border-b border-white/[0.12]";
 
 const VARIANTS = {
   amber: {
@@ -51,12 +55,15 @@ const VARIANTS = {
  *   headerExtra?: React.ReactNode,
  *   reorderable?: boolean,
  *   onSwapSlots?: (from: number, to: number) => void,
+ *   layoutInheritFrom?: string[],
  *   slots: {
  *     label: string,
  *     disabled?: boolean,
  *     title?: string,
  *     active?: boolean,
  *     cooldownSec?: number|null,
+ *     unusable?: boolean,
+ *     trainingSkill?: boolean,
  *     onClick?: () => void,
  *     previewOnly?: boolean,
  *     reorderable?: boolean,
@@ -72,6 +79,7 @@ export default function MoeVerticalSkillPanel({
   headerExtra = null,
   reorderable = false,
   onSwapSlots,
+  layoutInheritFrom,
   slots,
 }) {
   const getDefaultPos = useCallback(
@@ -87,13 +95,18 @@ export default function MoeVerticalSkillPanel({
     storageKey,
     getDefaultPos
   );
+  const { layout: panelLayout, onResizePointerDown } =
+    useMoeVerticalSkillPanelLayout(storageKey, layoutInheritFrom);
 
   const canReorder = reorderable && typeof onSwapSlots === "function";
   const { bindSlot } = useMoeSkillSlotSwap(onSwapSlots ?? (() => {}));
 
   const theme = VARIANTS[variant] ?? VARIANTS.amber;
 
-  if (!pos) return null;
+  if (!pos || !panelLayout) return null;
+
+  const { width, slotHeight } = panelLayout;
+  const rowStyle = { minHeight: slotHeight, height: slotHeight };
 
   return (
     <div
@@ -106,26 +119,42 @@ export default function MoeVerticalSkillPanel({
       style={{ left: pos.x, top: pos.y }}
     >
       <div
-        className={`flex max-h-[min(72vh,480px)] w-[5.35rem] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-lg border bg-black/70 p-1 pr-0.5 text-white backdrop-blur-md [scrollbar-width:thin] ${theme.border}`}
+        className={`relative flex max-h-[min(72vh,480px)] flex-col gap-0 overflow-y-auto overscroll-contain rounded-lg border bg-black/70 p-0 text-white backdrop-blur-md [scrollbar-width:thin] [scrollbar-gutter:stable] ${theme.border}`}
+        style={{ width }}
       >
-        <p
-          className={`sticky top-0 z-10 cursor-grab touch-none bg-black/85 pb-0.5 text-center text-[8px] font-bold active:cursor-grabbing ${theme.header}`}
-          onPointerDown={onDragPointerDown}
-          title="ドラッグで移動"
-        >
-          {title}
-        </p>
-        {headerExtra}
+        {headerExtra ? (
+          <div
+            className="sticky top-0 z-10 shrink-0 cursor-grab touch-none border-b border-white/10 bg-black/85 active:cursor-grabbing"
+            onPointerDown={onDragPointerDown}
+            title="ドラッグで移動 · 右下で幅・高さ変更"
+          >
+            {headerExtra}
+          </div>
+        ) : (
+          <p
+            className={`sticky top-0 z-10 shrink-0 cursor-grab touch-none border-b border-white/10 bg-black/85 py-px text-center text-[7px] font-bold leading-none active:cursor-grabbing ${theme.header}`}
+            onPointerDown={onDragPointerDown}
+            title="ドラッグで移動 · 右下で幅・高さ変更"
+          >
+            {title}
+          </p>
+        )}
         {topAction && (
           <button
             type="button"
             onClick={topAction.onClick}
             title={topAction.title ?? topAction.label}
-            className={`shrink-0 overflow-hidden rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 ${
+            style={rowStyle}
+            className={`shrink-0 overflow-hidden rounded-none border-0 py-0 font-bold leading-none shadow-none transition active:scale-95 ${MOE_VERTICAL_SLOT_DIVIDER} ${
               topAction.active ? theme.topOn : theme.topOff
             }`}
           >
-            <span className={MOE_SKILL_LABEL_CLIP}>{topAction.label}</span>
+            <span
+              className={`${MOE_SKILL_LABEL_CLIP} flex h-full w-full items-center justify-center`}
+              style={{ fontSize: moeVerticalSkillLabelFontPx(slotHeight) }}
+            >
+              {topAction.label}
+            </span>
           </button>
         )}
         {slots.map((slot, i) => {
@@ -134,27 +163,39 @@ export default function MoeVerticalSkillPanel({
               <div
                 key={`slot-${i}-${slot.label}`}
                 title={slot.title ?? slot.label}
-                className="shrink-0 overflow-hidden rounded-md border border-dashed border-fuchsia-400/30 bg-fuchsia-950/25 py-1 text-center text-[8px] font-bold leading-tight text-fuchsia-100/75"
+                style={rowStyle}
+                className={`shrink-0 overflow-hidden rounded-none border-0 border-dashed border-fuchsia-400/30 bg-fuchsia-950/25 py-0 text-center font-bold leading-none text-fuchsia-100/75 ${MOE_VERTICAL_SLOT_DIVIDER}`}
               >
-                <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
+                <span
+                  className={`${MOE_SKILL_LABEL_CLIP} flex h-full w-full items-center justify-center`}
+                  style={{ fontSize: moeVerticalSkillLabelFontPx(slotHeight) }}
+                >
+                  {slot.label}
+                </span>
               </div>
             );
           }
 
           const onCooldown =
             slot.cooldownSec !== null && slot.cooldownSec !== undefined;
-          const alwaysClickable = slot.slotKey === "condense_mind";
+          const alwaysClickable =
+            slot.slotKey === "jiriki_seiran" ||
+            Boolean(slot.unusable) ||
+            Boolean(slot.trainingSkill);
           const btnClass = onCooldown
             ? theme.skillCooldown
             : slot.active
               ? theme.skillActive
-              : theme.skillBtn;
+              : slot.unusable
+                ? "border-zinc-600/70 bg-gradient-to-b from-zinc-800/90 to-zinc-950 text-zinc-300 opacity-80"
+                : theme.skillBtn;
           const slotReorder =
             canReorder && slot.reorderable !== false;
           const pointerProps = bindSlot(i, { reorderable: slotReorder });
           const tipText = slot.title ?? slot.label;
           const blocked =
             !alwaysClickable && (slot.disabled || onCooldown);
+          const mainFontPx = moeVerticalSkillLabelFontPx(slotHeight);
 
           return (
             <MoeCompactSkillTip
@@ -171,28 +212,75 @@ export default function MoeVerticalSkillPanel({
                   if (blocked) return;
                   slot.onClick?.();
                 }}
-                style={pointerProps.style}
-                className={`relative w-full touch-none overflow-hidden rounded-md border py-1 text-[8px] font-bold leading-tight shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${btnClass} ${pointerProps.className ?? ""}`}
+                style={{
+                  ...pointerProps.style,
+                  ...rowStyle,
+                }}
+                className={`relative w-full touch-none overflow-hidden rounded-none border-0 py-0 font-bold leading-none shadow-none transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${MOE_VERTICAL_SLOT_DIVIDER} ${btnClass} ${pointerProps.className ?? ""}`}
                 onPointerDown={pointerProps.onPointerDown}
                 onPointerCancel={pointerProps.onPointerCancel}
                 onClickCapture={pointerProps.onClickCapture}
               >
                 {onCooldown ? (
-                  <span className="relative flex min-h-[1.1rem] items-center justify-center">
-                    <span className="pointer-events-none absolute inset-x-0 top-0.5 flex justify-center overflow-hidden text-[6px] font-bold leading-none opacity-25">
+                  <span
+                    className="relative flex h-full w-full items-center justify-center"
+                  >
+                    <span
+                      className="pointer-events-none absolute inset-x-0 top-px flex justify-center overflow-hidden font-bold leading-none opacity-25"
+                      style={{ fontSize: Math.max(7, Math.round(mainFontPx * 0.55)) }}
+                    >
                       <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
                     </span>
-                    <span className="relative text-[11px] tabular-nums leading-none">
+                    <span
+                      className="relative tabular-nums leading-none"
+                      style={{ fontSize: Math.max(11, Math.round(slotHeight * 0.62)) }}
+                    >
                       {slot.cooldownSec}
                     </span>
                   </span>
                 ) : (
-                  <span className={MOE_SKILL_LABEL_CLIP}>{slot.label}</span>
+                  <span
+                    className={`${MOE_SKILL_LABEL_CLIP} flex h-full w-full items-center justify-center`}
+                    style={{ fontSize: mainFontPx }}
+                  >
+                    {slot.label}
+                  </span>
                 )}
               </button>
             </MoeCompactSkillTip>
           );
         })}
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="縦スキルパネルサイズ変更"
+          className="sticky bottom-0 z-20 flex h-4 w-4 shrink-0 cursor-nwse-resize touch-none self-end"
+          onPointerDown={onResizePointerDown}
+          title="右下をドラッグで幅・ボタン高さを変更"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            className="pointer-events-none ml-auto mt-auto text-white/40"
+            aria-hidden
+          >
+            <path
+              d="M9 1v8H1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M9 5v4H5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
       </div>
     </div>
   );

@@ -105,6 +105,60 @@ export function buildMoe3dBiskTile(tileW, tileD) {
   sign.position.set(0, 0, -tileD * 0.36);
   root.add(sign);
 
+  const waterMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    roughness: 0.15,
+    metalness: 0.35,
+    transparent: true,
+    opacity: 0.72,
+  });
+  const altarPool = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      Math.min(tileW, tileD) * 0.14,
+      Math.min(tileW, tileD) * 0.16,
+      0.06,
+      24
+    ),
+    waterMat
+  );
+  altarPool.position.set(tileW * 0.02, 0.36, tileD * 0.08);
+  altarPool.receiveShadow = true;
+  root.add(altarPool);
+
+  const lanternMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0.35,
+    roughness: 0.6,
+  });
+  const postMat = new THREE.MeshStandardMaterial({
+    color: 0x475569,
+    roughness: 0.75,
+  });
+  const lanternSpecs = [
+    { x: -tileW * 0.14, z: tileD * 0.02, h: 2.4 },
+    { x: tileW * 0.14, z: tileD * 0.02, h: 2.4 },
+    { x: -tileW * 0.2, z: -tileD * 0.12, h: 2.1 },
+    { x: tileW * 0.2, z: -tileD * 0.1, h: 2.1 },
+    { x: 0, z: tileD * 0.2, h: 2.6 },
+  ];
+  for (const ln of lanternSpecs) {
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.1, ln.h, 6),
+      postMat
+    );
+    post.position.set(ln.x, 0.32 + ln.h / 2, ln.z);
+    post.castShadow = true;
+    root.add(post);
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 8, 6),
+      lanternMat
+    );
+    lamp.position.set(ln.x, 0.32 + ln.h + 0.12, ln.z);
+    lamp.castShadow = true;
+    root.add(lamp);
+  }
+
   root.userData.biskTile = {
     id: "bisk",
     nameJa: "城下町ビスク",

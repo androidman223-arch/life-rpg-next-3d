@@ -43,9 +43,9 @@ export const MOE_PHOENIX_DRAGON_SKILLS = [
     skillSet: 2,
     mpCost: 8,
     regenHpPerTick: 20,
-    regenIntervalMs: 3000,
+    regenIntervalMs: 3500,
     regenDurationMs: 90000,
-    note: "ペットに詠唱 · 3秒ごとにHP20回復",
+    note: "ペットに詠唱 · 3.5秒ごとにHP20回復",
   },
   {
     id: "phoenix_hot_spring",
@@ -54,41 +54,43 @@ export const MOE_PHOENIX_DRAGON_SKILLS = [
     type: "cure_status",
     skillSet: 2,
     mpCost: 12,
-    note: "ペットに詠唱 · 毒・麻痺を解毒",
+    defenseBonus: 50,
+    defenseBuffDurationMs: 90_000,
+    note: "ペットに詠唱 · 守り+50 · 温泉付近で眠る体に戻す",
   },
   {
     id: "phoenix_deep_sleep",
     level: 80,
     name: "深睡眠眠",
-    type: "heal",
+    type: "pet_mp_restore",
     skillSet: 2,
-    mpCost: 18,
-    healRatio: 0.45,
-    note: "ペットに詠唱 · ペットHP中回復",
+    mpCost: 12,
+    mpRestoreRatio: 0.45,
+    note: "ペットに詠唱5秒 · ペットMP中回復（HPはライト/ヒール/オール）",
   },
   {
     id: "phoenix_ultimate_sleep",
     level: 90,
     name: "睡眠絶崩",
-    type: "heal_regen",
+    type: "buff",
     skillSet: 2,
-    mpCost: 36,
-    healRatio: 0.85,
-    regenHpPerTick: 20,
-    regenIntervalMs: 3000,
-    regenDurationMs: 30000,
-    combatMagicRatio: 0.95,
-    note: "ペットに詠唱 · ペットHP大回復",
+    mpCost: 22,
+    combatAttackMult: 1.5,
+    note: "戦闘中のみペット攻撃1.5倍（決戦終了でリセット）",
   },
   {
     id: "phoenix_habit_ascension",
     level: 100,
     name: "生活改鳳",
-    type: "buff",
+    type: "magic_fire",
     skillSet: 2,
-    mpCost: 0,
-    combatAttackMult: 2,
-    note: "戦闘中のみ攻撃2倍（解除で1倍 · 戦闘終了でリセット）",
+    mpCost: 40,
+    combatPhase1Damage: 7,
+    combatPhase1Hits: 5,
+    combatPhase2Damage: 3,
+    combatPhase2Hits: 3,
+    combatStepMs: 350,
+    note: "炎5×7＋炎3×3＋リボーンワンス（戦闘中 · MP40）",
   },
   {
     id: "phoenix_life_burst",
@@ -103,12 +105,13 @@ export const MOE_PHOENIX_DRAGON_SKILLS = [
   {
     id: "phoenix_scorching_sky",
     level: 130,
-    name: "灼烈天火",
-    type: "magic_fire",
+    name: "攻撃2倍",
+    type: "buff",
     skillSet: 2,
-    mpCost: 48,
-    combatFixedDamage: 100,
-    note: "特大炎魔法 · 固定100ダメージ",
+    mpCost: 0,
+    combatAttackMult: 1.5,
+    skillSubInfo: "名前は後で考えます",
+    note: "戦闘中のみペット攻撃1.5倍（トグル）",
   },
   {
     id: "phoenix_purify_rebirth",
@@ -184,11 +187,9 @@ export function buildMysteryDragonCombatSkillSlots(
   return filtered
     .filter((s) => {
       if (s.type === "buff_permanent") return false;
-      if (s.type === "passive") {
-        return rebornPhoenix && activeSkillSet === 2 && s.id === "phoenix_trait";
-      }
+      if (s.type === "passive") return false;
       if (showAll || rebornPhoenix) {
-        return s.level > 1 || s.id === "phoenix_trait";
+        return s.level > 1;
       }
       return s.level <= petLevel && s.level > 1;
     })

@@ -237,6 +237,14 @@ export const MOE_MEERIM_ELVIN_BISON_KEY = "elvin_bison";
 export const MOE_MEERIM_SUPER_BOSS_KEY = "auzun_bura";
 export const MOE_MEERIM_MOUNTAIN_BISON_KEY = "mountain_bison";
 export const MOE_MEERIM_ROUGH_BISON_KEY = "rough_bison";
+
+/** 3Dフィールド湧き — エルビン各面の広い平地（正規化 tx/tz） */
+export const MOE_MEERIM_SPECIAL_BOSS_SPAWNS = {
+  superBoss: { mapSlotId: "elvin_mountains", tx: 0.52, tz: 0.44 },
+  mountainBison: { mapSlotId: "elvin_valley", tx: 0.5, tz: 0.36 },
+  roughBison: { mapSlotId: "elvin_valley", tx: 0.38, tz: 0.32 },
+};
+
 /** 中ボス HP 倍率（通常よりタフ） */
 export const MOE_MID_BOSS_HP_MULTIPLIER = 2;
 /** 超ボス HP 倍率 */

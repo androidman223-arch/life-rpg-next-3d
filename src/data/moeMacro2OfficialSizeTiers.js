@@ -41,6 +41,13 @@ export const MOE_OFFICIAL_SIZE_TIER_BY_KEY = {
   meerim_eats: "xs",
   meerim_snake: "s",
   sea_snake_field: "s",
+  yug_sea_snake: "s",
+  soles_rescue_hound: "s",
+  geo_abyss_salamander: "l",
+  mitoya_treant_guard: "xxl",
+
+  // エイシス洞
+  great_tarantula: "xl",
 
   // エルビン渓谷
   elvin_spider: "l",
@@ -80,6 +87,15 @@ export const MOE_OFFICIAL_SIZE_TIER_BY_KEY = {
   // スルト鉱山（マクロ１ · Wiki エリアガイド体型）
   elan_knight_white: "mPlus",
   elan_knight_black: "mPlus",
+  giant_destroyer: "boss",
+  frost_wolf: "m",
+  gargoyle_lord: "l",
+  gargoyle_lord_strong: "l",
+  lizardman_soldier: "mPlus",
+  lizardman_mage: "m",
+  lizardman_captain: "mPlus",
+  minotaur_boss: "superBoss",
+  dullahan: "superBoss",
   salamander: "l",
 
   // アルビーズの森
@@ -89,6 +105,16 @@ export const MOE_OFFICIAL_SIZE_TIER_BY_KEY = {
   // ネオク山
   neoku_orvan: "l",
   nocker: "s",
+
+  // エルビン山脈（追加）
+  pygmy_gryphon: "m",
+  tyrant_gryphon: "superBoss",
+  soil_basilisk: "l",
+
+  // 飛竜の谷
+  wild_orvan: "xl",
+  ancient_treant: "xxl",
+  sky_dragon: "xl",
 };
 
 /**
@@ -98,6 +124,7 @@ export const MOE_OFFICIAL_SIZE_TIER_BY_KEY = {
 export const MOE_OFFICIAL_SIZE_RATIO_OVERRIDE = {
   meerim_rat: 1.12,
   elvin_spider: 1.38,
+  great_tarantula: 1.72,
   elvin_wolf: 1.4,
   elvin_bison: 1.82,
   rescue_bear: 1.18,
@@ -107,11 +134,26 @@ export const MOE_OFFICIAL_SIZE_RATIO_OVERRIDE = {
   chimera: 3.85,
   elan_knight_white: 1.1,
   elan_knight_black: 1.16,
+  giant_destroyer: 2.4,
+  frost_wolf: 1.35,
+  gargoyle_lord: 1.85,
+  gargoyle_lord_strong: 2.1,
+  lizardman_soldier: 1.12,
+  lizardman_mage: 1.05,
+  lizardman_captain: 1.18,
+  minotaur_boss: 3.2,
+  dullahan: 1.2,
   salamander: 1.28,
   riverside_crawler: 1.05,
   orvan_pappy: 1.12,
   neoku_orvan: 1.22,
   nocker: 0.92,
+  pygmy_gryphon: 0.95,
+  tyrant_gryphon: 3.4,
+  soil_basilisk: 1.35,
+  wild_orvan: 1.85,
+  ancient_treant: 2.4,
+  sky_dragon: 1.78,
 };
 
 /** @param {string} key */

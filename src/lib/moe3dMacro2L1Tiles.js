@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { buildMoe3dKanbanSign } from "@/lib/moe3dKanbanSign";
-import { moe3dDesertPreviewTileIndex } from "@/lib/moe3dDesertPreviewTile";
 import {
   MOE_3D_LEGACY_TILES_X,
   MOE_3D_LEGACY_TILES_Z,
-} from "@/lib/moeField3DModels";
+  moe3dDesertPreviewTileIndex,
+  moe3dLayoutTileD,
+  moe3dLayoutTileW,
+} from "@/lib/moe3dLayoutConstants";
 import { MACRO2_L1_SLOT_IDS } from "@/lib/moe3dMacro2Constants";
 import { appendMoe3dMacro2L2Props } from "@/lib/moe3dMacro2L2Props";
 import { appendMoe3dMacro2L3SpawnPads } from "@/lib/moe3dMacro2L3Spawns";
@@ -14,7 +16,6 @@ import { appendAllMoe3dMacro2CyclePasses } from "@/lib/moe3dMacro2CyclePass";
 import { appendMoe3dMacro3Terrain } from "@/lib/moe3dMacro3Apply";
 import { MOE_TERRAIN_L1_HILL_BUMPS_ENABLED } from "@/lib/moe3dTerrainFeatures";
 import { MOE_MONSTER_FIELD_SPAWN_SPECS } from "@/lib/moe3dMonsterMapSpawns";
-import { moe3dLayoutTileD, moe3dLayoutTileW } from "@/lib/moeField3DModels";
 import {
   moe3dApplyMapTileScale,
   moe3dTileLocalOrigin,
@@ -440,10 +441,10 @@ const MACRO2_L1_LABELS = {
  * @param {THREE.Group} terrainGroup
  * @param {number} tileW
  * @param {number} tileD
- * @param {{ groundY: Function, raycaster: THREE.Raycaster, attachShowcaseNameLabel?: Function }} opts
+ * @param {{ groundY: Function, raycaster: THREE.Raycaster, attachShowcaseNameLabel?: Function, onTilePlaced?: (slotId: string, tile: THREE.Group, baseY: number) => void }} opts
  */
 export function addMoe3dMacro2L1Tiles(terrainGroup, tileW, tileD, opts) {
-  const { groundY, raycaster, attachShowcaseNameLabel } = opts;
+  const { groundY, raycaster, attachShowcaseNameLabel, onTilePlaced } = opts;
   resetMoe3dMacro2L4Fx();
   resetMoe3dMacro3L4Fx();
   const off = moe3dTerrainGroupOffset(tileW, tileD);
@@ -489,6 +490,7 @@ export function addMoe3dMacro2L1Tiles(terrainGroup, tileW, tileD, opts) {
     appendMoe3dMacro3Terrain(tile, slotId, tileW, tileD);
     tile.position.set(localX, baseY, localZ);
     terrainGroup.add(tile);
+    onTilePlaced?.(slotId, tile, baseY);
 
     const label = MACRO2_L1_LABELS[slotId];
     if (label && attachShowcaseNameLabel) {

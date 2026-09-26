@@ -140,5 +140,3 @@ export function appendAllMoe3dMacro2CyclePasses(tileRoot, slotId, tileW, tileD) 
   tileRoot.userData.macro2Cycles = { applied: max, target: MACRO2_TARGET_CYCLES };
 }
 
-/** @deprecated MACRO2_APPLIED_CYCLES を使用 */
-export const MACRO2_CURRENT_CYCLE = MACRO2_APPLIED_CYCLES;

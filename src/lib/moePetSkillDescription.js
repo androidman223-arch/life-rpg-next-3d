@@ -68,6 +68,9 @@ export function formatMoePetSkillDescription(skill) {
   if (skill.mpCost != null) meta.push(`消費 MP ${skill.mpCost}`);
   if (skill.delaySec != null) meta.push(`ディレイ ${skill.delaySec}秒`);
   if (meta.length) lines.push(meta.join(" · "));
+  if (skill.skillSubInfo?.trim()) {
+    lines.push(skill.skillSubInfo.trim());
+  }
 
   return lines.join("\n");
 }

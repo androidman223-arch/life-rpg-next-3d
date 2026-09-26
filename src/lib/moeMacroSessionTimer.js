@@ -5,7 +5,7 @@
 export const MOE_MACRO_TIMER_STORAGE_KEY = "moe_macro_session_timer_v1";
 
 /** @type {readonly number[]} */
-export const MOE_MACRO_TIMER_PRESET_MINUTES = [10, 20, 30, 45, 60];
+export const MOE_MACRO_TIMER_PRESET_MINUTES = [5, 10, 20, 30, 45, 60];
 
 /**
  * @param {number} totalSeconds

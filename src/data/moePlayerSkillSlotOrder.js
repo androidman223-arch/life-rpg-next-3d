@@ -3,7 +3,7 @@
 export const MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY =
   "life-rpg-moe-player-skill-slot-order";
 
-/** @typedef {'light'|'heal'|'heal-all'|'regen'|'banana_milk'|'condense_mind'|'holy_record'|'teleport'|'ninja_shinobiashi'|'ninja_shinsoku'|'ninja_kakuremino'} MoePlayerSlotSkillKey */
+/** @typedef {'light'|'heal'|'heal-all'|'regen'|'banana_milk'|'holy_record'|'teleport'|'ninja_shinobiashi'|'ninja_shinsoku'|'ninja_kakuremino'|'dragon_kintoun'} MoePlayerSlotSkillKey */
 
 export const MOE_PLAYER_SLOT_SKILL_KEYS = [
   "light",
@@ -11,12 +11,12 @@ export const MOE_PLAYER_SLOT_SKILL_KEYS = [
   "heal-all",
   "regen",
   "banana_milk",
-  "condense_mind",
   "holy_record",
   "teleport",
   "ninja_shinobiashi",
   "ninja_shinsoku",
   "ninja_kakuremino",
+  "dragon_kintoun",
 ];
 
 /** @type {Record<MoePlayerSlotSkillKey, string>} */
@@ -26,12 +26,12 @@ export const MOE_PLAYER_SLOT_LABELS = {
   "heal-all": "オール",
   regen: "リジェネ",
   banana_milk: "🍌バナナミルク",
-  condense_mind: "コンデンス",
   holy_record: "ホーリーRレコード",
   teleport: "テレポ",
   ninja_shinobiashi: "忍び足",
   ninja_shinsoku: "神速",
   ninja_kakuremino: "隠れ蓑",
+  dragon_kintoun: "筋斗雲",
 };
 
 /** @type {Record<string, string>} */
@@ -41,7 +41,6 @@ export const MOE_PLAYER_SLOT_ICONS = {
   "heal-all": "💖",
   regen: "🍃",
   banana_milk: "🍌",
-  condense_mind: "💠",
   holy_record: "📜",
   teleport: "🌀",
 };
@@ -54,13 +53,12 @@ export function defaultPlayerSkillSlotOrder() {
     "heal-all",
     "regen",
     "banana_milk",
-    "condense_mind",
     "holy_record",
     "teleport",
     "ninja_shinobiashi",
     "ninja_shinsoku",
     "ninja_kakuremino",
-    null,
+    "dragon_kintoun",
     null,
     null,
   ];
@@ -68,7 +66,9 @@ export function defaultPlayerSkillSlotOrder() {
 
 /** 新スキルを空き枠へ自動追加（localStorage 旧データ対応） */
 export function mergeMissingSkillKeys(order) {
-  const next = [...order];
+  const next = order.map((key) =>
+    key === "condense_mind" || key === "jiriki_seiran" ? null : key
+  );
   for (const key of MOE_PLAYER_SLOT_SKILL_KEYS) {
     if (!next.includes(key)) {
       const emptyIdx = next.findIndex((k) => k == null);
@@ -95,7 +95,13 @@ export function normalizePlayerSkillSlotOrder(raw) {
     out.push(key);
   }
   if (out.length !== 10) return def;
-  const migrated = out.map((key) => (key === "enemy_stat_search" ? null : key));
+  const migrated = out.map((key) =>
+    key === "enemy_stat_search" ||
+    key === "condense_mind" ||
+    key === "jiriki_seiran"
+      ? null
+      : key
+  );
   return mergeMissingSkillKeys(migrated);
 }
 

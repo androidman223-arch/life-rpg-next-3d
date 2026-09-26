@@ -4,8 +4,9 @@ import {
   MOE_3D_TILE_SPACING,
   moe3dLayoutTileD,
   moe3dLayoutTileW,
-} from "@/lib/moeField3DModels";
+} from "@/lib/moe3dLayoutConstants";
 import { MACRO2_L1_SLOT_IDS } from "@/lib/moe3dMacro2Constants";
+import { MOE_AGE_MAP_SLOT_IDS } from "@/lib/moe3dMacro2AgeConstants";
 
 /**
  * MOE 本編ワールド — タイル予約レイアウト
@@ -38,6 +39,9 @@ export const MOE_3D_NORTH_BRANCH_IZ = 2;
 
 /** アルター転送専用 iz（ワープ pad · 別次元扱い） */
 export const MOE_3D_WARP_ROW_IZ = 3;
+
+/** AGE大陸 iz（マクロ２ L1 · アルター転送） */
+export const MOE_3D_AGE_ROW_IZ = 4;
 
 /**
  * 全 MOE フィールド登録（調査用 · buildPhase=0 は今回タイル未配置）
@@ -257,6 +261,42 @@ export const MOE_3D_WORLD_MAP_REGISTRY = [
     warpOnly: true,
   },
   {
+    id: "dragon_valley",
+    nameJa: "飛竜の谷",
+    shortLabel: "飛竜谷",
+    ix: -10,
+    iz: MOE_3D_WARP_ROW_IZ,
+    order: 0,
+    branch: "warp",
+    buildPhase: 3,
+    warpOnly: true,
+    note: "ネオク高原奥 · ワイルドオルヴァン",
+  },
+  {
+    id: "sulfur_kazan_temple",
+    nameJa: "新スルト鉱山（火山神殿）",
+    shortLabel: "新スルト",
+    ix: -11,
+    iz: MOE_3D_WARP_ROW_IZ,
+    order: 0,
+    branch: "warp",
+    buildPhase: 3,
+    warpOnly: true,
+    note: "アルター転送 · 火竜神殿 GLB",
+  },
+  {
+    id: "elvin_keikoku",
+    nameJa: "新エルビン渓谷",
+    shortLabel: "新渓谷",
+    ix: -12,
+    iz: MOE_3D_WARP_ROW_IZ,
+    order: 0,
+    branch: "warp",
+    buildPhase: 3,
+    warpOnly: true,
+    note: "アルター転送 · 渓谷 GLB",
+  },
+  {
     id: "elan_palace",
     nameJa: "エルアン宮殿",
     shortLabel: "エルアン",
@@ -310,21 +350,74 @@ export const MOE_3D_WORLD_MAP_REGISTRY = [
     branch: "future",
     buildPhase: 0,
   },
+  {
+    id: "yug_coast",
+    nameJa: "ユグ海岸",
+    shortLabel: "ユグ",
+    ix: -11,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 0,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+    note: "AGE大陸入口 · マクロ２ L1",
+  },
+  {
+    id: "soles_valley",
+    nameJa: "ソレス渓谷",
+    shortLabel: "ソレス",
+    ix: -10,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 1,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+  },
+  {
+    id: "geo_abyss_ne",
+    nameJa: "ゲオの深淵（北東）",
+    shortLabel: "深NE",
+    ix: -9,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 2,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+  },
+  {
+    id: "geo_abyss_s",
+    nameJa: "ゲオの深淵（南）",
+    shortLabel: "深南",
+    ix: -8,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 3,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+  },
+  {
+    id: "geo_abyss_w",
+    nameJa: "ゲオの深淵（西）",
+    shortLabel: "深西",
+    ix: -7,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 4,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+  },
+  {
+    id: "mitoya_great_tree",
+    nameJa: "ミトヤの大樹",
+    shortLabel: "ミトヤ",
+    ix: -6,
+    iz: MOE_3D_AGE_ROW_IZ,
+    order: 5,
+    branch: "age",
+    buildPhase: 3,
+    warpOnly: true,
+  },
 ];
-
-/** @deprecated 互換 — 西本線のみ */
-export const MOE_3D_MAINLAND_MAP_CHAIN = MOE_3D_WORLD_MAP_REGISTRY.filter(
-  (s) => s.branch === "west" || s.id === "bisk"
-).sort((a, b) => a.order - b.order);
-
-/** @deprecated */
-export const MOE_3D_MAINLAND_CHAIN_START_IX = -6;
-/** @deprecated */
-export const MOE_3D_MAINLAND_CHAIN_IZ = MOE_3D_MAINLINE_IZ;
-/** @deprecated */
-export const MOE_3D_MAINLAND_CONNECTOR_SLOT = MOE_3D_WORLD_MAP_REGISTRY.find(
-  (s) => s.id === "mainland_connector"
-);
 
 /** 3D に置く予約タイル（buildPhase 1–3 · 専用タイルは除外） */
 export function moe3dReservedMapSlots() {
@@ -334,7 +427,8 @@ export function moe3dReservedMapSlots() {
       s.id !== "bisk" &&
       s.id !== "legacy_buffer" &&
       s.id !== "ips_canyon" &&
-      !MACRO2_L1_SLOT_IDS.has(s.id)
+      !MACRO2_L1_SLOT_IDS.has(s.id) &&
+      !MOE_AGE_MAP_SLOT_IDS.has(s.id)
   );
 }
 
@@ -372,24 +466,6 @@ export function moe3dTileLocalOrigin(ix, iz, tileW, tileD) {
 /** terrainGroup 内のタイル寸法 */
 export function moe3dTileLocalSize(_ix, _iz, tileW, tileD) {
   return { w: moe3dLayoutTileW(tileW), d: moe3dLayoutTileD(tileD) };
-}
-
-/** @deprecated */
-export function moe3dMainlandChainSlots() {
-  return MOE_3D_MAINLAND_MAP_CHAIN.map((entry) => ({
-    ...entry,
-    ix:
-      entry.id === "bisk"
-        ? -2
-        : entry.id === "meerim_coast"
-          ? -3
-          : entry.id === "elvin_valley"
-            ? -4
-            : entry.id === "elvin_mountains"
-              ? -5
-              : -6,
-    iz: MOE_3D_MAINLINE_IZ,
-  }));
 }
 
 /** ワールド原点 (0,0) = このマップ面の中心 */
@@ -552,10 +628,19 @@ const MINIMAP_FILLS = {
   hatiil_desert: "#d4a574",
   neoku_mountain: "#f97316",
   neoku_plateau: "#fb923c",
+  dragon_valley: "#7c3aed",
   elan_palace: "#fcd34d",
   war_age: "#ef4444",
   slorim_plain: "#a3e635",
   sulfur_mine: "#eab308",
+  sulfur_kazan_temple: "#dc2626",
+  elvin_keikoku: "#22c55e",
+  yug_coast: "#2dd4bf",
+  soles_valley: "#4ade80",
+  geo_abyss_ne: "#dc2626",
+  geo_abyss_s: "#7c3aed",
+  geo_abyss_w: "#2563eb",
+  mitoya_great_tree: "#15803d",
 };
 
 const LEGACY_MINI_FILLS = ["#d2b48c", "#228b22", "#2e7d32", "#388e3c"];
@@ -592,23 +677,3 @@ export function moe3dMinimapFullTileRects(mapBounds, mw, mh, tileW, tileD) {
   });
 }
 
-/** @deprecated moe3dMinimapFullTileRects を使用 */
-export function moe3dMinimapReservedMapRects(
-  halfW,
-  halfD,
-  mw,
-  mh,
-  tileW,
-  tileD,
-  mapBounds = null
-) {
-  if (mapBounds) {
-    return moe3dMinimapFullTileRects(mapBounds, mw, mh, tileW, tileD);
-  }
-  const tw =
-    tileW && tileW > 0 ? tileW : Math.max(40, (halfW * 2) / 12);
-  const td =
-    tileD && tileD > 0 ? tileD : Math.max(40, (halfD * 2) / 8);
-  const bounds = moe3dFullWorldBounds(tw, td, 0);
-  return moe3dMinimapFullTileRects(bounds, mw, mh, tw, td);
-}

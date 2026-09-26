@@ -52,6 +52,11 @@ const P = {
   orvanPappy: "OrvanPappy",
   neokuOrvan: "NeokuOrvan",
   nocker: "Nocker",
+  pygmyGryphon: "PygmyGryphon",
+  soilBasilisk: "SoilBasilisk",
+  wildOrvan: "WildOrvan",
+  ancientTreant: "AncientTreant",
+  skyDragon: "SkyDragon",
 };
 
 /** レスクール アマゾネス — 人型女戦士 · 槍と盾 */
@@ -1622,6 +1627,163 @@ export function buildNocker(palette, variantIndex = 0) {
   return root;
 }
 
+/** ピグミーグリフォン（サスール） — 小型鳥型 · 翼広げ */
+export function buildPygmyGryphon(palette, variantIndex = 0) {
+  const prefix = P.pygmyGryphon;
+  const m = buildMonsterMaterials(palette);
+  const root = createMonsterRoot(prefix, palette.id);
+  const body = createMonsterBody(root, prefix);
+  const scale = variantIndex ? 0.94 : 1;
+
+  addPart(body, new THREE.BoxGeometry(0.22 * scale, 0.16 * scale, 0.3 * scale), m.body, 0, 0.34 * scale, 0);
+  addPart(body, new THREE.BoxGeometry(0.14 * scale, 0.1 * scale, 0.18 * scale), m.bodyLight, 0, 0.36 * scale, 0.06 * scale);
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.42 * scale, 0.18 * scale);
+  body.add(head);
+  addPart(head, new THREE.BoxGeometry(0.14 * scale, 0.12 * scale, 0.14 * scale), m.body, 0, 0, 0.02);
+  addPart(head, new THREE.BoxGeometry(0.05 * scale, 0.04 * scale, 0.1 * scale), m.beak ?? m.accent, 0, -0.02, 0.1 * scale);
+  addFrontEyes(head, m, { ex: 0.05 * scale, ey: 0.02 * scale, ez: 0.06 * scale, tag: prefix });
+
+  for (const sx of [-1, 1]) {
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.28 * scale, 0.03 * scale, 0.2 * scale),
+      variantIndex ? m.accent : m.bodyLight,
+      sx * 0.22 * scale,
+      0.4 * scale,
+      -0.02,
+      [0.25, sx * 0.55, 0]
+    );
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.06 * scale, 0.18 * scale, 0.04 * scale),
+      m.bodyDark,
+      sx * 0.1 * scale,
+      0.18 * scale,
+      0.02
+    );
+  }
+
+  addPart(body, new THREE.BoxGeometry(0.08 * scale, 0.06 * scale, 0.22 * scale), m.accent, 0, 0.3 * scale, -0.22 * scale);
+  for (const sx of [-1, 1]) {
+    addPart(body, new THREE.BoxGeometry(0.04 * scale, 0.12 * scale, 0.04 * scale), m.bodyDark, sx * 0.08 * scale, 0.12 * scale, 0.1 * scale);
+  }
+  return root;
+}
+
+/** ソイルバジリスク — 地竜 · 低重心 · 尾 */
+export function buildSoilBasilisk(palette, variantIndex = 0) {
+  const prefix = P.soilBasilisk;
+  const m = buildMonsterMaterials(palette);
+  const root = createMonsterRoot(prefix, palette.id);
+  const body = createMonsterBody(root, prefix);
+
+  addPart(body, new THREE.BoxGeometry(0.42, 0.14, 0.56), m.body, 0, 0.22, 0);
+  addPart(body, new THREE.BoxGeometry(0.28, 0.08, 0.38), m.bodyLight, 0, 0.26, 0.08);
+  for (let i = 0; i < 5; i++) {
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.06, 0.1, 0.06),
+      variantIndex ? m.accent : m.detail,
+      (i - 2) * 0.08,
+      0.3,
+      -0.02 - i * 0.02
+    );
+  }
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.28, 0.34);
+  body.add(head);
+  addPart(head, new THREE.BoxGeometry(0.2, 0.12, 0.18), m.body, 0, 0, 0.04);
+  addFrontEyes(head, m, { ex: 0.07, ey: 0.03, ez: 0.08, tag: prefix });
+
+  addSnakeSegments(body, m, 4, { startZ: -0.28, step: 0.12, width: 0.1 });
+  for (const sx of [-1, 1]) {
+    addPart(body, new THREE.BoxGeometry(0.08, 0.06, 0.1), m.bodyDark, sx * 0.16, 0.12, 0.18);
+  }
+  return root;
+}
+
+/** ワイルドオルヴァン — ネオクオルヴァン大型 · 紫系 */
+export function buildWildOrvan(palette, variantIndex = 0) {
+  const root = buildNeokuOrvan(palette, variantIndex);
+  root.scale.setScalar(1.08);
+  return root;
+}
+
+/** エンシェントトレント — 巨木 · 鈍足 */
+export function buildAncientTreant(palette, variantIndex = 0) {
+  const prefix = P.ancientTreant;
+  const m = buildMonsterMaterials(palette);
+  const root = createMonsterRoot(prefix, palette.id);
+  const body = createMonsterBody(root, prefix);
+
+  addPart(body, new THREE.CylinderGeometry(0.18, 0.24, 0.72, 8), m.bodyDark, 0, 0.42, 0);
+  addPart(body, new THREE.SphereGeometry(0.34, 8, 8), m.body, 0, 0.92, 0);
+  addPart(body, new THREE.SphereGeometry(0.28, 8, 8), m.bodyLight, 0, 1.08, 0.06);
+  if (variantIndex) {
+    addPart(body, new THREE.BoxGeometry(0.08, 0.24, 0.08), m.accent, 0.22, 0.78, 0.08);
+  }
+
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(sx * 0.28, 0.72, 0.04);
+    body.add(arm);
+    addPart(arm, new THREE.BoxGeometry(0.08, 0.08, 0.32), m.bodyDark, 0, 0, 0.16);
+    addPart(arm, new THREE.BoxGeometry(0.1, 0.1, 0.1), m.bodyLight, 0, 0, 0.34);
+  }
+
+  for (const sx of [-1, 1]) {
+    addPart(body, new THREE.BoxGeometry(0.1, 0.12, 0.12), m.bodyDark, sx * 0.14, 0.08, 0.1);
+  }
+  return root;
+}
+
+/** スカイドラゴン — 飛竜 · 大翼 */
+export function buildSkyDragon(palette, variantIndex = 0) {
+  const prefix = P.skyDragon;
+  const m = buildMonsterMaterials(palette);
+  const root = createMonsterRoot(prefix, palette.id);
+  const body = createMonsterBody(root, prefix);
+
+  addPart(body, new THREE.BoxGeometry(0.4, 0.22, 0.66), m.body, 0, 0.44, 0);
+  addPart(body, new THREE.BoxGeometry(0.28, 0.12, 0.48), m.bodyLight, 0, 0.48, 0.1);
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.54, 0.36);
+  body.add(head);
+  addPart(head, new THREE.BoxGeometry(0.22, 0.18, 0.24), m.body, 0, 0, 0.06);
+  addPart(head, new THREE.BoxGeometry(0.1, 0.08, 0.12), m.bodyDark, 0, -0.02, 0.16);
+  addFrontEyes(head, m, { ex: 0.07, ey: 0.04, ez: 0.1, tag: prefix });
+
+  for (const sx of [-1, 1]) {
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.34, 0.05, 0.24),
+      variantIndex ? m.accent : m.bodyLight,
+      sx * 0.3,
+      0.56,
+      -0.04,
+      [0.12, sx * 0.5, 0]
+    );
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.26, 0.04, 0.18),
+      m.detail,
+      sx * 0.42,
+      0.5,
+      -0.12,
+      [0.2, sx * 0.35, 0]
+    );
+  }
+
+  addQuadLegs(body, m, { spread: 0.18, frontZ: 0.24, backZ: -0.26 });
+  addPart(body, new THREE.BoxGeometry(0.1, 0.08, 0.34), m.bodyDark, 0, 0.42, -0.5);
+  addPart(body, new THREE.SphereGeometry(0.07, 6, 6), m.accent, 0, 0.42, -0.68);
+  return root;
+}
+
 /** @type {Record<string, (palette: Record<string, number>, variantIndex?: number) => THREE.Group>} */
 export const MONSTER_TYPE_BUILDERS = {
   rescue_amazoness: buildRescueAmazoness,
@@ -1662,4 +1824,9 @@ export const MONSTER_TYPE_BUILDERS = {
   orvan_pappy: buildOrvanPappy,
   neoku_orvan: buildNeokuOrvan,
   nocker: buildNocker,
+  pygmy_gryphon: buildPygmyGryphon,
+  soil_basilisk: buildSoilBasilisk,
+  wild_orvan: buildWildOrvan,
+  ancient_treant: buildAncientTreant,
+  sky_dragon: buildSkyDragon,
 };

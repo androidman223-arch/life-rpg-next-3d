@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMoePanelDockOptional } from "@/context/MoePanelDockContext";
 
 /**
  * @param {string} storageKey
@@ -39,6 +40,8 @@ export function useMoeDraggableResizablePanel(
   const defaultWidth = opts.defaultWidth ?? 320;
   const minWidth = opts.minWidth ?? 200;
   const maxWidth = opts.maxWidth ?? 720;
+  const dockPanelId = opts.dockPanelId ?? null;
+  const dock = useMoePanelDockOptional();
 
   const [pos, setPos] = useState(null);
   const [width, setWidth] = useState(defaultWidth);
@@ -92,13 +95,40 @@ export function useMoeDraggableResizablePanel(
     if (!el) return;
     const sync = () => {
       sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
-      setPos((p) => (p ? clampPos(p.x, p.y, el.offsetWidth) : p));
+      setPos((p) => {
+        if (!p) return p;
+        const next = clampPos(p.x, p.y, el.offsetWidth);
+        if (dockPanelId && dock) {
+          queueMicrotask(() =>
+            dock.notifyParentMoved(dockPanelId, next, el.offsetWidth)
+          );
+        }
+        return next;
+      });
     };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [clampPos, width]);
+  }, [clampPos, dock, dockPanelId, width]);
+
+  useEffect(() => {
+    if (!dock || !dockPanelId) return undefined;
+    return dock.registerPanel(dockPanelId, {
+      setPosition: (nextPos) => {
+        setPos((p) => (p ? clampPos(nextPos.x, nextPos.y) : p));
+      },
+      getWidth: () => sizeRef.current.w,
+    });
+  }, [clampPos, dock, dockPanelId]);
+
+  const notifyDockFollowers = useCallback(
+    (nextPos, nextWidth = sizeRef.current.w) => {
+      if (!dockPanelId || !dock) return;
+      dock.notifyParentMoved(dockPanelId, nextPos, nextWidth);
+    },
+    [dock, dockPanelId]
+  );
 
   const onDragPointerDown = useCallback(
     (e) => {
@@ -114,12 +144,12 @@ export function useMoeDraggableResizablePanel(
       };
       const onMove = (ev) => {
         if (ev.pointerId !== drag.pointerId) return;
-        setPos(
-          clampPos(
-            drag.ox + ev.clientX - drag.startX,
-            drag.oy + ev.clientY - drag.startY
-          )
+        const nextPos = clampPos(
+          drag.ox + ev.clientX - drag.startX,
+          drag.oy + ev.clientY - drag.startY
         );
+        setPos(nextPos);
+        notifyDockFollowers(nextPos);
       };
       const onUp = (ev) => {
         if (ev.pointerId !== drag.pointerId) return;
@@ -131,7 +161,7 @@ export function useMoeDraggableResizablePanel(
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clampPos, pos]
+    [clampPos, notifyDockFollowers, pos]
   );
 
   const onResizePointerDown = useCallback(
@@ -148,7 +178,12 @@ export function useMoeDraggableResizablePanel(
         if (ev.pointerId !== drag.pointerId) return;
         const nextW = clampWidth(drag.startW + (ev.clientX - drag.startX));
         setWidth(nextW);
-        setPos((p) => (p ? clampPos(p.x, p.y, nextW) : p));
+        setPos((p) => {
+          if (!p) return p;
+          const nextPos = clampPos(p.x, p.y, nextW);
+          notifyDockFollowers(nextPos, nextW);
+          return nextPos;
+        });
       };
       const onUp = (ev) => {
         if (ev.pointerId !== drag.pointerId) return;
@@ -160,7 +195,7 @@ export function useMoeDraggableResizablePanel(
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clampPos, clampWidth, width, pos]
+    [clampPos, clampWidth, notifyDockFollowers, width, pos]
   );
 
   return {

@@ -16,6 +16,7 @@ import {
 export default function MoeField3DBattleOverlay({
   battlePopups,
   worldHealPopupsRef,
+  worldSkillExpPopupsRef,
   overlayProjectRef,
   enemies,
 }) {
@@ -25,30 +26,59 @@ export default function MoeField3DBattleOverlay({
     let id = 0;
     const loop = () => {
       const heals = worldHealPopupsRef?.current ?? [];
+      const skillExps = worldSkillExpPopupsRef?.current ?? [];
       const now = performance.now();
       const liveHeals = heals.filter((p) => now - p.born < 2100);
+      const liveSkillExps = skillExps.filter((p) => now - p.born < 2200);
       const hasDamage = battlePopups.some(
-        (p) => p.type !== "tenthBanner" && p.type !== "heal" && p.type !== "tenth"
+        (p) =>
+          p.type !== "tenthBanner" &&
+          p.type !== "heal" &&
+          p.type !== "skill_exp" &&
+          p.type !== "tenth"
       );
-      if (hasDamage || liveHeals.length > 0) {
+      if (hasDamage || liveHeals.length > 0 || liveSkillExps.length > 0) {
         setFrame((f) => f + 1);
       }
       id = requestAnimationFrame(loop);
     };
     id = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(id);
-  }, [battlePopups, worldHealPopupsRef]);
+  }, [battlePopups, worldHealPopupsRef, worldSkillExpPopupsRef]);
 
   const proj = overlayProjectRef?.current;
   if (!proj?.ready || !proj.projectAt) return null;
 
   const now = performance.now();
   const healRefList = worldHealPopupsRef?.current ?? [];
+  const skillExpRefList = worldSkillExpPopupsRef?.current ?? [];
   const liveHeals = healRefList.filter((p) => now - p.born < 2100);
+  const liveSkillExps = skillExpRefList.filter((p) => now - p.born < 2200);
   const petAnchor = proj.getPetAnchor?.();
   const petLift = (proj.petBodyLift ?? 0.3) + MOE_DAMAGE_POPUP_3D_PET_Y_EXTRA;
 
   const nodes = [];
+
+  for (const pop of liveSkillExps) {
+    const floatY = 2.4 + MOE_DAMAGE_POPUP_3D_Y_EXTRA;
+    const pt = proj.projectAt(pop.x, floatY, pop.y);
+    if (!pt.visible) continue;
+    nodes.push(
+      <div
+        key={`skill-exp-${pop.id}`}
+        className="pointer-events-none absolute z-[13]"
+        style={{
+          left: pt.x,
+          top: pt.y,
+          transform: "translate(-50%, 0)",
+        }}
+      >
+        <span className="moe-battle-popup-rise block text-center text-[16px] font-black tabular-nums tracking-tight text-amber-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
+          EXP{pop.label}
+        </span>
+      </div>
+    );
+  }
 
   for (const pop of liveHeals) {
     const label = pop.label ?? pop.value;
@@ -81,6 +111,7 @@ export default function MoeField3DBattleOverlay({
     if (
       pop.type === "tenthBanner" ||
       pop.type === "heal" ||
+      pop.type === "skill_exp" ||
       pop.type === "tenth"
     ) {
       continue;

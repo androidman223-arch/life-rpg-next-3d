@@ -4,7 +4,11 @@
  * expFromPrev は隣接累積の差分で算出
  */
 
-import { petUsesPreciseWikiStats, roundPetStatInternal } from "./moePets";
+import { petUsesPreciseWikiStats, roundPetStatInternal } from "./moePets.js";
+import {
+  moeEnsureTrainingGuideHpBonus,
+  moeResolvePetTrainingBonus,
+} from "../lib/moeTrainingGuideHouseBuff.js";
 
 /** 各Lv到達時点の累積EXP（インデックス0 = Lv1） */
 const WIKI_CUMULATIVE_EXP = [
@@ -29,9 +33,6 @@ function buildExpTable() {
 export const MOE_PET_EXP_TABLE = buildExpTable();
 
 export const MOE_PET_MAX_LEVEL = MOE_PET_EXP_TABLE.length;
-
-/** @deprecated 互換: Lv1〜30 のみ */
-export const MOE_PET_EXP_LV1_TO_30 = MOE_PET_EXP_TABLE.filter((r) => r.level <= 30);
 
 /**
  * 攻撃1回・取得判定成功時の基礎EXP（装備・ラブペ等の倍率は未実装）
@@ -96,15 +97,25 @@ export function resolvePetTotalExp(pet) {
     pet?.level ?? 1,
     pet?.expIntoLevel ?? 0
   );
-  if (pet?.totalExp == null || !Number.isFinite(Number(pet.totalExp))) {
+  const raw = pet?.totalExp;
+  if (raw == null || !Number.isFinite(Number(raw))) {
     return legacy;
   }
-  return Math.max(0, Math.floor(Number(pet.totalExp)));
+  const total = Math.max(0, Math.floor(Number(raw)));
+  // totalExp=0 だけ残り level/expIntoLevel が育成済みのときは Lv0 扱いで EXP 暴走しないよう救済
+  if (total === 0 && legacy > 0) return legacy;
+  return total;
 }
 
 /** 指定Lv・EXPバー0 に相当する累計EXP */
 export function getMoePetFreshTotalExpForLevel(level) {
   return getMoePetTotalExpFromLegacyProgress(level, 0);
+}
+
+/** デバッグ Lv100 儀式の「Lv100.0 固定」だけ救済対象（本番育成 Lv101+ は除外） */
+export function moePetIsStuckDebugLv100RitualExp(totalExp) {
+  const T = Math.max(0, Math.floor(Number(totalExp) || 0));
+  return T === getMoePetFreshTotalExpForLevel(100);
 }
 
 /** L → L+1 に上がるのに必要なEXP（Lv150 なら null） */
@@ -325,9 +336,16 @@ export function applyMoePetExpGain(pet, amount, calculateStats) {
   const expIntoLevel = getMoePetExpIntoLevelFromTotal(total, levelAfter);
   const stats = calculateStats(pet.id, levelAfter);
   const prec = petUsesPreciseWikiStats(pet.id);
-  let nextHp = leveled
-    ? stats?.hpMax ?? pet.hpMax
-    : Math.min(pet.hp, stats?.hpMax ?? pet.hpMax);
+  const trainingBonus = moeResolvePetTrainingBonus(pet);
+  const phoenixBonus = pet.phoenixHpBonus ?? 0;
+  const wikiHpMax =
+    stats?.hpMax ??
+    Math.max(1, (pet.hpMax ?? 1) - trainingBonus - phoenixBonus);
+  let hpMax = wikiHpMax + phoenixBonus + trainingBonus;
+  if (!leveled) {
+    hpMax = Math.max(hpMax, pet.hpMax ?? hpMax);
+  }
+  let nextHp = leveled ? hpMax : Math.min(pet.hp, hpMax);
   let nextMp = leveled
     ? stats?.mpMax ?? pet.mpMax
     : Math.min(pet.mp, stats?.mpMax ?? pet.mpMax);
@@ -335,17 +353,23 @@ export function applyMoePetExpGain(pet, amount, calculateStats) {
     nextHp = roundPetStatInternal(nextHp);
     nextMp = roundPetStatInternal(nextMp);
   }
-  const nextPet = {
+  let nextPet = {
     ...pet,
     totalExp: total,
     level: levelAfter,
     levelDisplay: getMoePetFractionalLevelFromTotalExp(total).displayLabel,
     expIntoLevel,
-    hpMax: stats?.hpMax ?? pet.hpMax,
+    hpMax,
     mpMax: stats?.mpMax ?? pet.mpMax,
     hp: nextHp,
     mp: nextMp,
+    trainingGuideHpBonus: trainingBonus || pet.trainingGuideHpBonus,
   };
+  nextPet = moeEnsureTrainingGuideHpBonus(nextPet);
+  if (!leveled) {
+    nextPet.hp = Math.min(nextPet.hpMax, pet.hp);
+    if (prec) nextPet.hp = roundPetStatInternal(nextPet.hp);
+  }
 
   return {
     pet: nextPet,
@@ -440,9 +464,15 @@ export function applyMoePetExpLoss(pet, amount, calculateStats, minLevel = 10) {
   const expIntoLevel = getMoePetExpIntoLevelFromTotal(total, levelAfter);
   const stats = calculateStats(pet.id, levelAfter);
   const prec = petUsesPreciseWikiStats(pet.id);
+  const trainingBonus = moeResolvePetTrainingBonus(pet);
+  const phoenixBonus = pet.phoenixHpBonus ?? 0;
+  const wikiHpMax =
+    stats?.hpMax ??
+    Math.max(1, (pet.hpMax ?? 1) - trainingBonus - phoenixBonus);
+  const hpMax = wikiHpMax + phoenixBonus + trainingBonus;
   let nextHp =
     leveledDown || tenthLeveledDown
-      ? Math.min(pet.hp, stats?.hpMax ?? pet.hpMax)
+      ? Math.min(pet.hp, hpMax)
       : pet.hp;
   let nextMp =
     leveledDown || tenthLeveledDown
@@ -452,17 +482,23 @@ export function applyMoePetExpLoss(pet, amount, calculateStats, minLevel = 10) {
     nextHp = roundPetStatInternal(nextHp);
     nextMp = roundPetStatInternal(nextMp);
   }
-  const nextPet = {
+  let nextPet = {
     ...pet,
     totalExp: total,
     level: levelAfter,
     levelDisplay: getMoePetFractionalLevelFromTotalExp(total).displayLabel,
     expIntoLevel,
-    hpMax: stats?.hpMax ?? pet.hpMax,
+    hpMax,
     mpMax: stats?.mpMax ?? pet.mpMax,
     hp: nextHp,
     mp: nextMp,
+    trainingGuideHpBonus: trainingBonus || pet.trainingGuideHpBonus,
   };
+  nextPet = moeEnsureTrainingGuideHpBonus(nextPet);
+  if (!leveledDown && !tenthLeveledDown) {
+    nextPet.hp = Math.min(nextPet.hpMax, pet.hp);
+    if (prec) nextPet.hp = roundPetStatInternal(nextPet.hp);
+  }
 
   return {
     pet: nextPet,

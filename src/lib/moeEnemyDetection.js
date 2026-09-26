@@ -108,6 +108,14 @@ function inferDetectionFromKey(key, familyId) {
       searchType: "visual",
     };
   }
+  if (/wolf|ウルフ/.test(id)) {
+    return {
+      hearing: "sensitive",
+      visionDeg: 100,
+      visionRange: 12,
+      searchType: "both",
+    };
+  }
   if (/hound|dog|pappy|orvan/.test(id)) {
     return {
       hearing: "sensitive",
@@ -124,7 +132,31 @@ function inferDetectionFromKey(key, familyId) {
       searchType: "hearing",
     };
   }
-  if (/golem|knight|gustav|bison|boss/.test(id)) {
+  if (/destroyer|giant_destroyer/.test(id)) {
+    return {
+      hearing: "normal",
+      visionDeg: 150,
+      visionRange: 28,
+      searchType: "visual",
+    };
+  }
+  if (/gargoyle/.test(id)) {
+    return {
+      hearing: "dull",
+      visionDeg: 120,
+      visionRange: 14,
+      searchType: "visual",
+    };
+  }
+  if (/lizardman/.test(id)) {
+    return {
+      hearing: "normal",
+      visionDeg: 105,
+      visionRange: 12,
+      searchType: "both",
+    };
+  }
+  if (/golem|knight|gustav|bison|boss|minotaur|dullahan/.test(id)) {
     return {
       hearing: "dull",
       visionDeg: 130,
@@ -287,7 +319,7 @@ export function isPlayerInEnemyHearingRange(p) {
  * @param {{ x: number, y: number }} playerPos
  * @param {{ x: number, y: number }} enemyPos
  * @param {number} facingYaw
- * @param {{ stealthFull?: boolean, soundMult?: number, playerMoving?: boolean }} [opts]
+ * @param {{ stealthFull?: boolean, soundMult?: number, playerMoving?: boolean, stealthVisualAvoidPct?: number }} [opts]
  */
 export function checkMoeEnemyPlayerDetection(
   enemy,
@@ -314,7 +346,12 @@ export function checkMoeEnemyPlayerDetection(
     visionRange: detection.visionRange,
   };
   if (moeEnemyUsesVisionSearch(detection) && isPlayerInEnemyVisionCone(cone)) {
-    via.push("visual");
+    const avoidPct = opts.stealthVisualAvoidPct ?? 0;
+    if (avoidPct > 0 && Math.random() < avoidPct) {
+      /* 忍び足熟練 — 視覚索敵を回避 */
+    } else {
+      via.push("visual");
+    }
   }
   if (
     playerMoving &&
