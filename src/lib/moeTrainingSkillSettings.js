@@ -1,4 +1,4 @@
-/** 鳳凰・龍神 修行スキル — 習得済みのみ / 全部使える */
+/** 鳳凰・龍神 修行スキル — 習得済みのみ / 仮習得済（Lv未達も使用可） */
 export const MOE_TRAINING_SKILL_MODE_STORAGE_KEY =
   "life-rpg-moe-training-skill-mode";
 
@@ -30,7 +30,7 @@ export function saveMoeTrainingSkillMode(mode) {
 
 /** @param {MoeTrainingSkillMode} mode */
 export function moeTrainingSkillModeLabel(mode) {
-  return mode === MOE_TRAINING_SKILL_MODE_LEARNED ? "習得済みのみ" : "全部使える";
+  return mode === MOE_TRAINING_SKILL_MODE_LEARNED ? "習得済みのみ" : "仮習得済";
 }
 
 /** @param {MoeTrainingSkillMode} mode @param {number} practiceLevel @param {{ level: number }} entry */

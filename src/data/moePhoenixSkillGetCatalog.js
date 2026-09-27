@@ -60,7 +60,7 @@ export const MOE_PHOENIX_SKILL_GET_CATALOG = [
     level: 70,
     name: "バイタリティ",
     originalName: "生命爆神",
-    hint: "HP＋100",
+    hint: "HP＋50",
     status: "planned",
   },
   {

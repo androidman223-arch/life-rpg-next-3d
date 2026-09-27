@@ -69,7 +69,7 @@ const PLAYER_SKILL_LINES = {
   phoenix_deep_sleep: "ペットに詠唱5秒 · ペットMP中回復（HPはライト/ヒール/オール）",
   phoenix_ultimate_sleep: "戦闘中のみペット攻撃1.5倍（決戦終了でリセット · MP22）",
   phoenix_habit_ascension: "炎5×7＋炎3×3＋リボーンワンス（戦闘中 · MP40）",
-  phoenix_life_burst: "ペットHP+100",
+  phoenix_life_burst: "ペットHP+50",
   phoenix_scorching_sky: "戦闘中ペット攻撃1.5倍 · 名前は後で考えます",
   phoenix_purify_rebirth: "大爆炎 · 30ダメージ×5",
 };

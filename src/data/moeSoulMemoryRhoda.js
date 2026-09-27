@@ -15,11 +15,11 @@ export const MOE_SOUL_MEMORY_RHODA_BUTTON = {
   emoji: "🔮",
 };
 
-/** フィールド上のローダ待機場所（ペット小屋とは別 · スタート南） */
+/** フィールド上のローダ待機場所（ペット小屋とは別 · 中央アルターの西） */
 export const MOE_SOUL_MEMORY_RHODA_FIELD = {
   spotLabel: "魂の記憶の祠",
   spotEmoji: "🔮",
-  directionHint: "スポーンから南（ミニマップの下）",
+  directionHint: "中央アルターの西",
 };
 
 /** ローダ初回会話 */

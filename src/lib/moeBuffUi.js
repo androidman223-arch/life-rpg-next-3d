@@ -48,6 +48,7 @@ export function padMoeBuffSlots(items, slotCount) {
  *   kakureminoUntilMs?: number,
  *   dashBoost3x?: boolean,
  *   kintounOn?: boolean,
+ *   skateboardOn?: boolean,
  *   playerCondenseMindRef?: { current: { until: number } | null },
  *   playerJirikiSeiranRef?: { current: { until: number, boostUntil?: number } | null },
  * }} ctx
@@ -110,20 +111,20 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
     });
   }
 
-  if (ctx.dashBoost3x) {
-    items.push({
-      id: "shinsoku",
-      icon: "💨",
-      label: "神速 — ダッシュ速度アップ",
-      tone: "toggle",
-    });
-  }
-
   if (ctx.kintounOn) {
     items.push({
       id: "kintoun",
       icon: "☁️",
       label: "筋斗雲 — 飛行 · 移動2倍",
+      tone: "toggle",
+    });
+  }
+
+  if (ctx.skateboardOn) {
+    items.push({
+      id: "skateboard",
+      icon: "🛹",
+      label: "板乗り — 地上 · 移動1.75倍",
       tone: "toggle",
     });
   }

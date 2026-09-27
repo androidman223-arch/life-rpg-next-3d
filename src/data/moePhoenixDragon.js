@@ -99,8 +99,8 @@ export const MOE_PHOENIX_DRAGON_SKILLS = [
     type: "heal",
     skillSet: 2,
     mpCost: 42,
-    healFlat: 100,
-    note: "ペットHP+100",
+    healFlat: 50,
+    note: "ペットHP+50",
   },
   {
     id: "phoenix_scorching_sky",

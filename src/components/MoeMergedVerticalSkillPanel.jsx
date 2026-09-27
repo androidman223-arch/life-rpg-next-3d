@@ -28,6 +28,8 @@ import { useMoeSkillPanelMode } from "@/hooks/useMoeSkillPanelMode";
  *   player3: {
  *     slots: object[],
  *   },
+ *   onClose?: () => void,
+ *   collapsed?: boolean,
  * }} props
  */
 export default function MoeMergedVerticalSkillPanel({
@@ -41,6 +43,8 @@ export default function MoeMergedVerticalSkillPanel({
   player1,
   player2,
   player3,
+  onClose,
+  collapsed = false,
 }) {
   const [storedMode, setStoredMode] = useMoeSkillPanelMode(storageKey);
   const mode = panelMode ?? storedMode;
@@ -88,6 +92,8 @@ export default function MoeMergedVerticalSkillPanel({
               ? player3.slots
               : pet.slots
       }
+      onClose={onClose}
+      collapsed={collapsed}
     />
   );
 }

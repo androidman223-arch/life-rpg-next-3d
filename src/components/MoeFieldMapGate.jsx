@@ -7,6 +7,7 @@ import {
   prefetchMoeFieldMap,
   subscribeMoeFieldPrefetch,
 } from "@/lib/moeFieldPrefetch";
+import { MoePanelStackProvider } from "@/context/MoePanelStackContext";
 
 /**
  * 先読み済みなら「準備中」を出さず即 MoeFieldMap を表示
@@ -55,11 +56,13 @@ export default function MoeFieldMapGate({
 
   if (FieldMap) {
     return (
-      <FieldMap
-        worldMode={worldMode}
-        onBack={onBack}
-        onEnemyDefeat={onEnemyDefeat}
-      />
+      <MoePanelStackProvider>
+        <FieldMap
+          worldMode={worldMode}
+          onBack={onBack}
+          onEnemyDefeat={onEnemyDefeat}
+        />
+      </MoePanelStackProvider>
     );
   }
 

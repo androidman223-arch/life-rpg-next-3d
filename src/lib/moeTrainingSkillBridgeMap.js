@@ -23,7 +23,7 @@ export const MOE_PHOENIX_TRAINING_SKILL_ACTIONS = {
 export const MOE_DRAGON_TRAINING_SKILL_ACTIONS = {
   10: { kind: "skill2", skillId: "phoenix_ansleep_walk" },
   20: { kind: "ninja", skillId: "ninja_shinobiashi" },
-  40: { kind: "ninja", skillId: "ninja_shinsoku" },
+  40: { kind: "dragon", skillId: "dragon_skateboard" },
   50: { kind: "ninja", skillId: "ninja_kakuremino" },
   80: { kind: "dragon", skillId: "dragon_kintoun" },
   90: { kind: "pre", skillId: "jiriki_seiryu" },

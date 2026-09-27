@@ -4,7 +4,7 @@
  */
 
 export const MOE_TRAINING_GUIDE_CHANT_PHRASE = "生命爆神を実装します";
-export const MOE_TRAINING_GUIDE_HP_BONUS = 100;
+export const MOE_TRAINING_GUIDE_HP_BONUS = 50;
 export const MOE_TRAINING_GUIDE_BGM_MAP_SLOT = "training_guide_house";
 
 /** @type {Map<string, number>} */

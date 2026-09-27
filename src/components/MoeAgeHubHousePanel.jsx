@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { moePetTrainingGuideForAgeHub } from "@/lib/moePetTrainingGuide";
 import { MOE_AGE_HUB_HOUSE } from "@/lib/moe3dAgeHubHouse";
 import { MOE_CAMPFIRE_REST } from "@/lib/moeCampfireRestCore";
-import { MOE_TRAINING_GUIDE_CHANT_PHRASE } from "@/lib/moeTrainingGuideHouseBuff";
 import { MOE_AGE_HUB_HOUSE_PET_REGEN } from "@/lib/moeAgeHubHouseRegen";
 
 /**
@@ -13,7 +11,6 @@ import { MOE_AGE_HUB_HOUSE_PET_REGEN } from "@/lib/moeAgeHubHouseRegen";
  *   view: "menu" | "training" | "restConfirm",
  *   onViewChange: (view: "menu" | "training" | "restConfirm") => void,
  *   onStartRest: () => void,
- *   onChantSubmit?: (text: string) => void,
  * }} props
  */
 export default function MoeAgeHubHousePanel({
@@ -21,20 +18,10 @@ export default function MoeAgeHubHousePanel({
   view,
   onViewChange,
   onStartRest,
-  onChantSubmit,
 }) {
-  const [chantText, setChantText] = useState("");
-
   if (!open) return null;
 
   const sections = view === "training" ? moePetTrainingGuideForAgeHub() : [];
-
-  const submitChant = () => {
-    const text = chantText.trim();
-    if (!text) return;
-    onChantSubmit?.(text);
-    setChantText("");
-  };
 
   return (
     <div
@@ -171,37 +158,6 @@ export default function MoeAgeHubHousePanel({
                 </div>
               </section>
             ))}
-
-            {onChantSubmit && (
-              <div className="mt-4 rounded-xl border border-rose-400/35 bg-rose-950/25 px-3 py-3">
-                <p className="text-xs font-bold text-rose-100/95">
-                  💥 生命爆神（セッション限定 · HP+100）
-                </p>
-                <p className="mt-1 text-[10px] leading-snug text-zinc-400">
-                  唱和「{MOE_TRAINING_GUIDE_CHANT_PHRASE}」または「生命爆神」
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={chantText}
-                    onChange={(e) => setChantText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submitChant();
-                    }}
-                    placeholder="唱和を入力…"
-                    className="min-w-0 flex-1 rounded-lg border border-zinc-600/70 bg-zinc-900/90 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
-                    aria-label="生命爆神の唱和"
-                  />
-                  <button
-                    type="button"
-                    onClick={submitChant}
-                    className="shrink-0 rounded-lg border border-rose-400/50 bg-rose-900/50 px-3 py-2 text-xs font-bold text-rose-50 hover:bg-rose-800/60"
-                  >
-                    唱和
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

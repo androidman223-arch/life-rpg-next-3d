@@ -1,7 +1,7 @@
 /**
  * マクロ２ L6 — MOE公式体型ティア（プレイヤー身長 = 1.0）
  *
- * 基準: コグニート♂トレーナー背高 1.52（`MOE_PLAYER_MODEL_HEIGHT`）
+ * 基準: コグニート♂トレーナー公式背高 1.52（フィールド表示高さとは別）
  * 出典: MOE_MONSTER_FAMILIES.shapeNote · Wiki エリアガイド体型
  * 旧マクロ１一律倍率（0.525×3 ≈ 1.575m）≈ ratio 1.036 を「標準フィールド mob」基準とする。
  *
@@ -145,7 +145,7 @@ export const MOE_OFFICIAL_SIZE_RATIO_OVERRIDE = {
   dullahan: 1.2,
   salamander: 1.28,
   riverside_crawler: 1.05,
-  orvan_pappy: 1.12,
+  orvan_pappy: 1.28,
   neoku_orvan: 1.22,
   nocker: 0.92,
   pygmy_gryphon: 0.95,

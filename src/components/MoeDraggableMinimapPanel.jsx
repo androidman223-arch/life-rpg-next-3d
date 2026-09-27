@@ -6,7 +6,12 @@ import { useMoePanelCollapsed } from "@/hooks/useMoePanelCollapsed";
 import { useMoePanelDockBounds } from "@/hooks/useMoePanelDockBounds";
 import MoePanelCollapseToggle from "@/components/MoePanelCollapseToggle";
 import { useMoePanelDockOptional } from "@/context/MoePanelDockContext";
-import { MOE_DOCK_PANEL_MINIMAP_3D } from "@/lib/moePanelDock";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ID_MINIMAP_2D,
+  MOE_PANEL_ID_MINIMAP_3D,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 
 const DEFAULT_PANEL_W = 320;
 
@@ -19,13 +24,14 @@ function defaultMinimapPos() {
 
 /**
  * 全体マップ — ドラッグで移動 · 右下で拡大縮小
- * @param {{ storageKey: string, children: React.ReactNode, hint?: string, dockPanelId?: string | null }} props
+ * @param {{ storageKey: string, children: React.ReactNode, hint?: string, dockPanelId?: string | null, panelStackId?: string | null }} props
  */
 export default function MoeDraggableMinimapPanel({
   storageKey,
   children,
   hint,
   dockPanelId = null,
+  panelStackId = null,
 }) {
   const getDefaultPos = useCallback(defaultMinimapPos, []);
   const {
@@ -43,6 +49,12 @@ export default function MoeDraggableMinimapPanel({
   const { collapsed, toggleCollapsed } = useMoePanelCollapsed("minimap");
   const dock = useMoePanelDockOptional();
   const snapHighlight = dock?.snapHighlight ?? false;
+  const stackPanelId =
+    panelStackId ??
+    dockPanelId ??
+    (storageKey.includes("2d")
+      ? MOE_PANEL_ID_MINIMAP_2D
+      : MOE_PANEL_ID_MINIMAP_3D);
   useMoePanelDockBounds(dockPanelId, panelRef, [
     pos?.x,
     pos?.y,
@@ -53,9 +65,10 @@ export default function MoeDraggableMinimapPanel({
   if (!pos) return null;
 
   return (
-    <div
+    <MoeFloatingPanelRoot
       ref={panelRef}
-      className={`fixed z-[45] rounded-lg border bg-black/78 text-white shadow-lg backdrop-blur-md transition-[box-shadow,border-color] duration-100 ${collapsed ? "" : "p-1.5"} ${
+      panelId={stackPanelId}
+      className={`fixed rounded-lg border bg-black/78 text-white shadow-lg backdrop-blur-md transition-[box-shadow,border-color] duration-100 ${collapsed ? "" : "p-1.5"} ${
         snapHighlight
           ? "border-cyan-300/85 shadow-[0_0_0_2px_rgba(34,211,238,0.4),0_0_16px_rgba(34,211,238,0.3)]"
           : "border-white/25"
@@ -69,7 +82,9 @@ export default function MoeDraggableMinimapPanel({
       <p
         className={`relative cursor-grab touch-none select-none py-1 pr-2 pl-5 text-center text-[8px] font-bold tracking-wide text-cyan-200/95 active:cursor-grabbing ${collapsed ? "" : "mb-1"}`}
         onPointerDown={onDragPointerDown}
-        title="ドラッグで移動 · バトルログを右端に近づけて合体"
+        title={moeFloatingDragTitle(
+          "ドラッグで移動 · バトルログを右端に近づけて合体"
+        )}
       >
         <MoePanelCollapseToggle
           collapsed={collapsed}
@@ -116,6 +131,6 @@ export default function MoeDraggableMinimapPanel({
           </div>
         </>
       ) : null}
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

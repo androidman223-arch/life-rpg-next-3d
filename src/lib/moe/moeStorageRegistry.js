@@ -8,7 +8,14 @@
 import { MOE_ALLY_TARGET_STORAGE_KEY } from "@/lib/moeAllyTargetSettings";
 import { MOE_SKILL_PANEL_MODE_STORAGE_KEY } from "@/lib/moeSkillPanelModeSettings";
 import { MOE_PET_SKILL_MODE_STORAGE_KEY } from "@/lib/moePetSkillSettings";
+import { MOE_PET_AUTO_SKILL_STORAGE_KEY } from "@/lib/moePetAutoSkillSettings";
+import { MOE_PET_LOYALTY_GATE_100_STORAGE_KEY } from "@/lib/moePetLoyaltyGateSettings";
+import { MOE_ENEMY_RESPAWN_STORAGE_KEY } from "@/lib/moeEnemyRespawn";
+import { MOE_PLAYER_LOOK_AHEAD_STORAGE_KEY } from "@/lib/moePlayerLookAhead";
 import { MOE_TRAINING_SKILL_MODE_STORAGE_KEY } from "@/lib/moeTrainingSkillSettings";
+import { MOE_PLAYER_SKILL_SUCCESS_100_STORAGE_KEY } from "@/lib/moePlayerSkillSuccessSettings";
+import { MOE_SKILL_PANEL_VISIBILITY_STORAGE_KEY } from "@/lib/moeSkillPanelVisibilitySettings";
+import { MOE_SKILL_PANEL_COLLAPSE_STORAGE_KEY } from "@/lib/moeSkillPanelCollapseSettings";
 import { MOE_PLAYER_SKILL_SET_STORAGE_KEY } from "@/lib/moePlayerSkillSetSettings";
 import { MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY } from "@/data/moePlayerSkillSlotOrder";
 import { MOE_PLAYER_SKILL_UNLOCK_STORAGE_KEY } from "@/data/moePlayerNinjaSkills";
@@ -25,8 +32,11 @@ import {
   MOE_ITEM_BOX_SELECTED_KEY,
 } from "@/lib/moeItemBoxStorage";
 import { MOE_HOLY_RECORD_STORAGE_KEY } from "@/lib/moeHolyRecordStorage";
-import { MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY } from "@/lib/moeEnemyStatSearch";
-import { MOE_TARGET_WINDOW_POS_STORAGE_KEY } from "@/components/MoeTargetWindow";
+import {
+  MOE_MINIMAP_POS_STORAGE_2D,
+  MOE_MINIMAP_POS_STORAGE_3D,
+  MOE_PANEL_DRAG_POS_KEYS,
+} from "@/lib/moePanelStack";
 import {
   MOE_EXTERNAL_SAVE_LAST_FILE_KEY,
   MOE_EXTERNAL_SAVE_LAST_FOLDER_KEY,
@@ -35,6 +45,18 @@ import {
   BGM_TRACK_STORAGE_KEY,
   BGM_VOLUME_STORAGE_KEY,
 } from "@/lib/moeAmbientBgmTracks";
+
+/** @type {Record<string, { key: string, owner: string, notes?: string }>} */
+const MOE_PANEL_DRAG_POS_REGISTRY = Object.fromEntries(
+  MOE_PANEL_DRAG_POS_KEYS.map((key) => [
+    `panelDragPos:${key}`,
+    {
+      key,
+      owner: "moePanelStack",
+      notes: "フローティングパネル位置（panelId と同値）",
+    },
+  ])
+);
 
 /** @type {Record<string, { key: string, owner: string, notes?: string }>} */
 export const MOE_STORAGE_REGISTRY = {
@@ -58,9 +80,44 @@ export const MOE_STORAGE_REGISTRY = {
     owner: "moeTrainingSkillSettings",
     notes: "鳳凰・龍神 修行スキル — learned | all",
   },
+  playerSkillSuccess100: {
+    key: MOE_PLAYER_SKILL_SUCCESS_100_STORAGE_KEY,
+    owner: "moePlayerSkillSuccessSettings",
+    notes: "プレイヤースキル成功率100%（設定）",
+  },
+  skillPanelVisibility: {
+    key: MOE_SKILL_PANEL_VISIBILITY_STORAGE_KEY,
+    owner: "moeSkillPanelVisibilitySettings",
+    notes: "縦横スキルUI 8種の表示オン/オフ",
+  },
+  skillPanelCollapse: {
+    key: MOE_SKILL_PANEL_COLLAPSE_STORAGE_KEY,
+    owner: "moeSkillPanelCollapseSettings",
+    notes: "縦横スキルUI 8種の◆たたみ状態",
+  },
   petSkillMode: {
     key: MOE_PET_SKILL_MODE_STORAGE_KEY,
     owner: "moePetSkillSettings",
+  },
+  petAutoSkill: {
+    key: MOE_PET_AUTO_SKILL_STORAGE_KEY,
+    owner: "moePetAutoSkillSettings",
+    notes: "戦闘オートAI（高Lvスキル優先）",
+  },
+  petLoyaltyGate100: {
+    key: MOE_PET_LOYALTY_GATE_100_STORAGE_KEY,
+    owner: "moePetLoyaltyGateSettings",
+    notes: "手動スキル — 愛着100で命令（MOE本家）",
+  },
+  enemyRespawnMinutes: {
+    key: MOE_ENEMY_RESPAWN_STORAGE_KEY,
+    owner: "moeEnemyRespawn",
+    notes: "帯別リポップ秒 lv20/50/100/150（v2）。旧分データも読む",
+  },
+  playerLookAhead: {
+    key: MOE_PLAYER_LOOK_AHEAD_STORAGE_KEY,
+    owner: "moePlayerLookAhead",
+    notes: "3Dプレイヤーの画面上下。大きいほど画面中央より下",
   },
   playerSkillSet: {
     key: MOE_PLAYER_SKILL_SET_STORAGE_KEY,
@@ -125,27 +182,16 @@ export const MOE_STORAGE_REGISTRY = {
     key: MOE_HOLY_RECORD_STORAGE_KEY,
     owner: "moeHolyRecordStorage",
   },
-  playerHpWindowPos: {
-    key: "life-rpg-moe-player-hp-window-pos",
-    owner: "MoePlayerHpWindow",
+  ...MOE_PANEL_DRAG_POS_REGISTRY,
+  minimapPos3d: {
+    key: MOE_MINIMAP_POS_STORAGE_3D,
+    owner: "MoeDraggableMinimapPanel",
+    notes: "全体マップ位置（stack id minimap-3d と別キー）",
   },
-  petHpWindowPos: {
-    key: "life-rpg-moe-pet-hp-window-pos",
-    owner: "MoePetHpWindow",
-  },
-  enemyStatSearchPanelPos: {
-    key: MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY,
-    owner: "MoeEnemyStatSearchPanel",
-    notes: "敵ステサーチウィンドウのドラッグ位置",
-  },
-  targetWindowPos: {
-    key: MOE_TARGET_WINDOW_POS_STORAGE_KEY,
-    owner: "MoeTargetWindow",
-    notes: "敵ターゲット＋支援ターゲットウィンドウのドラッグ位置",
-  },
-  itemBoxPos: {
-    key: "life-rpg-moe-item-box-pos",
-    owner: "MoeItemBox",
+  minimapPos2d: {
+    key: MOE_MINIMAP_POS_STORAGE_2D,
+    owner: "MoeDraggableMinimapPanel",
+    notes: "2Dミニマップ位置（stack id minimap-2d と別キー）",
   },
   itemBoxLayout: {
     key: "life-rpg-moe-item-box-layout",

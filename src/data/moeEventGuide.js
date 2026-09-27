@@ -53,7 +53,7 @@ export const MOE_EVENT_GUIDE_SECTIONS = [
       {
         label: "フェニックス系（技②）",
         detail: "ミステリー ドラゴンⅡ転生後 · プレイヤー技② →",
-        note: "回復・HP+100 等 — トレーナーがペットを支援",
+        note: "回復・HP+50 等 — トレーナーがペットを支援",
       },
     ],
   },

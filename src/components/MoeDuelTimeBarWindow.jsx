@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useMoeDuelTimeBarLayout } from "@/hooks/useMoeDuelTimeBarLayout";
 import { MOE_DUEL_TIME_BAR_DEFAULT_WIDTH } from "@/lib/moeDuelTimeBarLayout";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ID_DUEL_TIME_BAR,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 
 function useSmoothDuelBar(duelRef, barKey, active) {
   const [pct, setPct] = useState(0);
@@ -59,7 +64,6 @@ export default function MoeDuelTimeBarWindow({
   const enemyPct = useSmoothDuelBar(duelRef, "enemyBar", charging);
   const { layout, panelRef, onDragPointerDown, onResizePointerDown } =
     useMoeDuelTimeBarLayout();
-
   useEffect(() => {
     if (!duelRef) return undefined;
     let raf = 0;
@@ -82,9 +86,10 @@ export default function MoeDuelTimeBarWindow({
   const labelSize = Math.max(8, Math.round(9 * scale));
 
   return (
-    <div
+    <MoeFloatingPanelRoot
       ref={panelRef}
-      className="pointer-events-auto fixed z-[55] max-w-[calc(100vw-0.5rem)] rounded-xl border border-white/25 bg-black/82 text-white shadow-lg backdrop-blur-md"
+      panelId={MOE_PANEL_ID_DUEL_TIME_BAR}
+      className="pointer-events-auto fixed max-w-[calc(100vw-0.5rem)] rounded-xl border border-white/25 bg-black/82 text-white shadow-lg backdrop-blur-md"
       style={{
         left: layout.x,
         top: layout.y,
@@ -94,7 +99,7 @@ export default function MoeDuelTimeBarWindow({
       <div
         className="h-1.5 cursor-grab touch-none select-none rounded-t-xl bg-white/8 active:cursor-grabbing"
         onPointerDown={onDragPointerDown}
-        title="ドラッグで移動"
+        title={moeFloatingDragTitle("ドラッグで移動")}
         aria-label="ドラッグで移動"
       />
       <div className="px-2 pb-1.5 pt-0.5">
@@ -173,6 +178,6 @@ export default function MoeDuelTimeBarWindow({
           />
         </svg>
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

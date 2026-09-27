@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+MOE風 3D フィールド RPG（Next.js + Three.js）。
+
+**全体目次（ゲームの流れ・コード構成）:** [`docs/moe-overview.md`](docs/moe-overview.md)
 
 ## Getting Started
 

@@ -277,6 +277,16 @@ export function buildMysteryDragonRoot(palette = DEFAULT_PALETTE) {
   addPart(body, new THREE.ConeGeometry(0.07, 0.18, 4), horn, 0.08, 0.58, -0.94, [0.55, 0, 0.28]);
   addPart(body, new THREE.OctahedronGeometry(0.045, 0), crystal, 0.09, 0.6, -1.02, [0.4, 0.3, 0.2]);
 
+  /* 横幅だけ細くする。高さ・長さはそのまま */
+  const slimX = 0.8;
+  root.traverse((obj) => {
+    if (obj === root) return;
+    obj.position.x *= slimX;
+    if (obj.isMesh && obj.geometry) {
+      obj.geometry.scale(slimX, 1, 1);
+    }
+  });
+
   root.userData.dragonPaletteId = p.id;
   return root;
 }

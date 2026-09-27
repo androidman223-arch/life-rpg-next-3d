@@ -6,9 +6,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## MOE フィールド（life-rpg）
 
-### 落とし穴メモ
-- 再発防止の短い記録: `docs/moe-lessons.md`（1件最大3行）
+### 目次・全体像
+- **1枚目次**: `docs/moe-overview.md`（ゲームの流れ・ルート・コード層・サブシステム一覧）
 - ファイル索引: `docs/moe-files.md`（どのファイルに何があるか）
+- 再発防止の短い記録: `docs/moe-lessons.md`（1件最大3行）
 
 ### 現状の課題
 - `MoeFieldMap.jsx` がオーケストレーター兼ゲームループ兼 HUD（7000行超）。新機能はまず `src/lib/` に純粋ロジックを切り出す。

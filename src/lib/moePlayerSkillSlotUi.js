@@ -6,6 +6,7 @@ import MoeShinsokuIcon from "@/components/icons/MoeShinsokuIcon";
 import MoeShinobiashiIcon from "@/components/icons/MoeShinobiashiIcon";
 import MoeKakureminoIcon from "@/components/icons/MoeKakureminoIcon";
 import MoeKintounIcon from "@/components/icons/MoeKintounIcon";
+import MoeSkateboardIcon from "@/components/icons/MoeSkateboardIcon";
 import { getMoePlayerDragonSkill } from "@/data/moePlayerDragonSkills";
 import {
   MOE_PLAYER_SLOT_ICONS,
@@ -37,6 +38,7 @@ const NINJA_ICONS = {
 
 const DRAGON_ICONS = {
   MoeKintounIcon,
+  MoeSkateboardIcon,
 };
 
 /**
@@ -57,6 +59,7 @@ export function renderPlayerSlotIcon(key, ninjaSkill, dragonSkill = null) {
     return movementSkill.icon ?? "✦";
   }
   if (key === "dragon_kintoun") return "☁️";
+  if (key === "dragon_skateboard") return "🛹";
   return "·";
 }
 
@@ -206,18 +209,25 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
     };
   }
 
-  if (key === "dragon_kintoun") {
-    const skill = ctx.dragonById?.dragon_kintoun ?? getMoePlayerDragonSkill(key);
-    const unlocked = Boolean(ctx.dragonById?.dragon_kintoun);
+  if (key === "dragon_kintoun" || key === "dragon_skateboard") {
+    const skill = ctx.dragonById?.[key] ?? getMoePlayerDragonSkill(key);
+    const unlocked = Boolean(ctx.dragonById?.[key]);
+    const active =
+      key === "dragon_kintoun"
+        ? Boolean(ctx.kintounOn)
+        : Boolean(ctx.skateboardOn);
+    const defaultLevel = key === "dragon_kintoun" ? 80 : 30;
     return {
       slotKey: key,
       label,
       icon: renderPlayerSlotIcon(key, null, unlocked ? skill : null),
       disabled: !unlocked,
-      active: unlocked && Boolean(ctx.kintounOn),
+      active: unlocked && active,
       title: unlocked
         ? formatMoePetSkillDescription(skill)
-        : `筋斗雲（龍神Lv.${skill?.requiredDragonLevel ?? 80}でゲット）`,
+        : key === "dragon_skateboard"
+          ? `${label}（トレーナーLv.30または龍神Lv.40でゲット）`
+          : `${label}（龍神Lv.${skill?.requiredDragonLevel ?? defaultLevel}でゲット）`,
       onClick: () => unlocked && skill && ctx.onDragonSkill?.(skill),
       reorderable: true,
     };
@@ -228,7 +238,6 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
   let active = false;
   let cooldownSec = null;
   if (skill?.id === "ninja_shinobiashi") active = ctx.shinobiashiOn;
-  if (skill?.id === "ninja_shinsoku") active = ctx.dashBoost3x;
   if (skill?.id === "ninja_kakuremino") active = Boolean(ctx.kakureminoActive);
   if (
     skill?.id === "ninja_kakuremino" &&
@@ -238,8 +247,7 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
     cooldownSec = ctx.kakureminoCooldownSec;
   }
 
-  const toggleNinja =
-    skill?.id === "ninja_shinobiashi" || skill?.id === "ninja_shinsoku";
+  const toggleNinja = skill?.id === "ninja_shinobiashi";
   const kakureminoBusy =
     skill?.id === "ninja_kakuremino" &&
     (Boolean(ctx.kakureminoActive) || (ctx.kakureminoCooldownSec ?? 0) > 0);

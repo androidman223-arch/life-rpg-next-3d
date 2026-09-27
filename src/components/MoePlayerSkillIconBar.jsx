@@ -5,8 +5,13 @@ import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
 import { useMoeSkillSlotSwap } from "@/hooks/useMoeSkillSlotSwap";
 import { MOE_PLAYER_SKILL_SLOT_COUNT } from "@/data/moePlayerNinjaSkills";
 import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 
-const DEFAULT_STORAGE_KEY = "life-rpg-moe-player-skill-icon-bar-pos";
+const DEFAULT_STORAGE_KEY = MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR;
 const SLOT_PX = 32;
 const CAP_W = 5;
 
@@ -59,7 +64,6 @@ export default function MoePlayerSkillIconBar({
     storageKey,
     getDefaultPos
   );
-
   const canReorder = typeof onSwapSlots === "function";
   const { bindSlot } = useMoeSkillSlotSwap(onSwapSlots ?? (() => {}));
 
@@ -81,20 +85,21 @@ export default function MoePlayerSkillIconBar({
   if (!pos) return null;
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={storageKey}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[46] select-none"
+      className="fixed select-none"
       style={{ left: pos.x, top: pos.y }}
     >
       <div className="overflow-hidden rounded-[5px] border border-slate-300/85 bg-black shadow-[0_2px_10px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)]">
         <div
           className={`cursor-grab touch-none bg-gradient-to-b px-1 py-px active:cursor-grabbing ${headerGradient}`}
           onPointerDown={onDragPointerDown}
-          title="ドラッグで移動"
+          title={moeFloatingDragTitle("ドラッグで移動")}
         >
           {headerExtra ??
             (title ? (
@@ -186,6 +191,6 @@ export default function MoePlayerSkillIconBar({
           />
         </div>
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

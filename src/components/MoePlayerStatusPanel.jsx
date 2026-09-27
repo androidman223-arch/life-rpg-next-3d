@@ -5,7 +5,7 @@ import { buildPlayerPhoenixSkillList } from "@/lib/moePlayerPhoenixSkillUi";
 
 function VitalRow({ label, current, max, pct, barClass }) {
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0">
       <div className="flex items-center justify-between gap-1 text-[9px] leading-tight">
         <span className="font-bold text-sky-100">{label}</span>
         <span className="font-mono tabular-nums text-white/90">
@@ -28,7 +28,7 @@ function ExpBar({ label, current, max, pct, tone = "fuchsia" }) {
       ? "bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500"
       : "bg-gradient-to-r from-fuchsia-400 via-violet-500 to-fuchsia-400";
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0">
       <div className="flex items-center justify-between gap-1 text-[9px] leading-tight">
         <span className="font-bold text-fuchsia-100">{label}</span>
         <span className="font-mono tabular-nums text-white/85">
@@ -83,17 +83,17 @@ export default function MoePlayerStatusPanel({
 
   return (
     <div
-      className="mt-1 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-sky-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(14rem,38vh)]"
+      className="mt-0.5 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-sky-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(11rem,32vh)]"
       role="region"
       aria-label="プレイヤーステータス"
     >
-      <div className="box-border w-full max-w-full px-1 py-2 text-white">
-        <div className="space-y-1.5 text-[10px]">
+      <div className="box-border w-full max-w-full px-1 py-1 text-white">
+        <div className="space-y-1 text-[10px]">
           <p className="text-[9px] font-bold tabular-nums text-sky-100">
             {view.job} · 訓練士 Lv.{view.trainerLevel}
           </p>
 
-          <div className="space-y-1 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-pink-100/90">訓練士 EXP</p>
             <ExpBar
               label="EXP"
@@ -107,7 +107,7 @@ export default function MoePlayerStatusPanel({
             </p>
           </div>
 
-          <div className="space-y-1 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-sky-100/90">バイタル</p>
             <VitalRow
               label="HP"
@@ -132,7 +132,7 @@ export default function MoePlayerStatusPanel({
             />
           </div>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-fuchsia-100/90">技② Lv.{view.skill2.level.toFixed(1)}</p>
             <ExpBar
               label="技② EXP"
@@ -146,7 +146,7 @@ export default function MoePlayerStatusPanel({
             </p>
           </div>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-pink-100/90">
               回復熟練 Lv.{view.healProficiency.level.toFixed(1)}
             </p>
@@ -159,7 +159,7 @@ export default function MoePlayerStatusPanel({
             />
           </div>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-emerald-100/90">
               隠密熟練 Lv.{view.stealthProficiency.level.toFixed(1)}
             </p>
@@ -171,7 +171,7 @@ export default function MoePlayerStatusPanel({
             />
           </div>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1.5 text-[9px] leading-tight">
+          <div className="space-y-0.5 border-b border-white/10 pb-1 text-[9px] leading-tight">
             <p className="text-[8px] font-bold text-violet-100/90">技② 習得</p>
             {view.phoenixSkills.map((row) => (
               <div
@@ -196,7 +196,7 @@ export default function MoePlayerStatusPanel({
             ))}
           </div>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1.5">
+          <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-amber-100/90">技③</p>
             {view.preSkills.map((row) => (
               <div key={row.id} className="text-[9px] leading-tight">
@@ -217,7 +217,7 @@ export default function MoePlayerStatusPanel({
           </div>
 
           {view.activeBuffs.length > 0 && (
-            <div className="space-y-0.5 border-b border-white/10 pb-1.5 text-[9px] leading-tight">
+            <div className="space-y-0.5 border-b border-white/10 pb-1 text-[9px] leading-tight">
               <p className="text-[8px] font-bold text-cyan-100/90">バフ</p>
               {view.activeBuffs.map((buff) => (
                 <p key={buff.id} className="text-cyan-50/95">

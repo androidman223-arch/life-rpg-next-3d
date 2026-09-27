@@ -78,11 +78,14 @@ export function formatMoePetSkillDescription(skill) {
 /**
  * スキルバー・ホバーツールチップ用（名前＋短い説明）
  * @param {object | null | undefined} skill
- * @param {{ locked?: boolean }} [opts]
+ * @param {{ locked?: boolean, loyaltyLocked?: boolean }} [opts]
  */
 export function formatMoeSkillHoverTip(skill, opts = {}) {
   if (!skill) return "";
   const name = skill.name ?? "スキル";
+  if (opts.loyaltyLocked) {
+    return `${name}\n（オートAIのみ·手動不可）`;
+  }
   if (opts.locked) {
     return `${name}\n（Lv.${skill.level ?? 1}で習得）`;
   }

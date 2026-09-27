@@ -1519,7 +1519,7 @@ export function buildRiversideCrawler(palette, variantIndex = 0) {
   return root;
 }
 
-/** オルヴァン パピー — 小型ドラゴン · 青系 */
+/** オルヴァン パピー — 子供龍 · 細く、脚と首を立てて縦に高く */
 export function buildOrvanPappy(palette, variantIndex = 0) {
   const prefix = P.orvanPappy;
   const m = buildMonsterMaterials(palette);
@@ -1527,30 +1527,109 @@ export function buildOrvanPappy(palette, variantIndex = 0) {
   const body = createMonsterBody(root, prefix);
   const scale = variantIndex ? 0.92 : 1;
 
-  addPart(body, new THREE.BoxGeometry(0.34 * scale, 0.2 * scale, 0.48 * scale), m.body, 0, 0.34, 0);
-  addPart(body, new THREE.BoxGeometry(0.24 * scale, 0.12 * scale, 0.34 * scale), m.bodyLight, 0, 0.38, 0.06);
+  addPart(
+    body,
+    new THREE.BoxGeometry(0.2 * scale, 0.28 * scale, 0.34 * scale),
+    m.body,
+    0,
+    0.54 * scale,
+    0
+  );
+  addPart(
+    body,
+    new THREE.BoxGeometry(0.13 * scale, 0.16 * scale, 0.24 * scale),
+    m.bodyLight,
+    0,
+    0.58 * scale,
+    0.04 * scale
+  );
+
+  const neck = new THREE.Group();
+  neck.position.set(0, 0.64 * scale, 0.14 * scale);
+  neck.rotation.x = -0.4;
+  body.add(neck);
+  addPart(
+    neck,
+    new THREE.BoxGeometry(0.09 * scale, 0.24 * scale, 0.09 * scale),
+    m.body,
+    0,
+    0.08 * scale,
+    0.02
+  );
 
   const head = new THREE.Group();
-  head.position.set(0, 0.42 * scale, 0.28 * scale);
-  body.add(head);
-  addPart(head, new THREE.BoxGeometry(0.2 * scale, 0.16 * scale, 0.22 * scale), m.body, 0, 0, 0.04);
-  addPart(head, new THREE.BoxGeometry(0.1 * scale, 0.08 * scale, 0.12 * scale), m.bodyDark, 0, -0.02, 0.14);
-  addFrontEyes(head, m, { ex: 0.06 * scale, ey: 0.03 * scale, ez: 0.1 * scale, tag: prefix });
+  head.position.set(0, 0.2 * scale, 0.06 * scale);
+  neck.add(head);
+  addPart(
+    head,
+    new THREE.BoxGeometry(0.15 * scale, 0.13 * scale, 0.16 * scale),
+    m.body,
+    0,
+    0,
+    0.04
+  );
+  addPart(
+    head,
+    new THREE.BoxGeometry(0.07 * scale, 0.05 * scale, 0.11 * scale),
+    m.bodyDark,
+    0,
+    -0.02 * scale,
+    0.11 * scale
+  );
+  addFrontEyes(head, m, {
+    ex: 0.045 * scale,
+    ey: 0.03 * scale,
+    ez: 0.07 * scale,
+    tag: prefix,
+  });
 
   for (const sx of [-1, 1]) {
     addPart(
       body,
-      new THREE.BoxGeometry(0.18 * scale, 0.04 * scale, 0.22 * scale),
+      new THREE.BoxGeometry(0.11 * scale, 0.025 * scale, 0.18 * scale),
       variantIndex ? m.accent : m.bodyLight,
-      sx * 0.2 * scale,
-      0.44 * scale,
-      -0.04,
-      [0.2, sx * 0.35, 0]
+      sx * 0.13 * scale,
+      0.64 * scale,
+      -0.02,
+      [0.3, sx * 0.45, 0]
     );
   }
 
-  addQuadLegs(body, m, { spread: 0.14 * scale, frontZ: 0.16 * scale, backZ: -0.18 * scale });
-  addPart(body, new THREE.BoxGeometry(0.08 * scale, 0.06 * scale, 0.28 * scale), m.bodyDark, 0, 0.32, -0.3 * scale);
+  const spread = 0.09 * scale;
+  const frontZ = 0.1 * scale;
+  const backZ = -0.12 * scale;
+  for (const [x, z] of [
+    [-spread, frontZ],
+    [spread, frontZ],
+    [-spread, backZ],
+    [spread, backZ],
+  ]) {
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.045 * scale, 0.4 * scale, 0.045 * scale),
+      m.bodyDark,
+      x,
+      0.2 * scale,
+      z
+    );
+    addPart(
+      body,
+      new THREE.BoxGeometry(0.05 * scale, 0.04 * scale, 0.07 * scale),
+      m.detail,
+      x,
+      0.02 * scale,
+      z + 0.02 * scale
+    );
+  }
+
+  addPart(
+    body,
+    new THREE.BoxGeometry(0.045 * scale, 0.04 * scale, 0.24 * scale),
+    m.bodyDark,
+    0,
+    0.48 * scale,
+    -0.24 * scale
+  );
   return root;
 }
 

@@ -4,8 +4,10 @@
 
 export const MOE_PANEL_DOCK_STORAGE_KEY = "life-rpg-moe-panel-dock";
 
-export const MOE_DOCK_PANEL_MINIMAP_3D = "minimap-3d";
-export const MOE_DOCK_PANEL_BATTLE_LOG = "battle-log";
+export {
+  MOE_PANEL_ID_BATTLE_LOG as MOE_DOCK_PANEL_BATTLE_LOG,
+  MOE_PANEL_ID_MINIMAP_3D as MOE_DOCK_PANEL_MINIMAP_3D,
+} from "./moePanelStack.js";
 
 /** @typedef {{ x: number, y: number, width: number, height: number }} MoeDockBounds */
 /** @typedef {{ childId: string, parentId: string }} MoePanelDockRelation */

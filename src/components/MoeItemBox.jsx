@@ -26,10 +26,15 @@ import {
 import MoeHolyRecordIcon from "@/components/icons/MoeHolyRecordIcon";
 import MoeExperiencePowderIcon from "@/components/MoeExperiencePowderIcon";
 import MoeExperienceCubeIcon from "@/components/MoeExperienceCubeIcon";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ID_ITEM_BOX,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 
 export { MOE_ITEM_BOX_COLS, MOE_ITEM_BOX_ROWS, MOE_ITEM_SLOT_COUNT };
 
-const STORAGE_KEY = "life-rpg-moe-item-box-pos";
+const STORAGE_KEY = MOE_PANEL_ID_ITEM_BOX;
 const GOLD_STORAGE_KEY = "life-rpg-moe-item-box-gold";
 const CAP_W = 5;
 
@@ -153,7 +158,6 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
     getDefaultPos
   );
   const { layout, onResizePointerDown } = useMoeItemBoxLayout();
-
   const [slots, setSlots] = useState(emptySlots);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [gold, setGold] = useState(100);
@@ -256,13 +260,14 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
   const cellCount = moeItemBoxCellCount(gridCols);
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={STORAGE_KEY}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[46] select-none"
+      className="fixed select-none"
       style={{ left: pos.x, top: pos.y }}
     >
       <div
@@ -280,7 +285,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
             background: `linear-gradient(to bottom, ${MOE_UI_GOLD.caption}, ${MOE_UI_GOLD.captionDark})`,
           }}
           onPointerDown={onDragPointerDown}
-          title="ドラッグで移動"
+          title={moeFloatingDragTitle("ドラッグで移動")}
         >
           <p
             className="text-center text-[8px] font-bold leading-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
@@ -540,7 +545,7 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
           </div>
         </div>
       ) : null}
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }
 

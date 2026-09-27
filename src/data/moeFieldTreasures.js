@@ -39,13 +39,13 @@ export const MOE_ITEM_EXPERIENCE_CUBE = {
   expAmount: 20000,
 };
 
-/** 忍者の足袋 — 神速解放用（別途） */
+/** 忍者の足袋 — 板乗り解放用（別途） */
 export const MOE_ITEM_NINJA_TABI = {
   id: "ninja_tabi",
   label: "忍者の足袋",
   emoji: "🧦",
   iconKind: "ninja_tabi",
-  unlocksPlayerSkillId: "ninja_shinsoku",
+  unlocksPlayerSkillId: "dragon_skateboard",
 };
 
 /** レベルダウンパウダー（USE で -1000 EXP） */
@@ -91,11 +91,11 @@ export function shouldMoeEnemyDropTreasure(enemyKey) {
 
 /**
  * @param {string} sourceEnemyKey
- * @param {{ playerHasShinsoku?: boolean }} [opts]
+ * @param {{ playerHasBoardRide?: boolean }} [opts]
  */
 export function lootItemIdForMoeTreasureDrop(sourceEnemyKey, opts = {}) {
   if (sourceEnemyKey === "gustav_junior") {
-    if (!opts.playerHasShinsoku) {
+    if (!opts.playerHasBoardRide) {
       return MOE_ITEM_NINJA_TABI.id;
     }
     return MOE_ITEM_EXPERIENCE_CUBE.id;

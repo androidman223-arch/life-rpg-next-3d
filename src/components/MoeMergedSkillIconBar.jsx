@@ -10,6 +10,9 @@ import { formatMoeSkillHoverTip } from "@/lib/moePetSkillDescription";
 import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
 import MoeSkillPanelSwitcher from "@/components/MoeSkillPanelSwitcher";
 import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
+import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import { moeFloatingDragTitle } from "@/lib/moePanelStack";
 
 const SLOT_PX = 32;
 const CAP_W = 5;
@@ -37,6 +40,8 @@ export default function MoeMergedSkillIconBar({
   player2Slots,
   player3Slots,
   onSwapPlayer1Slots,
+  onClose,
+  collapsed = false,
 }) {
   const [storedMode, setStoredMode] = useMoeSkillPanelMode(storageKey);
   const mode = panelMode ?? storedMode;
@@ -107,21 +112,25 @@ export default function MoeMergedSkillIconBar({
   if (!pos) return null;
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={storageKey}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[46] select-none"
+      className="fixed select-none"
       style={{ left: pos.x, top: pos.y }}
     >
-      <div className="overflow-hidden rounded-[5px] border border-slate-300/85 bg-black shadow-[0_2px_10px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)]">
+      <div className={`overflow-hidden rounded-[5px] border border-slate-300/85 bg-black shadow-[0_2px_10px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)] ${collapsed ? "min-w-[7.5rem]" : ""}`}>
         <div
-          className={`cursor-grab touch-none bg-gradient-to-b px-1 py-px active:cursor-grabbing ${headerGradient}`}
+          className={`relative min-h-5 cursor-grab touch-none bg-gradient-to-b py-1 pl-5 pr-1 text-white active:cursor-grabbing ${headerGradient}`}
           onPointerDown={onDragPointerDown}
-          title="ドラッグで移動"
+          title={moeFloatingDragTitle("ドラッグで移動")}
         >
+          {onClose ? (
+            <MoeSkillPanelCloseButton collapsed={collapsed} onClose={onClose} />
+          ) : null}
           {showPlayer ? (
             <MoeSkillPanelSwitcher
               mode={effectiveMode}
@@ -129,11 +138,13 @@ export default function MoeMergedSkillIconBar({
               petLabel={petLabel}
             />
           ) : (
-            <p className="text-center text-[8px] font-bold leading-tight text-amber-50 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
+            <p className="w-full text-center text-[8px] font-bold leading-tight text-amber-50 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
               {petLabel}
             </p>
           )}
         </div>
+        {!collapsed ? (
+        <>
         <div className="h-px shrink-0 bg-white/55" aria-hidden />
         <div
           className="flex items-stretch bg-zinc-950 p-1"
@@ -227,7 +238,13 @@ export default function MoeMergedSkillIconBar({
                     </MoeCompactSkillTip>
                   );
                 })
-              : petRow.map((skill, i) => {
+              : petRow.map((slot, i) => {
+                  const skill = slot?.skill ?? slot;
+                  const cooldownSec =
+                    slot?.cooldownSec != null && slot.cooldownSec > 0
+                      ? slot.cooldownSec
+                      : null;
+                  const onCooldown = cooldownSec != null;
                   const icon = iconForPetSkill(skill);
                   const label = skill?.name ?? `スキル ${i + 1}`;
                   const filled = Boolean(skill);
@@ -235,9 +252,11 @@ export default function MoeMergedSkillIconBar({
                     filled &&
                     typeof isPetSkillUsable === "function" &&
                     !isPetSkillUsable(skill);
-                  const usable = filled && !locked;
+                  const usable = filled && !locked && !onCooldown;
                   const tip = filled
-                    ? formatMoeSkillHoverTip(skill, { locked })
+                    ? onCooldown
+                      ? `${label}\n（待ち ${cooldownSec}秒）`
+                      : formatMoeSkillHoverTip(skill, { locked })
                     : `${i + 1}（未設定）`;
 
                   return (
@@ -249,11 +268,13 @@ export default function MoeMergedSkillIconBar({
                         onClick={() => usable && onPetActivate(i, skill)}
                         style={{ width: SLOT_PX, height: SLOT_PX }}
                         className={`relative shrink-0 overflow-hidden rounded-[3px] border transition active:scale-95 ${
-                          usable
-                            ? "border-amber-400/70 bg-gradient-to-b from-amber-700 via-amber-900 to-zinc-950 text-amber-50 hover:border-amber-200/80 hover:brightness-110"
-                            : filled
-                              ? "cursor-not-allowed border-zinc-600/70 bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-55"
-                              : "cursor-default border-zinc-700/60 bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-75"
+                          onCooldown
+                            ? "cursor-not-allowed border-zinc-700/80 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-zinc-500 opacity-55"
+                            : usable
+                              ? "border-amber-400/70 bg-gradient-to-b from-amber-700 via-amber-900 to-zinc-950 text-amber-50 hover:border-amber-200/80 hover:brightness-110"
+                              : filled
+                                ? "cursor-not-allowed border-zinc-600/70 bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-55"
+                                : "cursor-default border-zinc-700/60 bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-75"
                         }`}
                       >
                         <span
@@ -263,9 +284,18 @@ export default function MoeMergedSkillIconBar({
                         >
                           {i + 1}
                         </span>
-                        <span className="pointer-events-none flex h-full w-full items-center justify-center text-[17px] leading-none">
+                        <span
+                          className={`pointer-events-none flex h-full w-full items-center justify-center text-[17px] leading-none ${
+                            onCooldown ? "opacity-35" : ""
+                          }`}
+                        >
                           {filled ? icon : "·"}
                         </span>
+                        {onCooldown ? (
+                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 text-[15px] font-bold tabular-nums leading-none text-amber-200/95">
+                            {cooldownSec}
+                          </span>
+                        ) : null}
                         {usable && skill?.skillSubInfo ? (
                           <span
                             className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/35 text-center text-[5px] font-bold leading-none text-amber-100/90"
@@ -284,7 +314,9 @@ export default function MoeMergedSkillIconBar({
             aria-hidden
           />
         </div>
+        </>
+        ) : null}
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

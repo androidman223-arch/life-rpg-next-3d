@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MoeBuffIconStrip from "@/components/MoeBuffIconStrip";
 import MoeNameWindowChargeRow from "@/components/MoeNameWindowChargeRow";
 import { MOE_PET_BUFF_COLUMNS } from "@/lib/moeBuffUi";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ALLY_SELECTED_MIN_Z,
+  MOE_PANEL_ID_PET_HP,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 
 const WINDOW_W = 130;
 const SIDE_CAP_W = 7;
-const STORAGE_KEY = "life-rpg-moe-pet-hp-window-pos";
+const STORAGE_KEY = MOE_PANEL_ID_PET_HP;
 const MOE_HP_RED = "#ef4444";
 const MOE_PET_CHARGE = "#eab308";
 
@@ -50,7 +56,6 @@ export default function MoePetHpWindow({
   const [pos, setPos] = useState(null);
   const canSaveRef = useRef(false);
   const sizeRef = useRef({ w: WINDOW_W, h: 32 });
-
   useEffect(() => {
     canSaveRef.current = false;
     const saved = loadSavedPos();
@@ -127,13 +132,15 @@ export default function MoePetHpWindow({
   if (!pos) return null;
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={STORAGE_KEY}
+      minZIndex={allySelected ? MOE_PANEL_ALLY_SELECTED_MIN_Z : 0}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className={`fixed pointer-events-auto select-none ${allySelected ? "z-[58]" : "z-[54]"}`}
+      className="fixed pointer-events-auto select-none"
       style={{ left: pos.x, top: pos.y, width: WINDOW_W }}
     >
       <div
@@ -146,7 +153,7 @@ export default function MoePetHpWindow({
         <div
           className="cursor-grab touch-none bg-gradient-to-b from-blue-600 to-blue-800 px-1.5 py-0.5 active:cursor-grabbing"
           onPointerDown={onDragPointerDown}
-          title="クリックでターゲット · ドラッグで移動"
+          title={moeFloatingDragTitle("ターゲット · ドラッグで移動")}
         >
           <p className="truncate text-center text-[9px] font-bold leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
             {emoji} {name}
@@ -208,6 +215,6 @@ export default function MoePetHpWindow({
         />
         </div>
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

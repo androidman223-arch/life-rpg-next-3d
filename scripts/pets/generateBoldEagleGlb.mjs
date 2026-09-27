@@ -39,12 +39,12 @@ export function buildBoldEagleRoot() {
   addPart(body, new THREE.BoxGeometry(0.36, 0.28, 0.48), bodyM, 0, 0.58, 0);
   addPart(body, new THREE.BoxGeometry(0.28, 0.12, 0.38), bodyLight, 0, 0.48, 0.02);
 
-  /* 頭 — 白頭 */
-  addPart(body, new THREE.SphereGeometry(0.18, 8, 8), headM, 0, 0.78, 0.22);
-  addPart(body, new THREE.ConeGeometry(0.06, 0.16, 4), beak, 0, 0.74, 0.38, [1.2, 0, 0]);
-  addPart(body, new THREE.BoxGeometry(0.04, 0.04, 0.06), beakDark, 0, 0.72, 0.42);
-  addPart(body, new THREE.SphereGeometry(0.04, 6, 6), eye, -0.07, 0.8, 0.32);
-  addPart(body, new THREE.SphereGeometry(0.04, 6, 6), eye, 0.07, 0.8, 0.32);
+  /* 頭 — 白頭。上が広く下が尖った ▼ */
+  addPart(body, new THREE.ConeGeometry(0.12, 0.24, 4), headM, 0, 0.86, 0.24, [Math.PI, 0, 0]);
+  addPart(body, new THREE.ConeGeometry(0.045, 0.14, 4), beak, 0, 0.74, 0.36, [1.15, 0, 0]);
+  addPart(body, new THREE.BoxGeometry(0.035, 0.03, 0.05), beakDark, 0, 0.72, 0.4);
+  addPart(body, new THREE.SphereGeometry(0.028, 6, 6), eye, -0.05, 0.9, 0.3);
+  addPart(body, new THREE.SphereGeometry(0.028, 6, 6), eye, 0.05, 0.9, 0.3);
 
   /* 翼 — 左右 */
   const wingL = new THREE.Group();

@@ -161,6 +161,24 @@ import {
   tickMoeEnemyFieldChaseBatch,
 } from "@/lib/moeEnemyFieldChase";
 import {
+  moeEnemyRespawnReady,
+  moeMarkEnemyDefeated,
+  loadMoeEnemyRespawnSeconds,
+  saveMoeEnemyRespawnSeconds,
+  defaultMoeEnemyRespawnSeconds,
+  MOE_ENEMY_RESPAWN_BANDS,
+  MOE_ENEMY_RESPAWN_CHOICES,
+} from "@/lib/moeEnemyRespawn";
+import { placeMoeFieldEnemyRespawn } from "@/lib/moeEnemyRespawnPlace";
+import {
+  MOE_PLAYER_LOOK_AHEAD_DEFAULT,
+  MOE_PLAYER_LOOK_AHEAD_MAX,
+  MOE_PLAYER_LOOK_AHEAD_MIN,
+  loadMoePlayerLookAhead,
+  nudgeMoePlayerLookAhead,
+  saveMoePlayerLookAhead,
+} from "@/lib/moePlayerLookAhead";
+import {
   activateMoeKakuremino,
   buildMoeEnemyDetectionOpts,
   dropMoeEnemyFieldAggro,
@@ -171,7 +189,6 @@ import {
 } from "@/lib/moePlayerStealth";
 import MoeField3DBattleOverlay from "@/components/MoeField3DBattleOverlay";
 import MoeField3DTreasureOverlay from "@/components/MoeField3DTreasureOverlay";
-import MoeTargetWindow from "@/components/MoeTargetWindow";
 import MoeEnemyStatSearchPanel from "@/components/MoeEnemyStatSearchPanel";
 import MoeCircleMarker from "@/components/MoeCircleMarker";
 import MoeCrystalMarker from "@/components/MoeCrystalMarker";
@@ -184,20 +201,49 @@ import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
 import MoeMergedSkillIconBar from "@/components/MoeMergedSkillIconBar";
 import MoeMergedVerticalSkillPanel from "@/components/MoeMergedVerticalSkillPanel";
 import MoeTrainingVerticalSkillPanel from "@/components/MoeTrainingVerticalSkillPanel";
+import MoeTrainingSkillIconBar from "@/components/MoeTrainingSkillIconBar";
+import {
+  loadMoeSkillPanelVisibility,
+  MOE_SKILL_PANEL_IDS,
+  MOE_SKILL_PANEL_LABELS,
+  setMoeSkillPanelVisible,
+} from "@/lib/moeSkillPanelVisibilitySettings";
+import {
+  loadMoeSkillPanelCollapse,
+  setMoeSkillPanelCollapsed,
+} from "@/lib/moeSkillPanelCollapseSettings";
 import { runTrainingSkillBridgeAction } from "@/lib/moeTrainingSkillBridge";
 import {
   loadMoeTrainingSkillMode,
   saveMoeTrainingSkillMode,
   MOE_TRAINING_SKILL_MODE_ALL,
   MOE_TRAINING_SKILL_MODE_LEARNED,
-  moeTrainingSkillModeLabel,
   isTrainingSkillUsableAtLevel,
 } from "@/lib/moeTrainingSkillSettings";
+import {
+  loadMoePlayerSkillSuccess100,
+  saveMoePlayerSkillSuccess100,
+} from "@/lib/moePlayerSkillSuccessSettings";
 import MoeDragonLineupCanvas from "@/components/MoeDragonLineupCanvas";
 import MoeMonsterLineupCanvas from "@/components/MoeMonsterLineupCanvas";
 import MoeShowcaseDeletePicker from "@/components/MoeShowcaseDeletePicker";
 import MoeDraggableMinimapPanel from "@/components/MoeDraggableMinimapPanel";
 import { MoePanelDockProvider } from "@/context/MoePanelDockContext";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import {
+  MOE_PANEL_ID_DRAGON_TRAINING_ICON_BAR,
+  MOE_PANEL_ID_DRAGON_TRAINING_SKILL_PANEL,
+  MOE_PANEL_ID_MERGED_ICON_BAR_A,
+  MOE_PANEL_ID_MERGED_ICON_BAR_B,
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_A,
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_B,
+  MOE_PANEL_ID_PET_SIDE,
+  MOE_PANEL_ID_PHOENIX_TRAINING_ICON_BAR,
+  MOE_PANEL_ID_PHOENIX_TRAINING_SKILL_PANEL,
+  MOE_MINIMAP_POS_STORAGE_2D,
+  MOE_MINIMAP_POS_STORAGE_3D,
+  moeFloatingDragTitle,
+} from "@/lib/moePanelStack";
 import { MOE_DOCK_PANEL_MINIMAP_3D } from "@/lib/moePanelDock";
 import MoeField3DCompassHud from "@/components/MoeField3DCompassHud";
 import { MOE_DRAGON_LINEUP } from "@/data/moeDragonVariants";
@@ -220,9 +266,20 @@ import {
 } from "@/data/moePlayerNinjaSkills";
 import { buildPlayerDragonSkillById } from "@/data/moePlayerDragonSkills";
 import {
+  beginKintounApproach,
+  kintounPetRideSlot,
+  lerpKintounPetRideSlot,
   moeKintounMoveSpeedMult,
+  tickKintounApproach,
   tickKintounFlyOffset,
 } from "@/lib/moeDragonKintoun";
+import {
+  beginSkateboardApproach,
+  lerpSkateboardPetRideSlot,
+  moeSkateboardMoveSpeedMult,
+  skateboardPetRideSlot,
+  tickSkateboardApproach,
+} from "@/lib/moeDragonSkateboard";
 import {
   loadPlayerSkillSlotOrder,
   savePlayerSkillSlotOrder,
@@ -298,8 +355,6 @@ import {
   MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC,
   MOE_PLAYER_HEAL_LIGHT_AMOUNT,
   MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC,
-  moePlayerHealCooldownLabel,
-  moePlayerHealSkillTitle,
 } from "@/lib/moePlayerHealSkills";
 import {
   MOE_PLAYER_REGEN_COOLDOWN_SEC,
@@ -383,13 +438,36 @@ import {
   saveMoePetSkillMode,
   MOE_PET_SKILL_MODE_ALL,
   MOE_PET_SKILL_MODE_LEARNED,
-  moePetSkillModeLabel,
 } from "@/lib/moePetSkillSettings";
+import {
+  loadMoePetAutoSkillEnabled,
+  saveMoePetAutoSkillEnabled,
+} from "@/lib/moePetAutoSkillSettings";
+import {
+  loadMoePetLoyaltyGate100,
+  saveMoePetLoyaltyGate100,
+} from "@/lib/moePetLoyaltyGateSettings";
+import {
+  findPetCombatSkillSlotIndex,
+  markMoePetSkillDelay,
+  moePetManualSkillLoyaltyOk,
+  moePetSkillDelayKey,
+  moePetSkillDelayRemainSec,
+  pickMoePetAutoSkill,
+} from "@/lib/moePetAutoSkill";
+import {
+  MOE_PET_LOYALTY_MAX,
+  moePetLoyaltyValue,
+  rollMoePetLoyaltyGain,
+} from "@/lib/moePetLoyaltyGain";
+import MoeFieldSettingsPanel from "@/components/MoeFieldSettingsPanel";
+import MoePetSettingsSection from "@/components/MoePetSettingsSection";
 import {
   formatMoePetSkillDescription,
   formatMoeSkillHoverTip,
 } from "@/lib/moePetSkillDescription";
 import { MOE_EVENT_GUIDE_SECTIONS } from "@/data/moeEventGuide";
+import { MOE_MODELING_SHOWCASE_GROUPS } from "@/data/moeModelingShowcases";
 import {
   addMoeItemBoxItem,
   loadMoeItemBoxSelectedIndex,
@@ -430,7 +508,6 @@ import {
   MOE_CASH_SHOP_ITEM_BY_ACTION,
   moeCashShopItemToBoxItem,
 } from "@/data/moeCashShopItems";
-import { moe3dIsNearCashShopNpc } from "@/lib/moe3dBiskHubLayout";
 import {
   MOE_JOSEPH_NPC,
   MOE_JOSEPH_EXP_CRYSTAL_BUTTON,
@@ -627,10 +704,10 @@ function minimap3dEnemyDotOpacity(en) {
   if (en.fieldGustav) return 0.58;
   return 0.5;
 }
-const MOVE_SPEED = 4.5;
-/** 3Dマップは座標範囲が狭いので、同じ数値だと約10倍速く感じる */
-const MOVE_SPEED_3D = 0.2;
-const SPRINT_MULTIPLIER_3D = 2;
+const MOVE_SPEED = 3.15;
+/** 3Dマップは座標範囲が狭いので、同じ数値だと約10倍速く感じる（敵追跡は moeEnemyFieldChase と同期） */
+const MOVE_SPEED_3D = 0.14;
+const SPRINT_MULTIPLIER_3D = 1.45;
 /** Shift ダッシュ ON 時の追加倍率（通常ダッシュ × この値） */
 const SPRINT_BOOST_MULT_3D = 3;
 const JUMP_VELOCITY_3D = 17;
@@ -1067,17 +1144,23 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [josephSynthTrialPetLevel, setJosephSynthTrialPetLevel] = useState(100);
   const [josephSynthLastCrystal, setJosephSynthLastCrystal] = useState(null);
   const [josephSynthResultMessage, setJosephSynthResultMessage] = useState(null);
-  const [nearPetHouse, setNearPetHouse] = useState(false);
   const nearPetHouseRef = useRef(false);
-  const [nearRhoda, setNearRhoda] = useState(false);
+  const [houseTalkMenu, setHouseTalkMenu] = useState(false);
+  const houseTalkMenuRef = useRef(false);
+  const setHouseTalkMenuTracked = useCallback((value) => {
+    setHouseTalkMenu((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      houseTalkMenuRef.current = next;
+      return next;
+    });
+  }, []);
   const nearRhodaRef = useRef(false);
   const [cashShopOpen, setCashShopOpen] = useState(false);
   const [cashShopView, setCashShopView] = useState("lines");
   const [cashShopLineIndex, setCashShopLineIndex] = useState(0);
-  const [nearCashShop, setNearCashShop] = useState(false);
-  const nearCashShopRef = useRef(false);
   const [nearAltar, setNearAltar] = useState(null);
   const nearAltarRef = useRef(null);
+  const [altarMenu, setAltarMenu] = useState(null);
   const skillChantRef = useRef(null);
   const cancelSkillChantRef = useRef(() => {});
   const startPetDeepSleepChantRef = useRef(() => false);
@@ -1116,9 +1199,34 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [dragonDeleteListIds, setDragonDeleteListIds] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
   const [petSkillMode, setPetSkillMode] = useState(MOE_PET_SKILL_MODE_ALL);
+  const [petAutoSkillEnabled, setPetAutoSkillEnabled] = useState(true);
+  const [petLoyaltyGate100, setPetLoyaltyGate100] = useState(true);
+  const [enemyRespawnSeconds, setEnemyRespawnSeconds] = useState(
+    defaultMoeEnemyRespawnSeconds
+  );
+  const [playerLookAhead, setPlayerLookAhead] = useState(
+    MOE_PLAYER_LOOK_AHEAD_DEFAULT
+  );
+  const [showPlayerLookAheadSettings, setShowPlayerLookAheadSettings] =
+    useState(false);
   const [trainingSkillMode, setTrainingSkillMode] = useState(
     MOE_TRAINING_SKILL_MODE_ALL
   );
+  const [skillSuccess100, setSkillSuccess100] = useState(false);
+  const [skillPanelVisibility, setSkillPanelVisibility] = useState(() =>
+    loadMoeSkillPanelVisibility()
+  );
+  const [skillPanelCollapsed, setSkillPanelCollapsed] = useState(() =>
+    loadMoeSkillPanelCollapse()
+  );
+  const [showSkillUiDisplaySettings, setShowSkillUiDisplaySettings] =
+    useState(false);
+  const [showEnemyRespawnSettings, setShowEnemyRespawnSettings] = useState(false);
+  const [showPetExpSaveSettings, setShowPetExpSaveSettings] = useState(false);
+  const [showProgressSettings, setShowProgressSettings] = useState(false);
+  const [petExpResetAskOpen, setPetExpResetAskOpen] = useState(false);
+  const [showModelingShowcaseSettings, setShowModelingShowcaseSettings] =
+    useState(false);
   const [externalSaveFolderLabel, setExternalSaveFolderLabel] = useState(null);
   const [externalSaveFolderActionMsg, setExternalSaveFolderActionMsg] =
     useState(null);
@@ -1178,6 +1286,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const fieldVitalsBootstrappedRef = useRef(false);
   /** 回復魔法のクールダウン終了時刻（ms） — MOE 公式ディレイ */
   const healCdUntilRef = useRef({ light: 0, healing: 0, healAll: 0, regen: 0 });
+  const [petSkillDelayCdSec, setPetSkillDelayCdSec] = useState({});
   const [healCdSec, setHealCdSec] = useState({
     light: 0,
     healing: 0,
@@ -1201,7 +1310,39 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(() => {
     setPetSkillMode(loadMoePetSkillMode());
+    const loyaltyGate = loadMoePetLoyaltyGate100();
+    setPetLoyaltyGate100(loyaltyGate);
+    setPetAutoSkillEnabled(loyaltyGate);
     setTrainingSkillMode(loadMoeTrainingSkillMode());
+    setSkillSuccess100(loadMoePlayerSkillSuccess100());
+    setSkillPanelVisibility(loadMoeSkillPanelVisibility());
+    setSkillPanelCollapsed(loadMoeSkillPanelCollapse());
+    setEnemyRespawnSeconds(loadMoeEnemyRespawnSeconds());
+    setPlayerLookAhead(loadMoePlayerLookAhead());
+  }, []);
+
+  const toggleSkillPanelCollapse = useCallback((panelId) => {
+    setSkillPanelCollapsed((prev) =>
+      setMoeSkillPanelCollapsed(prev, panelId, !prev[panelId])
+    );
+  }, []);
+
+  const setSkillPanelVisibleState = useCallback((panelId, visible) => {
+    setSkillPanelVisibility((prev) =>
+      setMoeSkillPanelVisible(prev, panelId, visible)
+    );
+    if (visible) {
+      setSkillPanelCollapsed((prev) =>
+        setMoeSkillPanelCollapsed(prev, panelId, false)
+      );
+    }
+  }, []);
+
+  const openModelingShowcase = useCallback((actionId) => {
+    setShowSettings(false);
+    setShowModelingShowcaseSettings(false);
+    if (actionId === "dragon-lineup") setShowDragonLineup(true);
+    else if (actionId === "monster-lineup") setShowMonsterLineup(true);
   }, []);
 
   useEffect(() => {
@@ -1225,6 +1366,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const playerJumpRef = useRef({ offset: 0, vy: 0 });
   /** 3D: Shift 押下中かつ移動入力あり */
   const playerSprintRef = useRef(false);
+  /** 3D: WASD 移動入力あり（乗車中アニメ用） */
+  const playerMoveInputRef = useRef(false);
   /** 3D: ペットに RUN アニメを出す（走行追従中） */
   const petRunAnimRef = useRef(false);
   const petPosRef = useRef(initial3dSpawn?.pet ?? { x: 100, y: 100 });
@@ -1289,6 +1432,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** 3D：待て/座れ中に固定する向き（プレイヤー追従回転を止める） */
   const petHoldYawRef = useRef(null);
   const autoAttackCooldownRef = useRef(0);
+  const petSkillDelayUntilRef = useRef({});
+  const combatSkillSlotsRef = useRef([]);
+  const activateCombatSkillSlotRef = useRef(null);
+  const petAutoSkillEnabledRef = useRef(true);
+  const petLoyaltyGate100Ref = useRef(true);
+  const enemyRespawnSecondsRef = useRef(defaultMoeEnemyRespawnSeconds());
+  const playerLookAheadRef = useRef(MOE_PLAYER_LOOK_AHEAD_DEFAULT);
+  const petSkillModeRef = useRef(MOE_PET_SKILL_MODE_ALL);
+  const petCombatLevelRef = useRef(1);
   const sitRegenAccRef = useRef(0);
   const [regenActive, setRegenActive] = useState(false);
   const regenActiveRef = useRef(false);
@@ -1379,6 +1531,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [kintounOn, setKintounOn] = useState(false);
   const kintounOnRef = useRef(false);
   const kintounFlyRef = useRef({ offset: 0 });
+  const kintounApproachRef = useRef(null);
+  const [skateboardOn, setSkateboardOn] = useState(false);
+  const skateboardOnRef = useRef(false);
+  const skateboardApproachRef = useRef(null);
   const [shinobiashiOn, setShinobiashiOn] = useState(false);
   const shinobiashiOnRef = useRef(false);
   const kakureminoUntilRef = useRef(0);
@@ -1399,8 +1555,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     if (!world?.mode3d) {
       setKintounOn(false);
       kintounOnRef.current = false;
+      kintounApproachRef.current = null;
     }
   }, [kintounOn, world?.mode3d]);
+  useEffect(() => {
+    skateboardOnRef.current = skateboardOn;
+    if (!skateboardOn) return;
+    if (!world?.mode3d) {
+      setSkateboardOn(false);
+      skateboardOnRef.current = false;
+      skateboardApproachRef.current = null;
+    }
+  }, [skateboardOn, world?.mode3d]);
   useEffect(() => {
     shinobiashiOnRef.current = shinobiashiOn;
   }, [shinobiashiOn]);
@@ -1412,13 +1578,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     []
   );
   const sprintSpeedMult3d = useCallback((sprinting) => {
-    const kintounMult = moeKintounMoveSpeedMult(
-      sprinting,
-      kintounOnRef.current
-    );
-    if (!sprinting) return kintounMult;
+    const rideMult =
+      moeKintounMoveSpeedMult(sprinting, kintounOnRef.current) *
+      moeSkateboardMoveSpeedMult(sprinting, skateboardOnRef.current);
+    if (!sprinting) return rideMult;
     return (
-      kintounMult *
+      rideMult *
       SPRINT_MULTIPLIER_3D *
       (dashBoost3xRef.current ? SPRINT_BOOST_MULT_3D : 1)
     );
@@ -1900,6 +2065,31 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     [triggerPetTenthLevelUpCelebration]
   );
 
+  const applyPetLoyaltyOnEnemyDefeat = useCallback(
+    (enemyLevel) => {
+      const p = petRef.current;
+      const combatLevel = petCombatLevelRef.current ?? p?.level ?? 1;
+      const before = moePetLoyaltyValue(p?.loyalty);
+      const result = rollMoePetLoyaltyGain(p, enemyLevel, combatLevel);
+      if (!result.qualified) return;
+      setPet((prev) => {
+        const next = {
+          ...prev,
+          loyalty: result.loyalty,
+          loyaltyPityMiss: result.loyaltyPityMiss,
+        };
+        petRef.current = next;
+        petStateRef.current = next;
+        flushPersistActivePet(next);
+        return next;
+      });
+      if (result.gained) {
+        setToast(`💗愛着度 UP！（${before} → ${result.loyalty}）`);
+      }
+    },
+    [flushPersistActivePet]
+  );
+
   /**
    * ペットの1ヒット分（通常アタック・連撃スキル共通）
    * @param opts.grantExp コンボ中は最終ヒットだけ true 推奨
@@ -1924,9 +2114,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         magicScale = null,
         fixedDamage = null,
         stackIndex = null,
-        skillLabel = duelSkillLabelRef.current ?? "アタック",
+        skillLabel = "アタック",
       } = opts;
-      const w = worldRef.current;
       let defeated = false;
       let abortDuel = false;
       let treasureDropped = false;
@@ -2029,193 +2218,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
           return prevEn.map((en) => {
             if (en.id !== enemyId) return en;
-            if (defeated && w) {
-              if (en.fieldBison) {
-                const base =
-                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
-                const pos = w.mode3d
-                  ? en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
-                    ? w.mountainBisonPos ??
-                      moe3dMountainBisonSpawnPosition(
-                        w.halfW ?? w.mw / 2,
-                        w.halfD ?? w.mh / 2
-                      )
-                    : w.roughBisonPos ??
-                      moe3dRoughBisonSpawnPosition(
-                        w.halfW ?? w.mw / 2,
-                        w.halfD ?? w.mh / 2
-                      )
-                  : en.key === MOE_MEERIM_MOUNTAIN_BISON_KEY
-                    ? moe2dMountainBisonSpawnPosition(w.rowLayout, w.mw)
-                    : moe2dRoughBisonSpawnPosition(w.rowLayout, w.mw);
-                const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
-                return {
-                  ...en,
-                  x: pos.x,
-                  y: pos.y,
-                  level: scaled.level,
-                  hpMax: scaled.hpMax,
-                  hp: scaled.hpMax,
-                  petDamage: scaled.petDamage,
-                  wiki: scaled.wiki,
-                  zoneLevel: base.level,
-                };
-              }
-              if (w.mode3d) {
-                const hw = w.halfW ?? w.mw / 2;
-                const hd = w.halfD ?? w.mh / 2;
-                if (moe3dIsMapSlotFieldEnemy(en)) {
-                  const { tileW, tileD } = moe3dEstimatedTileSize(hw, hd);
-                  const base =
-                    moeMonsterFieldBase(en.key) ??
-                    MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ??
-                    en;
-                  const area = en.spawnArea ?? en.mapSlotId;
-                  const fixed =
-                    en.midBoss || en.superBoss
-                      ? moe3dMonsterFieldSpawnWorld(
-                          area,
-                          en.key,
-                          en.slotInZone ?? 0,
-                          tileW,
-                          tileD
-                        )
-                      : null;
-                  const pos =
-                    fixed ??
-                    moe3dPickRespawnInMapSlot(
-                      area,
-                      tileW,
-                      tileD,
-                      playerPosRef.current,
-                      prevEn,
-                      enemyId
-                    );
-                  const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
-                  return {
-                    ...en,
-                    x: pos.x,
-                    y: pos.y,
-                    level: scaled.level,
-                    hpMax: scaled.hpMax,
-                    hp: scaled.hpMax,
-                    petDamage: scaled.petDamage,
-                    wiki: scaled.wiki,
-                    zoneLevel: base.level,
-                  };
-                }
-              }
-              if (
-                (en.midBoss || en.superBoss) &&
-                !moe3dIsMapSlotFieldEnemy(en)
-              ) {
-                const base =
-                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
-                const pos = w.mode3d
-                  ? en.superBoss
-                    ? w.superBossPos ??
-                      moe3dSuperBossSpawnPosition(
-                        w.halfW ?? w.mw / 2,
-                        w.halfD ?? w.mh / 2
-                      )
-                    : w.midBossPos ??
-                      moe3dMidBossSpawnPosition(
-                        w.halfW ?? w.mw / 2,
-                        w.halfD ?? w.mh / 2
-                      )
-                  : en.superBoss
-                    ? moe2dSuperBossSpawnPosition(w.rowLayout, w.mw)
-                    : moe2dMidBossSpawnPosition(w.rowLayout, w.mw);
-                const scaled = moe3dEnemyStatsForZoneLevel(base, base.level);
-                const hpMult = en.superBoss
-                  ? MOE_SUPER_BOSS_HP_MULTIPLIER
-                  : MOE_MID_BOSS_HP_MULTIPLIER;
-                const hpMax = Math.max(1, Math.round(scaled.hpMax * hpMult));
-                return {
-                  ...en,
-                  x: pos.x,
-                  y: pos.y,
-                  level: scaled.level,
-                  hpMax,
-                  hp: hpMax,
-                  petDamage: scaled.petDamage,
-                  wiki: scaled.wiki,
-                  zoneLevel: base.level,
-                };
-              }
-              if (w.mode3d) {
-                const hw = w.halfW ?? w.mw / 2;
-                const hd = w.halfD ?? w.mh / 2;
-                const zoneIndex = en.zoneIndex ?? 0;
-                const zoneCount = MOE_3D_ENEMY_ZONES.length;
-                const pos = moe3dPickRespawnInZone(
-                  zoneIndex,
-                  zoneCount,
-                  hw,
-                  hd,
-                  playerPosRef.current,
-                  prevEn,
-                  enemyId
-                );
-                const base =
-                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
-                const zoneLevel =
-                  en.zoneLevel ??
-                  MOE_3D_ENEMY_ZONES[zoneIndex]?.level ??
-                  base.level;
-                const scaled = moe3dEnemyStatsForZoneLevel(
-                  base,
-                  zoneLevel
-                );
-                return {
-                  ...en,
-                  x: pos.x,
-                  y: pos.y,
-                  level: scaled.level,
-                  hpMax: scaled.hpMax,
-                  hp: scaled.hpMax,
-                  petDamage: scaled.petDamage,
-                  wiki: scaled.wiki,
-                  zoneLevel: scaled.zoneLevel,
-                };
-              }
-              const rowLayout = w.rowLayout;
-              if (rowLayout?.length) {
-                const pos = moe2dPickRespawnInZone2d(
-                  en.zoneIndex ?? 0,
-                  en.slotInZone ?? 0,
-                  rowLayout,
-                  w.mw,
-                  prevEn,
-                  enemyId
-                );
-                const base =
-                  MOE_MEERIM_ENEMIES.find((d) => d.key === en.key) ?? en;
-                const zoneLevel =
-                  en.zoneLevel ??
-                  MOE_3D_ENEMY_ZONES[en.zoneIndex ?? 0]?.level ??
-                  base.level;
-                const scaled = moe3dEnemyStatsForZoneLevel(base, zoneLevel);
-                return {
-                  ...en,
-                  x: pos.x,
-                  y: pos.y,
-                  level: scaled.level,
-                  hpMax: scaled.hpMax,
-                  hp: scaled.hpMax,
-                  petDamage: scaled.petDamage,
-                  wiki: scaled.wiki,
-                  zoneLevel: scaled.zoneLevel,
-                };
-              }
-              const screenH = w.mh / 6;
-              const yStart = w.mh - (en.sy + 1) * screenH;
-              return {
-                ...en,
-                hp: en.hpMax,
-                x: 100 + Math.random() * (w.mw - 200),
-                y: yStart + 50 + Math.random() * (screenH - 100),
-              };
+            if (defeated) {
+              return moeMarkEnemyDefeated(
+                en,
+                performance.now(),
+                enemyRespawnSecondsRef.current
+              );
             }
             return { ...en, hp: Math.max(0, newHpAfterHit) };
           });
@@ -2244,7 +2252,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             hitFollowUp.dropY,
             hitFollowUp.enemyKey,
             {
-              playerHasShinsoku:
+              playerHasBoardRide:
+                playerSkillUnlocksRef.current.has("dragon_skateboard") ||
                 playerSkillUnlocksRef.current.has("ninja_shinsoku"),
             }
           ),
@@ -2288,6 +2297,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             setToast(null);
           }
           if (h.defeated) {
+            applyPetLoyaltyOnEnemyDefeat(h.enemyLevel);
             onEnemyDefeat?.(h.enemyLevel);
             setTrainerStatus(loadGameStatus());
           }
@@ -2309,7 +2319,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
       return false;
     },
-    [is3d, onEnemyDefeat, pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, scaleBattleMs, endActiveDuel, commitPetExpFromHit]
+    [is3d, onEnemyDefeat, pushPetExpPopup, pushWorldDamagePopup, rollPetExpOnHit, scaleBattleMs, endActiveDuel, commitPetExpFromHit, applyPetLoyaltyOnEnemyDefeat]
   );
 
   const handleTreasureClick = useCallback((treasureId) => {
@@ -2352,8 +2362,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           tr.id === treasureId ? { ...tr, state: "looted" } : tr
         )
       );
-      if (loot.unlocksPlayerSkillId === "ninja_shinsoku") {
-        setToast("忍者の足袋 — 神速が使えるようになった！");
+      if (loot.unlocksPlayerSkillId === "dragon_skateboard") {
+        setToast("忍者の足袋 — 板乗りが使えるようになった！");
       } else {
         setToast(`${loot.label} — スキルを習得した！`);
       }
@@ -2575,6 +2585,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   useEffect(() => {
     if (!showSettings) {
       setExternalSaveFolderActionMsg(null);
+      setShowPetExpSaveSettings(false);
+      setShowModelingShowcaseSettings(false);
       return;
     }
     let cancelled = false;
@@ -2710,7 +2722,39 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (!d || d.enemyId !== enemyId || d.phase !== "simultaneous_charge") {
         return false;
       }
-      return applyPetComboHit(enemyId);
+      if (petAutoSkillEnabledRef.current) {
+        const p = petRef.current;
+        const petData = MOE_PET_DATA[p.id];
+        const nowMs = Date.now();
+        const picked = pickMoePetAutoSkill({
+          petId: p.id,
+          pet: p,
+          petLevel: petCombatLevelRef.current,
+          skills: petData?.skills ?? [],
+          skillMode: petSkillModeRef.current,
+          loyalty:
+            p.loyalty != null && !Number.isNaN(Number(p.loyalty))
+              ? moePetLoyaltyValue(p.loyalty)
+              : 0,
+          nowMs,
+          cooldownUntil: petSkillDelayUntilRef.current,
+        });
+        if (picked) {
+          markMoePetSkillDelay(
+            petSkillDelayUntilRef.current,
+            picked,
+            nowMs
+          );
+          const slots = combatSkillSlotsRef.current;
+          const idx = findPetCombatSkillSlotIndex(slots, picked);
+          const activate = activateCombatSkillSlotRef.current;
+          if (activate) {
+            activate(idx >= 0 ? idx : 0, picked, { fromAuto: true });
+            return false;
+          }
+        }
+      }
+      return applyPetComboHit(enemyId, { skillLabel: "アタック" });
     },
     [applyPetComboHit]
   );
@@ -2744,6 +2788,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           magicScale: o.magicScale ?? null,
           fixedDamage: o.fixedDamage ?? null,
           stackIndex: o.stackIndex ?? idx,
+          skillLabel,
         });
         if (ended) {
           moeSkillComboGenRef.current += 1;
@@ -2753,8 +2798,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [scaleBattleMs]);
 
   const activateCombatSkillSlot = useCallback(
-    (slotIndex, skill) => {
+    (slotIndex, skill, opts = {}) => {
       if (!skill) return;
+      if (
+        !opts.fromAuto &&
+        !moePetManualSkillLoyaltyOk(petRef.current, petLoyaltyGate100Ref.current)
+      ) {
+        setToast("オートAIのみでは手動でスキル命令できません");
+        return;
+      }
       if (!isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode)) {
         setToast(`Lv.${skill.level}で習得`);
         return;
@@ -2820,7 +2872,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
 
       if (skill.id === "phoenix_life_burst") {
-        const healAmt = skill.healFlat ?? 100;
+        const healAmt = skill.healFlat ?? 50;
         const mpCost = skill.mpCost ?? 0;
         setPet((prev) => {
           if (mpCost > 0 && prev.mp < mpCost) return prev;
@@ -2946,11 +2998,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           ? resolveMoeDuelSkillSequence(pet.id, skill)
           : null;
       if (duelSkillSeq) {
+        if (!opts.fromAuto) {
+          markMoePetSkillDelay(
+            petSkillDelayUntilRef.current,
+            skill,
+            Date.now()
+          );
+        }
         scheduleMoeDuelSkillHits(d.enemyId, duelSkillSeq, skill.name ?? "スキル");
       }
     },
     [pet.id, petCombatLevel, petSkillMode, scheduleMoeDuelSkillHits, pushWorldHealPopup, flushPersistActivePet]
   );
+  activateCombatSkillSlotRef.current = activateCombatSkillSlot;
 
   const activatePlayerSkillSlot = useCallback((_slotIndex, skill) => {
     if (!skill) return;
@@ -2977,35 +3037,72 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       });
       return;
     }
-    if (skill.id === "ninja_shinsoku") {
-      setDashBoost3x((v) => {
-        const next = !v;
-        setToast(
-          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】" : "【OFF】"}`
-        );
-        return next;
-      });
-      return;
-    }
     if (skill.id === "dragon_kintoun") {
       if (!worldRef.current?.mode3d) {
         setToast("筋斗雲は3Dフィールドでのみ使えます");
         return;
       }
-      setKintounOn((v) => {
-        const next = !v;
-        setToast(
-          `${formatMoePetSkillDescription(skill)}\n${next ? "【ON】山の上を翔ける" : "【OFF】"}`
+      if (kintounApproachRef.current) {
+        kintounApproachRef.current = null;
+        setToast("筋斗雲の召喚をやめた");
+        return;
+      }
+      if (kintounOnRef.current) {
+        setKintounOn(false);
+        kintounOnRef.current = false;
+        kintounFlyRef.current.offset = tickKintounFlyOffset(
+          kintounFlyRef.current.offset,
+          false,
+          0.2
         );
-        if (!next) {
-          kintounFlyRef.current.offset = tickKintounFlyOffset(
-            kintounFlyRef.current.offset,
-            false,
-            0.2
-          );
-        }
-        return next;
-      });
+        setToast(`${formatMoePetSkillDescription(skill)}\n【OFF】`);
+        return;
+      }
+      if (skateboardOnRef.current || skateboardApproachRef.current) {
+        setSkateboardOn(false);
+        skateboardOnRef.current = false;
+        skateboardApproachRef.current = null;
+      }
+      kintounApproachRef.current = beginKintounApproach(
+        playerFacingRef.current
+      );
+      setToast(
+        `${formatMoePetSkillDescription(skill)}\n筋斗雲が急接近！ジャンプして乗る`
+      );
+      return;
+    }
+    if (skill.id === "dragon_skateboard") {
+      if (!worldRef.current?.mode3d) {
+        setToast("板乗りは3Dフィールドでのみ使えます");
+        return;
+      }
+      if (skateboardApproachRef.current) {
+        skateboardApproachRef.current = null;
+        setToast("板乗りの召喚をやめた");
+        return;
+      }
+      if (skateboardOnRef.current) {
+        setSkateboardOn(false);
+        skateboardOnRef.current = false;
+        setToast(`${formatMoePetSkillDescription(skill)}\n【OFF】`);
+        return;
+      }
+      if (kintounOnRef.current || kintounApproachRef.current) {
+        setKintounOn(false);
+        kintounOnRef.current = false;
+        kintounApproachRef.current = null;
+        kintounFlyRef.current.offset = tickKintounFlyOffset(
+          kintounFlyRef.current.offset,
+          false,
+          0.2
+        );
+      }
+      skateboardApproachRef.current = beginSkateboardApproach(
+        playerFacingRef.current
+      );
+      setToast(
+        `${formatMoePetSkillDescription(skill)}\n板が滑り込む！ジャンプして乗る`
+      );
       return;
     }
     if (skill.id === "ninja_kakuremino") {
@@ -3346,7 +3443,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       if (skill.id === "phoenix_life_burst") {
         if (!assertPhoenixSkillSuccess(skill)) return;
-        const healAmt = skill.healFlat ?? 100;
+        const healAmt = skill.healFlat ?? 50;
         if (!spendPhoenixPlayerMp(skill)) {
           setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
           return;
@@ -3947,6 +4044,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         ),
       });
 
+      const delaySec = {};
+      for (const skill of combatSkillSlotsRef.current) {
+        if (!skill) continue;
+        const remain = moePetSkillDelayRemainSec(
+          petSkillDelayUntilRef.current,
+          skill,
+          now
+        );
+        if (remain > 0) {
+          delaySec[moePetSkillDelayKey(skill)] = remain;
+        }
+      }
+      setPetSkillDelayCdSec(delaySec);
     };
     tick();
     const id = window.setInterval(tick, 200);
@@ -4339,6 +4449,39 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const duelNow = duelRef.current;
       if (duelNow?.phase === "simultaneous_charge") {
         petPosRef.current = { x: duelNow.slotX, y: duelNow.slotY };
+      } else if (
+        (cmd === "follow" || cmd === "auto") &&
+        !duelNow
+      ) {
+        if (kintounOnRef.current) {
+          const slot = kintounPetRideSlot(
+            playerPosRef.current.x,
+            playerPosRef.current.y,
+            playerFacingRef.current
+          );
+          const snapped = lerpKintounPetRideSlot(
+            petPosRef.current.x,
+            petPosRef.current.y,
+            slot.x,
+            slot.y,
+            dt
+          );
+          petPosRef.current = { x: snapped.x, y: snapped.y };
+        } else if (skateboardOnRef.current) {
+          const slot = skateboardPetRideSlot(
+            playerPosRef.current.x,
+            playerPosRef.current.y,
+            playerFacingRef.current
+          );
+          const snapped = lerpSkateboardPetRideSlot(
+            petPosRef.current.x,
+            petPosRef.current.y,
+            slot.x,
+            slot.y,
+            dt
+          );
+          petPosRef.current = { x: snapped.x, y: snapped.y };
+        }
       }
     };
 
@@ -4425,6 +4568,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
 
       const moving = inputX !== 0 || inputZ !== 0;
+      if (world.mode3d) {
+        playerMoveInputRef.current = moving;
+      }
       const sprinting3d = !!(world.mode3d && k.shift && moving);
       tickPlayerVitalsField(dt, sprinting3d, moving);
 
@@ -4461,8 +4607,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const petSpeed = MOVE_SPEED_3D * 60 * dt * speedMult;
 
         const jump = playerJumpRef.current;
+        const kintounApproach = kintounApproachRef.current;
+        const skateboardApproach = skateboardApproachRef.current;
+        const rideApproach = kintounApproach ?? skateboardApproach;
         if (
           !campfireRestingRef.current &&
+          !rideApproach &&
           k.space &&
           jump.offset <= 0.02 &&
           jump.vy <= 0
@@ -4472,9 +4622,85 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           }
           jump.vy = JUMP_VELOCITY_3D;
         }
+        if (kintounApproach) {
+          const approachStep = tickKintounApproach(kintounApproach, dt);
+          if (approachStep.triggerJump) {
+            if (skillChantRef.current) {
+              cancelSkillChantRef.current();
+            }
+            jump.vy = JUMP_VELOCITY_3D * 0.92;
+          }
+          if (approachStep.assistJump && jump.offset < 1.4) {
+            jump.vy = Math.max(jump.vy, 4.8);
+          }
+          if (approachStep.done) {
+            kintounApproachRef.current = null;
+            setKintounOn(true);
+            kintounOnRef.current = true;
+            if (jump.offset > 0.15) {
+              kintounFlyRef.current.offset = Math.max(
+                kintounFlyRef.current.offset,
+                jump.offset
+              );
+              jump.offset = 0;
+              jump.vy = 0;
+            }
+            const aggroDropped = dropMoeEnemyFieldAggro(
+              enemyChaseRuntimeRef.current,
+              enemiesRef.current,
+              (enemy) =>
+                moeEnemyFieldIdleFacingYaw(
+                  enemy,
+                  worldRef.current?.tileWidth,
+                  worldRef.current?.tileDepth
+                )
+            );
+            if (aggroDropped) {
+              startTransition(() => {
+                setEnemies((prev) =>
+                  prev.map((en) => {
+                    const rt = enemyChaseRuntimeRef.current[en.id];
+                    if (!rt) return en;
+                    return { ...en, x: rt.x, y: rt.y };
+                  })
+                );
+              });
+            }
+            setToast("筋斗雲に乗った！【ON】山の上を翔ける");
+          }
+        } else if (skateboardApproach) {
+          const approachStep = tickSkateboardApproach(skateboardApproach, dt);
+          if (approachStep.triggerJump) {
+            if (skillChantRef.current) {
+              cancelSkillChantRef.current();
+            }
+            jump.vy = JUMP_VELOCITY_3D * 0.88;
+          }
+          if (approachStep.assistJump && jump.offset < 1.1) {
+            jump.vy = Math.max(jump.vy, 4.2);
+          }
+          if (approachStep.done) {
+            skateboardApproachRef.current = null;
+            setSkateboardOn(true);
+            skateboardOnRef.current = true;
+            jump.offset = 0;
+            jump.vy = 0;
+            setToast("板乗り！【ON】地上を滑走");
+          }
+        }
         if (kintounOnRef.current) {
           jump.offset = 0;
           jump.vy = 0;
+        } else if (skateboardOnRef.current) {
+          jump.offset = 0;
+          jump.vy = 0;
+        } else if (!rideApproach) {
+          jump.offset += jump.vy * dt;
+          jump.vy -= GRAVITY_3D * dt;
+          if (jump.offset <= 0) {
+            jump.offset = 0;
+            jump.vy = Math.max(0, jump.vy);
+          }
         } else {
           jump.offset += jump.vy * dt;
           jump.vy -= GRAVITY_3D * dt;
@@ -4542,7 +4768,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           const nearHouse = moe3dIsNearPetHouse(nx, ny, hw, hd);
           if (nearHouse !== nearPetHouseRef.current) {
             nearPetHouseRef.current = nearHouse;
-            startTransition(() => setNearPetHouse(nearHouse));
           }
           const nearRhodaSpot = moe3dIsNearRhoda(
             nx,
@@ -4554,7 +4779,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           );
           if (nearRhodaSpot !== nearRhodaRef.current) {
             nearRhodaRef.current = nearRhodaSpot;
-            startTransition(() => setNearRhoda(nearRhodaSpot));
           }
           const nearbyAltar =
             fieldTw && fieldTd
@@ -4564,18 +4788,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 })
               : null;
           const altarKey = nearbyAltar?.id ?? null;
-          if (altarKey !== nearAltarRef.current?.id) {
+          const prevAltarKey = nearAltarRef.current?.id ?? null;
+          if (altarKey !== prevAltarKey) {
             nearAltarRef.current = nearbyAltar;
-            startTransition(() => setNearAltar(nearbyAltar));
-          }
-          const nearCashShopSpot =
-            !nearbyAltar &&
-            fieldTw &&
-            fieldTd &&
-            moe3dIsNearCashShopNpc(nx, ny, fieldTw, fieldTd);
-          if (nearCashShopSpot !== nearCashShopRef.current) {
-            nearCashShopRef.current = nearCashShopSpot;
-            startTransition(() => setNearCashShop(nearCashShopSpot));
+            startTransition(() => {
+              setNearAltar(nearbyAltar);
+              setAltarMenu((current) =>
+                current && current.id !== altarKey ? null : current
+              );
+            });
           }
           const nearCampfireSpot =
             !nearbyAltar &&
@@ -4601,6 +4822,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerMoving: moving,
           shinobiashiOn: shinobiashiOnRef.current,
           kakureminoUntilMs: kakureminoUntilRef.current,
+          kintounOn: kintounOnRef.current,
+          kintounFlyY: kintounFlyRef.current.offset,
           stealthProficiency: playerStealthProficiencyRef.current?.level ?? 0,
           stealthRequiredLevel: 10,
         });
@@ -4792,6 +5015,34 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }
       }
 
+      const respawnRoster = enemiesRef.current;
+      if (
+        respawnRoster.some((en) => moeEnemyRespawnReady(en, now)) &&
+        worldRef.current
+      ) {
+        const respawnWorld = worldRef.current;
+        const respawnPlayer = playerPosRef.current;
+        const dueIds = new Set(
+          respawnRoster
+            .filter((en) => moeEnemyRespawnReady(en, now))
+            .map((en) => en.id)
+        );
+        for (const id of dueIds) {
+          delete enemyChaseRuntimeRef.current[id];
+        }
+        setEnemies((prev) =>
+          prev.map((en) => {
+            if (!dueIds.has(en.id) || en.hp > 0) return en;
+            return placeMoeFieldEnemyRespawn(
+              en,
+              respawnWorld,
+              prev,
+              respawnPlayer
+            );
+          })
+        );
+      }
+
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -4809,6 +5060,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       skillMode: petSkillMode,
     }
   );
+  combatSkillSlotsRef.current = combatSkillSlots;
+  petCombatLevelRef.current = petCombatLevel;
+  petSkillModeRef.current = petSkillMode;
+  petAutoSkillEnabledRef.current = petAutoSkillEnabled;
+  petLoyaltyGate100Ref.current = petLoyaltyGate100;
+  enemyRespawnSecondsRef.current = enemyRespawnSeconds;
+  playerLookAheadRef.current = playerLookAhead;
   const skillPanelLabels =
     petSkillMode === MOE_PET_SKILL_MODE_ALL
       ? SKILL_SLOT_LABELS
@@ -4825,6 +5083,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setKintounOn(false);
     kintounOnRef.current = false;
     kintounFlyRef.current.offset = 0;
+    kintounApproachRef.current = null;
+    setSkateboardOn(false);
+    skateboardOnRef.current = false;
+    skateboardApproachRef.current = null;
     setFieldTreasures((prev) => prev.filter((tr) => !isGustavJuniorTreasure(tr)));
   }, []);
 
@@ -4984,10 +5246,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const target = enemiesRef.current.find((en) => en.id === id);
       if (!target || target.hp <= 0) return;
       targetEnemyIdRef.current = id;
-      const label = `${target.emoji} ${target.name} Lv.${formatEnemyLevelUi(target.level)}`;
       setPetFocused(false);
       setTargetEnemyId(id);
-      setToast(`ターゲット: ${label}`);
     },
     []
   );
@@ -5000,14 +5260,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     saveMoeAllyTarget("pet");
     setPetFocused((prev) => {
       const next = !prev;
-      if (next) {
-        setTargetEnemyId(null);
-        const data = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
-        setToast(`ペット: ${data.name} Lv.${petLevelDisplay}`);
-      }
+      if (next) setTargetEnemyId(null);
       return next;
     });
-  }, [pet.id, petLevelDisplay]);
+  }, []);
 
   const handlePetDoubleClick = useCallback((e) => {
     e?.preventDefault?.();
@@ -5234,12 +5490,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       setAllyTarget(id);
       saveMoeAllyTarget(id);
       allyTargetRef.current = id;
-      const petData = MOE_PET_DATA[pet.id] || MOE_PET_DATA.sun_spirit;
-      const label =
-        id === "player" ? trainerStatus.job ?? "プレイヤー" : petData.name;
-      setToast(`支援ターゲット: ${label}`);
     },
-    [trainerStatus.job, pet.id]
+    []
   );
 
   const handlePlayerAllySelect = useCallback(() => {
@@ -5542,11 +5794,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const playerOrderedSkillSlots = useMemo(() => {
     const ninjaById = {
       ninja_shinobiashi: playerSkillIconSlots[0],
-      ninja_shinsoku: playerSkillIconSlots[1],
       ninja_kakuremino: playerSkillIconSlots[2],
     };
     const dragonById = buildPlayerDragonSkillById(
-      loadPlayerExperienceTrack("dragon").level ?? 0
+      loadPlayerExperienceTrack("dragon").level ?? 0,
+      {
+        trainerLevel: trainerStatus.level ?? 1,
+        skillUnlocks: playerSkillUnlocks,
+      }
     );
     const condenseMindActiveOnTarget =
       allyTarget === "player"
@@ -5570,6 +5825,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       kakureminoCooldownSec,
       dashBoost3x,
       kintounOn,
+      skateboardOn,
       playerSkillCooldownSec,
       ninjaById,
       dragonById,
@@ -5630,11 +5886,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     kakureminoCooldownSec,
     dashBoost3x,
     kintounOn,
+    skateboardOn,
     playerSkillCooldownSec,
     handleRegenToggle,
     handleBananaMilkToggle,
     handleCondenseMind,
     trainerStatus.level,
+    playerSkillUnlocks,
     activatePlayerSkillSlot,
     skillChant,
     skillChantRemainSec,
@@ -5767,16 +6025,26 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     () =>
       skillPanelLabels.map((label, i) => {
         const skill = combatSkillSlots[i];
-        const locked =
+        const levelLocked =
           petSkillMode === MOE_PET_SKILL_MODE_LEARNED &&
           skill &&
           !isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode);
+        const loyaltyLocked =
+          skill &&
+          !moePetManualSkillLoyaltyOk(pet, petLoyaltyGate100);
+        const locked = levelLocked || loyaltyLocked;
         const skillName = skill?.name ?? "";
+        const delayKey = skill ? moePetSkillDelayKey(skill) : "";
+        const cooldownSec =
+          delayKey && petSkillDelayCdSec[delayKey] > 0
+            ? petSkillDelayCdSec[delayKey]
+            : null;
         return {
           label: skillName || label,
           disabled: !skill || locked,
+          cooldownSec,
           title: skill
-            ? formatMoeSkillHoverTip(skill, { locked })
+            ? formatMoeSkillHoverTip(skill, { locked: levelLocked, loyaltyLocked })
             : label,
           onClick: () => activateCombatSkillSlot(i, skill),
         };
@@ -5786,6 +6054,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       combatSkillSlots,
       petSkillMode,
       petCombatLevel,
+      petLoyaltyGate100,
+      pet,
+      petSkillDelayCdSec,
       activateCombatSkillSlot,
     ]
   );
@@ -5887,12 +6158,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     },
   };
 
+  const petSkillIconBarSlots = useMemo(
+    () =>
+      skillIconSlots.map((skill) => {
+        if (!skill) return null;
+        const key = moePetSkillDelayKey(skill);
+        const cooldownSec =
+          key && petSkillDelayCdSec[key] > 0 ? petSkillDelayCdSec[key] : null;
+        return { skill, cooldownSec };
+      }),
+    [skillIconSlots, petSkillDelayCdSec]
+  );
+
   const mergedIconBarProps = {
     showPlayer: is3d,
     petLabel: activePetSkillTitle,
-    petSlots: skillIconSlots,
+    petSlots: petSkillIconBarSlots,
     onPetActivate: activateCombatSkillSlot,
     isPetSkillUsable: (skill) =>
+      moePetManualSkillLoyaltyOk(pet, petLoyaltyGate100) &&
       isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode),
     player1Slots: playerOrderedSkillSlots,
     player2Slots: playerPhoenixOrderedSlots,
@@ -5991,15 +6275,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [dragonDeleteListIds]);
 
   const handlePetExpReset = () => {
-    if (
-      !window.confirm(
-        "ペットのレベル・経験値を本当にリセットしますか？\n現在選んでいるペットのまま、Lv." +
-          INITIAL_MOE_PET_LEVEL +
-          "・EXPバー0・HP/MP全快に戻します。"
-      )
-    ) {
-      return;
-    }
+    setPetExpResetAskOpen(true);
+  };
+
+  const confirmPetExpReset = () => {
+    setPetExpResetAskOpen(false);
     setPet((prev) => {
       const stats = calculatePetStats(prev.id, INITIAL_MOE_PET_LEVEL);
       const totalExp = getMoePetFreshTotalExpForLevel(INITIAL_MOE_PET_LEVEL);
@@ -6067,13 +6347,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     });
   }, []);
 
+  const handlePetHouseClick = useCallback((mode) => {
+    if (mode === "dismiss") {
+      setHouseTalkMenuTracked(false);
+      return;
+    }
+    setHouseTalkMenuTracked((open) => !open);
+  }, [setHouseTalkMenuTracked]);
+
   const openPetMasterDialogue = useCallback(() => {
     setPetMasterDialogue({ view: "menu" });
   }, []);
 
   const handlePetMasterTalk = useCallback(() => {
     if (is3d) {
-      if (!nearPetHouseRef.current) {
+      if (!nearPetHouseRef.current && !houseTalkMenuRef.current) {
         setToast("ペット小屋の近くで話しかけてください");
         return;
       }
@@ -6091,7 +6379,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const handleExpVendorTalk = useCallback(() => {
     if (is3d) {
-      if (!nearPetHouseRef.current) {
+      if (!nearPetHouseRef.current && !houseTalkMenuRef.current) {
         setToast("ペット小屋の近くで話しかけてください");
         return;
       }
@@ -6136,10 +6424,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [is3d, world?.rowLayout, world?.mw]);
 
   const handleRhodaShrineClick = useCallback(() => {
+    setHouseTalkMenuTracked(false);
     setRhodaLineIndex(0);
     setRhodaView("lines");
     setRhodaOpen(true);
-  }, []);
+  }, [setHouseTalkMenuTracked]);
 
   const openAltarPanel = useCallback((altar) => {
     if (!altar) return;
@@ -6148,16 +6437,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, []);
 
   const handleAltarOpen = useCallback(() => {
-    openAltarPanel(nearAltarRef.current);
-  }, [openAltarPanel]);
+    openAltarPanel(altarMenu);
+    setAltarMenu(null);
+  }, [altarMenu, openAltarPanel]);
 
-  const handleAltarClickById = useCallback(
-    (altarId) => {
-      const altar = MOE_ALTARS.find((a) => a.id === altarId) ?? null;
-      openAltarPanel(altar);
-    },
-    [openAltarPanel]
-  );
+  const handleAltarClickById = useCallback((altarId) => {
+    if (!altarId) {
+      setAltarMenu(null);
+      return;
+    }
+    const altar = MOE_ALTARS.find((a) => a.id === altarId) ?? null;
+    if (!altar) return;
+    setAltarMenu(altar);
+  }, []);
 
   const closeAltar = useCallback(() => {
     setAltarOpen(false);
@@ -6353,17 +6645,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setCashShopOpen(true);
   }, []);
 
-  const handleCashShopTalk = useCallback(() => {
-    if (is3d && !nearCashShopRef.current) {
-      setToast("プレミアムショップの近くで話しかけてください");
-      return;
-    }
-    openCashShopDialogue();
-  }, [is3d, openCashShopDialogue]);
-
   const handleCashShopNpcClick = useCallback(() => {
+    setHouseTalkMenuTracked(false);
     openCashShopDialogue();
-  }, [openCashShopDialogue]);
+  }, [openCashShopDialogue, setHouseTalkMenuTracked]);
 
   const closeCashShop = useCallback(() => {
     setCashShopOpen(false);
@@ -6384,7 +6669,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const handleJosephTalk = useCallback(() => {
     if (is3d) {
-      if (!nearPetHouseRef.current) {
+      if (!nearPetHouseRef.current && !houseTalkMenuRef.current) {
         setToast("ペット小屋の近くで話しかけてください");
         return;
       }
@@ -6412,7 +6697,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const handleJosephSynthTalk = useCallback(() => {
     if (is3d) {
-      if (!nearPetHouseRef.current) {
+      if (!nearPetHouseRef.current && !houseTalkMenuRef.current) {
         setToast("ペット小屋の近くで話しかけてください");
         return;
       }
@@ -6838,15 +7123,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     pos: petSidePanelPos,
     sizeRef: petSidePanelSizeRef,
     onDragPointerDown: onPetSidePanelDrag,
-  } = useMoeDraggablePos(
-    "life-rpg-moe-pet-side-panel-pos",
-    getPetSidePanelPos
-  );
+  } = useMoeDraggablePos(MOE_PANEL_ID_PET_SIDE, getPetSidePanelPos);
   const {
     collapsed: petSidePanelCollapsed,
     toggleCollapsed: togglePetSidePanelCollapsed,
   } = useMoePanelCollapsed("pet-side-panel");
-
   const handleMacroTimerFinished = useCallback(() => {
     setToast("⏱ マクロ４ 0:00 — お疲れさま！");
     playSfx("heal");
@@ -6938,20 +7219,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         barKey: "petBar",
       }
     : null;
-  const targetDuelUi =
-    duel && targetEnemy && duel.enemyId === targetEnemy.id
-      ? {
-          phase: duel.phase,
-          duelRef,
-          barKey: "enemyBar",
-        }
-      : null;
-
   const trainerExpPct = Math.min(
     100,
     Math.floor(
       ((trainerStatus.exp || 0) / Math.max(1, trainerStatus.nextExp || 1)) * 100
     )
+  );
+  const petLoyaltyDisplay = moePetLoyaltyValue(pet?.loyalty);
+  const petLoyaltyPct = Math.min(
+    100,
+    Math.floor((petLoyaltyDisplay / MOE_PET_LOYALTY_MAX) * 100)
   );
 
   const showBattleLog = is3d;
@@ -6972,18 +7249,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const petMasterView = petMasterDialogue?.view ?? "menu";
 
-  const allyTargetView = {
-    emoji: allyTarget === "player" ? "🧑" : currentPetDisplay.emoji,
-    name:
-      allyTarget === "player"
-        ? trainerStatus.job ?? "勇者"
-        : currentPetDisplay.name,
-    hp: allyTarget === "player" ? playerVitals.hp : pet.hp,
-    hpMax: allyTarget === "player" ? playerVitals.hpMax : pet.hpMax,
-    mp: allyTarget === "player" ? playerVitals.mp : pet.mp,
-    mpMax: allyTarget === "player" ? playerVitals.mpMax : pet.mpMax,
-  };
-
   return (
     <MoePanelDockProvider>
     <div
@@ -6992,14 +7257,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     >
       <MoeMacroSessionTimer onFinished={handleMacroTimerFinished} />
       <MoeBattleLogPanel open={showBattleLog} entries={battleLogEntries} />
-      <MoeTargetWindow
-        target={targetEnemy}
-        chaseAggro={targetEnemyChaseAggro}
-        duelUi={targetDuelUi}
-        allyTarget={allyTargetView}
-        allyTargetMode={allyTarget}
-        onSelectAllyTarget={selectAllyTarget}
-      />
       <MoeEnemyStatSearchPanel
         enemy={targetEnemy}
         open={enemyStatSearchOpen}
@@ -7025,6 +7282,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             kakureminoUntilMs: kakureminoUntilRef.current,
             dashBoost3x,
             kintounOn,
+            skateboardOn,
             playerCondenseMindRef,
             playerJirikiSeiranRef,
           },
@@ -7182,7 +7440,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       {/* Pet Status UI — ドラッグで移動 */}
       {petSidePanelPos && (
-      <div
+      <MoeFloatingPanelRoot
+        panelId={MOE_PANEL_ID_PET_SIDE}
         ref={(el) => {
           if (el) {
             petSidePanelSizeRef.current = {
@@ -7191,21 +7450,27 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             };
           }
         }}
-        className="fixed z-[46]"
-        style={{ left: petSidePanelPos.x, top: petSidePanelPos.y }}
+        className="fixed"
+        style={{
+          left: petSidePanelPos.x,
+          top: petSidePanelPos.y,
+        }}
       >
         <div
-          className={`overflow-x-hidden rounded-lg border border-white/20 bg-black/75 text-white backdrop-blur-md [scrollbar-width:thin] ${petSidePanelCollapsed ? "w-auto" : "max-h-[calc(100dvh-4.5rem)] w-[10.75rem] overflow-y-auto overscroll-contain p-2"}`}
+          className={`overflow-x-hidden rounded-lg border border-white/20 bg-black/75 text-white backdrop-blur-md [scrollbar-width:thin] ${petSidePanelCollapsed ? "w-auto" : "max-h-[calc(100dvh-4.5rem)] w-[9.2rem] overflow-y-auto overscroll-contain px-1.5 py-2"}`}
         >
           <div
-            className={`relative flex cursor-grab touch-none pl-5 active:cursor-grabbing ${petSidePanelCollapsed ? "items-center gap-1 py-1 pr-2" : "mb-1.5 items-center gap-1.5"}`}
+            className={`relative flex cursor-grab touch-none pl-8 active:cursor-grabbing ${petSidePanelCollapsed ? "items-center gap-1 py-1 pr-2" : "mb-1.5 items-center gap-1.5"}`}
             onPointerDown={onPetSidePanelDrag}
-            title="ドラッグで移動"
+            title={moeFloatingDragTitle("ドラッグで移動")}
           >
             <MoePanelCollapseToggle
               collapsed={petSidePanelCollapsed}
               onToggle={togglePetSidePanelCollapsed}
-            />
+              className="!left-0 !h-7 !w-7 !-translate-y-[calc(50%+3px)] !text-[22px] leading-none"
+            >
+              <span aria-hidden="true">🌸</span>
+            </MoePanelCollapseToggle>
             <span className={`leading-none ${petSidePanelCollapsed ? "text-base" : "text-xl"}`}>
               {currentPetData.emoji}
             </span>
@@ -7230,39 +7495,73 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           </div>
           {!petSidePanelCollapsed ? (
           <div className="space-y-0.5">
-            <div className="flex justify-between text-[9px]">
-              <span>HP</span>
-              <span>
-                {precisePet
-                  ? `${formatPetStatUi(pet.hp)}/${formatPetStatUi(pet.hpMax)}`
-                  : `${Math.floor(pet.hp)}/${pet.hpMax}`}
-              </span>
+            <div className="rounded-[2px] border border-amber-50/95 bg-gradient-to-b from-amber-100 via-yellow-300 to-amber-500 px-[7px] py-0 shadow-[0_0_6px_rgba(251,191,36,0.7),inset_0_1px_0_rgba(255,250,220,0.85)]">
+              <div className="relative h-3.5 w-full overflow-hidden rounded-full bg-gray-800">
+                <div
+                  className="absolute inset-y-0 left-0 transition-all"
+                  style={{
+                    width: `${petResourceBarPct(pet.hp, pet.hpMax)}%`,
+                    backgroundColor: "#ef4444",
+                  }}
+                />
+                <div className="relative flex h-full items-center justify-between px-1.5 text-[9px] font-bold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.9)]">
+                  <span>HP</span>
+                  <span className="tabular-nums">
+                    {precisePet
+                      ? `${formatPetStatUi(pet.hp)}/${formatPetStatUi(pet.hpMax)}`
+                      : `${Math.floor(pet.hp)}/${pet.hpMax}`}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-              <div
-                className="bg-green-500 h-full transition-all"
-                style={{ width: `${petResourceBarPct(pet.hp, pet.hpMax)}%` }}
-              />
+            <div className="rounded-[2px] border border-amber-50/95 bg-gradient-to-b from-amber-100 via-yellow-300 to-amber-500 px-[7px] py-0 shadow-[0_0_6px_rgba(251,191,36,0.7),inset_0_1px_0_rgba(255,250,220,0.85)]">
+              <div className="relative h-3.5 w-full overflow-hidden rounded-full bg-gray-800">
+                <div
+                  className="absolute inset-y-0 left-0 transition-all"
+                  style={{
+                    width: `${petResourceBarPct(pet.mp, pet.mpMax)}%`,
+                    backgroundColor: "#ec4899",
+                  }}
+                />
+                <div className="relative flex h-full items-center justify-between px-1.5 text-[9px] font-bold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.9)]">
+                  <span>MP</span>
+                  <span className="tabular-nums">
+                    {precisePet
+                      ? `${formatPetStatUi(pet.mp)}/${formatPetStatUi(pet.mpMax)}`
+                      : `${pet.mp}/${pet.mpMax}`}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between text-[9px]">
-              <span>MP</span>
-              <span>
-                {precisePet
-                  ? `${formatPetStatUi(pet.mp)}/${formatPetStatUi(pet.mpMax)}`
-                  : `${pet.mp}/${pet.mpMax}`}
-              </span>
-            </div>
-            <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-              <div
-                className="bg-blue-500 h-full transition-all"
-                style={{ width: `${petResourceBarPct(pet.mp, pet.mpMax)}%` }}
-              />
+            <div
+              className="rounded-[2px] border border-amber-50/95 bg-gradient-to-b from-amber-100 via-yellow-300 to-amber-500 px-[7px] py-0 shadow-[0_0_6px_rgba(251,191,36,0.7),inset_0_1px_0_rgba(255,250,220,0.85)]"
+              title={
+                pet.loyaltyPityMiss
+                  ? "愛着度。次の強敵撃破で上昇確定"
+                  : "愛着度。敵Lvがペットより7以上で上昇（50%）"
+              }
+            >
+              <div className="relative h-3.5 w-full overflow-hidden rounded-full bg-gray-800">
+                <div
+                  className="absolute inset-y-0 left-0 transition-all"
+                  style={{
+                    width: `${petLoyaltyPct}%`,
+                    backgroundColor: "#38bdf8",
+                  }}
+                />
+                <div className="relative flex h-full items-center justify-between px-1.5 text-[9px] font-bold leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.9)]">
+                  <span>愛着度</span>
+                  <span className="tabular-nums">
+                    {petLoyaltyDisplay}/{MOE_PET_LOYALTY_MAX}
+                  </span>
+                </div>
+              </div>
             </div>
             <p className="mt-1.5 text-center text-[7px] font-bold text-cyan-200/90">
               ペット命令
             </p>
             <div className="mt-0.5 rounded-md border border-cyan-500/45 bg-zinc-950/70 p-1">
-              <div className="grid grid-cols-3 gap-0.5">
+              <div className="grid grid-cols-3 gap-0.5 [&>button]:whitespace-nowrap">
                 <button
                   type="button"
                   onClick={handlePetAttackCommand}
@@ -7324,133 +7623,17 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 </button>
                 </div>
                 </div>
-            <div className="mt-1 flex items-stretch justify-center gap-0.5">
-              <button
-                type="button"
-                disabled={healCdSec.light > 0}
-                onClick={() =>
-                  handleHeal(
-                    MOE_PLAYER_HEAL_LIGHT_AMOUNT,
-                    "light",
-                    MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC
-                  )
-                }
-                className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
-                  healCdSec.light > 0
-                    ? "cursor-not-allowed bg-pink-700/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
-                    : "bg-pink-700/90 hover:bg-pink-600"
-                }`}
-                title={
-                  healCdSec.light > 0
-                    ? moePlayerHealCooldownLabel("light")
-                    : moePlayerHealSkillTitle("light")
-                }
-              >
-                {healCdSec.light > 0 ? (
-                  <span className="relative flex h-full w-full items-center justify-center">
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
-                      ライト
-                  </span>
-                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
-                      {healCdSec.light}
-                  </span>
-                  </span>
-                ) : (
-                  "ライト"
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={healCdSec.healing > 0}
-                onClick={() =>
-                  handleHeal(
-                    MOE_PLAYER_HEAL_HEALING_AMOUNT,
-                    "healing",
-                    MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC
-                  )
-                }
-                className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
-                  healCdSec.healing > 0
-                    ? "cursor-not-allowed bg-pink-600/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
-                    : "bg-pink-600 text-white hover:bg-pink-500"
-                }`}
-                title={
-                  healCdSec.healing > 0
-                    ? moePlayerHealCooldownLabel("healing")
-                    : moePlayerHealSkillTitle("healing")
-                }
-              >
-                {healCdSec.healing > 0 ? (
-                  <span className="relative flex h-full w-full items-center justify-center">
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
-                      ヒール
-                  </span>
-                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
-                      {healCdSec.healing}
-                  </span>
-                  </span>
-                ) : (
-                  "ヒール"
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={healCdSec.healAll > 0}
-                onClick={() =>
-                  handleHeal(
-                    MOE_PLAYER_HEAL_ALL_AMOUNT,
-                    "healAll",
-                    MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC
-                  )
-                }
-                className={`flex h-6 min-w-0 flex-[0.85] items-center justify-center rounded px-0.5 text-[6px] font-bold leading-tight transition active:scale-95 ${
-                  healCdSec.healAll > 0
-                    ? "cursor-not-allowed bg-pink-500/28 text-amber-200/80 ring-1 ring-inset ring-pink-300/25"
-                    : "bg-pink-500 text-white hover:bg-pink-400"
-                }`}
-                title={
-                  healCdSec.healAll > 0
-                    ? moePlayerHealCooldownLabel("healAll")
-                    : moePlayerHealSkillTitle("healAll")
-                }
-              >
-                {healCdSec.healAll > 0 ? (
-                  <span className="relative flex h-full w-full items-center justify-center">
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[6px] font-bold leading-none text-white/25">
-                      オール
-                </span>
-                    <span className="relative text-[11px] tabular-nums leading-none text-amber-200/90">
-                      {healCdSec.healAll}
-                    </span>
-                  </span>
-                ) : (
-                  "オール"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleRegenToggle}
-                className={`flex h-6 min-w-[2rem] shrink-0 flex-[0.72] items-center justify-center rounded border px-0.5 text-[6px] font-bold leading-none whitespace-nowrap transition active:scale-95 ${
-                  regenActive
-                    ? "border-teal-300/70 bg-teal-800/95 text-teal-50 ring-1 ring-teal-300/45"
-                    : "border-teal-600/45 bg-teal-950/85 text-teal-100 hover:bg-teal-900/90"
-                }`}
-                title={moePlayerRegenToggleTitle()}
-              >
-                リジェネ
-              </button>
-              </div>
             <button
               type="button"
               onClick={() => setShowPetStatusOverlay((v) => !v)}
-              className="mt-1.5 w-full rounded border border-emerald-500/50 bg-emerald-950/90 py-1 text-[9px] font-bold text-emerald-100 transition hover:bg-emerald-900/95 active:scale-95"
+              className="mt-1 w-full whitespace-nowrap rounded border border-emerald-500/50 bg-emerald-950/90 px-0.5 py-0.5 text-[8px] font-bold text-emerald-100 transition hover:bg-emerald-900/95 active:scale-95"
             >
               ステータス{showPetStatusOverlay ? " ▲" : ""}
             </button>
             <button
               type="button"
               onClick={() => setShowPlayerStatusPanel((v) => !v)}
-              className="mt-1 w-full rounded border border-sky-500/50 bg-sky-950/90 py-1 text-[9px] font-bold text-sky-100 transition hover:bg-sky-900/95 active:scale-95"
+              className="mt-0.5 w-full whitespace-nowrap rounded border border-sky-500/50 bg-sky-950/90 px-0.5 py-0.5 text-[8px] font-bold text-sky-100 transition hover:bg-sky-900/95 active:scale-95"
             >
               プレイヤーステータス{showPlayerStatusPanel ? " ▲" : ""}
             </button>
@@ -7469,6 +7652,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   kakureminoUntilMs: kakureminoUntilRef.current,
                   dashBoost3x,
                   kintounOn,
+                  skateboardOn,
                   playerCondenseMindRef,
                   playerJirikiSeiranRef,
                 },
@@ -7476,33 +7660,25 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               )}
             />
             {showPetStatusOverlay && (
-              <div className="mt-1 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-emerald-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(14rem,38vh)]">
-                <div className="box-border w-full max-w-full px-1 py-2 text-white">
-                  <div className="space-y-1.5 text-[10px]">
+              <div className="mt-0.5 w-full overflow-x-hidden overflow-y-auto overscroll-contain border-y border-emerald-400/40 bg-zinc-950/97 [scrollbar-width:thin] max-h-[min(11rem,32vh)]">
+                <div className="box-border w-full max-w-full px-1 py-1 text-white">
+                  <div className="space-y-1 text-[10px]">
             <div
               ref={petExpUiAnchorRef}
                       className="relative"
                       key={`pet-exp-ui-${petTotalExp}-${petLevelDisplay}`}
                     >
-                      <p className="text-[9px] font-bold tabular-nums text-amber-100">
-                        Lv.{petLevelDisplay}
-                      </p>
-                      <p className="mt-0.5 font-mono text-[9px] tabular-nums leading-snug text-white">
+                      <p className="whitespace-nowrap font-mono text-[8px] tabular-nums leading-none text-white">
                         {petCombatLevel >= MOE_PET_MAX_LEVEL ? (
-                          <>
-                            次回EXP MAX
-                            <br />
-                            合計EXP {petTotalExp.toLocaleString()}
-                          </>
+                          <>次 EXP MAX ／計 EXP {petTotalExp.toLocaleString()}</>
                         ) : (
                           <>
-                            次回EXP {petNextRemaining ?? "—"}
-                            <br />
-                            合計EXP {petTotalExp.toLocaleString()}
+                            次 EXP {petNextRemaining ?? "—"} ／計 EXP{" "}
+                            {petTotalExp.toLocaleString()}
                           </>
                         )}
                       </p>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full border border-white/35 bg-white/10">
+                      <div className="mt-0.5 h-1 overflow-hidden rounded-full border border-white/35 bg-white/10">
                         <div
                           className="h-full bg-gradient-to-r from-white to-white/75 transition-[width] duration-150"
                   style={{ width: `${petExpPct}%` }}
@@ -7514,7 +7690,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             <button
               type="button"
                         onClick={previewPetTenthLevelUpEffect}
-                        className="mt-1 w-full rounded border border-cyan-500/45 bg-cyan-950/70 py-0.5 text-[8px] font-bold text-cyan-100 transition hover:bg-cyan-900/80 active:scale-[0.98]"
+                        className="mt-0.5 w-full rounded border border-cyan-500/45 bg-cyan-950/70 py-0.5 text-[8px] font-bold text-cyan-100 transition hover:bg-cyan-900/80 active:scale-[0.98]"
             >
                         0.1 up 演出プレビュー
             </button>
@@ -7524,7 +7700,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             </p>
           </div>
                     {precisePet && petWikiStats && (
-                      <div className="space-y-0.5 border-t border-white/15 pt-1.5 text-[9px] leading-tight">
+                      <div className="space-y-0 border-t border-white/15 pt-1 text-[9px] leading-none">
                         {[
                           ["攻撃", formatPetStatUi(petWikiStats.attack), "耐火", formatPetResistUi(petWikiStats.resistFire)],
                           [
@@ -7598,102 +7774,123 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 )}
             </select>
           </div>
-            <div className="mt-1.5 space-y-1 border-t border-white/15 pt-1.5">
-              <button
-                type="button"
-                onClick={handlePetExpReset}
-                className="w-full rounded border border-rose-600/60 bg-rose-950/80 py-1 text-[8px] font-bold text-rose-100 transition hover:bg-rose-900/90 active:scale-[0.98]"
-              >
-                ペットEXP・Lv リセット
-              </button>
-              <p className="text-[8px] leading-snug text-white/42">
-                ペットの Lv・EXP等はこのブラウザ保存
-              </p>
-              <div className="space-y-1">
-                <div className="flex w-full items-center justify-between gap-2 text-pink-100/95">
-                  <span className="shrink-0 text-[10px]">訓練士EXP</span>
-                  <span className="min-w-0 shrink text-right font-mono text-[9px] tabular-nums">
-                    {trainerStatus.exp}/{trainerStatus.nextExp}
-                  </span>
-        </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full border border-pink-800/50 bg-pink-950/80">
-                  <div
-                    className="h-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500 transition-all duration-500"
-                    style={{ width: `${trainerExpPct}%` }}
-                  />
-                </div>
-                <p className="text-[8px] leading-snug text-white/42">
-                  敵撃破で加算・localStorage 保存
-                </p>
-              </div>
-            </div>
           </div>
           ) : null}
         </div>
-      </div>
+      </MoeFloatingPanelRoot>
       )}
 
       {/* 縦スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
-      <MoeMergedVerticalSkillPanel
-        storageKey="life-rpg-moe-merged-skill-panel-a"
-        defaultPos={() => ({
-          x: Math.max(8, window.innerWidth - 90),
-          y: 8,
-        })}
-        {...mergedSkillPanelProps}
-      />
-      <MoeMergedVerticalSkillPanel
-        storageKey="life-rpg-moe-merged-skill-panel-b"
-        defaultPos={() => ({
-          x: Math.max(8, window.innerWidth - 168),
-          y: 8,
-        })}
-        {...mergedSkillPanelProps}
-      />
+      {skillPanelVisibility.vertical1 ? (
+        <MoeMergedVerticalSkillPanel
+          storageKey={MOE_PANEL_ID_MERGED_SKILL_PANEL_A}
+          defaultPos={() => ({
+            x: Math.max(8, window.innerWidth - 90),
+            y: 8,
+          })}
+          collapsed={skillPanelCollapsed.vertical1}
+          onClose={() => toggleSkillPanelCollapse("vertical1")}
+          {...mergedSkillPanelProps}
+        />
+      ) : null}
+      {skillPanelVisibility.vertical2 ? (
+        <MoeMergedVerticalSkillPanel
+          storageKey={MOE_PANEL_ID_MERGED_SKILL_PANEL_B}
+          defaultPos={() => ({
+            x: Math.max(8, window.innerWidth - 168),
+            y: 8,
+          })}
+          collapsed={skillPanelCollapsed.vertical2}
+          onClose={() => toggleSkillPanelCollapse("vertical2")}
+          {...mergedSkillPanelProps}
+        />
+      ) : null}
 
-      {/* 縦スキル ×2 — 鳳凰 / 龍神 修行スキルゲット表 */}
-      {is3d ? (
-        <>
-          <MoeTrainingVerticalSkillPanel
-            kind="phoenix"
-            storageKey="life-rpg-moe-phoenix-training-skill-panel"
-            onActivateSkill={activateTrainingSkill}
-            skillMode={trainingSkillMode}
-            defaultPos={() => ({
-              x: 8,
-              y: 8,
-            })}
-          />
-          <MoeTrainingVerticalSkillPanel
-            kind="dragon"
-            storageKey="life-rpg-moe-dragon-training-skill-panel"
-            onActivateSkill={activateTrainingSkill}
-            skillMode={trainingSkillMode}
-            defaultPos={() => ({
-              x: 8,
-              y: 220,
-            })}
-          />
-        </>
+      {/* 縦スキル — 鳳凰 / 龍神 修行スキルゲット表 */}
+      {is3d && skillPanelVisibility.verticalPhoenix ? (
+        <MoeTrainingVerticalSkillPanel
+          kind="phoenix"
+          storageKey={MOE_PANEL_ID_PHOENIX_TRAINING_SKILL_PANEL}
+          onActivateSkill={activateTrainingSkill}
+          skillMode={trainingSkillMode}
+          collapsed={skillPanelCollapsed.verticalPhoenix}
+          onClose={() => toggleSkillPanelCollapse("verticalPhoenix")}
+          defaultPos={() => ({
+            x: 8,
+            y: 8,
+          })}
+        />
+      ) : null}
+      {is3d && skillPanelVisibility.verticalDragon ? (
+        <MoeTrainingVerticalSkillPanel
+          kind="dragon"
+          storageKey={MOE_PANEL_ID_DRAGON_TRAINING_SKILL_PANEL}
+          onActivateSkill={activateTrainingSkill}
+          skillMode={trainingSkillMode}
+          collapsed={skillPanelCollapsed.verticalDragon}
+          onClose={() => toggleSkillPanelCollapse("verticalDragon")}
+          defaultPos={() => ({
+            x: 8,
+            y: 220,
+          })}
+        />
       ) : null}
 
       {/* 横スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
-      <MoeMergedSkillIconBar
-        storageKey="life-rpg-moe-merged-icon-bar-a"
-        defaultPos={() => ({
-          x: Math.max(8, (window.innerWidth - 360) / 2),
-          y: Math.max(8, window.innerHeight - 148),
-        })}
-        {...mergedIconBarProps}
-      />
-      <MoeMergedSkillIconBar
-        storageKey="life-rpg-moe-merged-icon-bar-b"
-        defaultPos={() => ({
-          x: Math.max(8, (window.innerWidth - 360) / 2),
-          y: Math.max(8, window.innerHeight - 220),
-        })}
-        {...mergedIconBarProps}
-      />
+      {skillPanelVisibility.horizontal1 ? (
+        <MoeMergedSkillIconBar
+          storageKey={MOE_PANEL_ID_MERGED_ICON_BAR_A}
+          defaultPos={() => ({
+            x: Math.max(8, (window.innerWidth - 360) / 2),
+            y: Math.max(8, window.innerHeight - 148),
+          })}
+          collapsed={skillPanelCollapsed.horizontal1}
+          onClose={() => toggleSkillPanelCollapse("horizontal1")}
+          {...mergedIconBarProps}
+        />
+      ) : null}
+      {skillPanelVisibility.horizontal2 ? (
+        <MoeMergedSkillIconBar
+          storageKey={MOE_PANEL_ID_MERGED_ICON_BAR_B}
+          defaultPos={() => ({
+            x: Math.max(8, (window.innerWidth - 360) / 2),
+            y: Math.max(8, window.innerHeight - 220),
+          })}
+          collapsed={skillPanelCollapsed.horizontal2}
+          onClose={() => toggleSkillPanelCollapse("horizontal2")}
+          {...mergedIconBarProps}
+        />
+      ) : null}
+
+      {/* 横スキル ×2 — 鳳凰 / 龍神 修行スキル */}
+      {is3d && skillPanelVisibility.horizontal3 ? (
+        <MoeTrainingSkillIconBar
+          kind="phoenix"
+          storageKey={MOE_PANEL_ID_PHOENIX_TRAINING_ICON_BAR}
+          onActivateSkill={activateTrainingSkill}
+          skillMode={trainingSkillMode}
+          collapsed={skillPanelCollapsed.horizontal3}
+          onClose={() => toggleSkillPanelCollapse("horizontal3")}
+          defaultPos={() => ({
+            x: Math.max(8, (window.innerWidth - 380) / 2),
+            y: Math.max(8, window.innerHeight - 296),
+          })}
+        />
+      ) : null}
+      {is3d && skillPanelVisibility.horizontal4 ? (
+        <MoeTrainingSkillIconBar
+          kind="dragon"
+          storageKey={MOE_PANEL_ID_DRAGON_TRAINING_ICON_BAR}
+          onActivateSkill={activateTrainingSkill}
+          skillMode={trainingSkillMode}
+          collapsed={skillPanelCollapsed.horizontal4}
+          onClose={() => toggleSkillPanelCollapse("horizontal4")}
+          defaultPos={() => ({
+            x: Math.max(8, (window.innerWidth - 380) / 2),
+            y: Math.max(8, window.innerHeight - 368),
+          })}
+        />
+      ) : null}
 
       <MoeItemBox onToast={setToast} onUse={handleItemBoxUse} />
 
@@ -7792,8 +7989,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         ) : null}
         <div className="min-w-0 flex-1">
         {!showSettings ? (
-              <button
-                type="button"
+          <button
+            type="button"
             onClick={() => setShowSettings(true)}
             className="rounded-lg border border-zinc-400/50 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-zinc-100 shadow-md backdrop-blur-sm transition hover:bg-black/75 active:scale-[0.98]"
             aria-expanded={false}
@@ -7801,23 +7998,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           >
             設定
           </button>
-        ) : (
-          <div
-            id="moe-field-settings-panel"
-            className="rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-xs text-white/90 backdrop-blur-sm"
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <p className="font-bold text-zinc-200">設定</p>
-              <button
-                type="button"
-                onClick={() => setShowSettings(false)}
-                className="shrink-0 rounded border border-white/20 px-1.5 py-0.5 text-[9px] text-white/70 hover:bg-white/10"
-                aria-label="設定を閉じる"
-              >
-                閉じる
-              </button>
-            </div>
-            <div className="flex flex-col gap-1.5">
+        ) : null}
+        </div>
+      </div>
+
+      <MoeFieldSettingsPanel
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+      >
+        <div id="moe-field-settings-panel" className="flex flex-col gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -7838,185 +8027,389 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               >
                 イベント情報
               </button>
+              <div className="rounded border border-zinc-500/35 bg-zinc-950/40 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowSkillUiDisplaySettings((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-zinc-100 transition hover:text-white active:scale-[0.99]"
+                  aria-expanded={showSkillUiDisplaySettings}
+                >
+                  <span>スキルUI表示</span>
+                  <span className="text-[9px] font-normal text-white/55">
+                    {showSkillUiDisplaySettings ? "▲" : "▼"}
+                  </span>
+                </button>
+                {showSkillUiDisplaySettings ? (
+                  <div className="mt-1.5 flex flex-col gap-1 border-t border-white/10 pt-1.5">
+                    {MOE_SKILL_PANEL_IDS.map((panelId) => (
+                      <label
+                        key={panelId}
+                        className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[10px] text-zinc-100/90 hover:bg-white/5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(skillPanelVisibility[panelId])}
+                          onChange={(e) => {
+                            setSkillPanelVisibleState(
+                              panelId,
+                              e.target.checked
+                            );
+                          }}
+                          className="h-3 w-3 shrink-0 accent-cyan-400"
+                        />
+                        <span>{MOE_SKILL_PANEL_LABELS[panelId]}</span>
+                      </label>
+                    ))}
+                    <p className="text-[8px] leading-snug text-white/45">
+                      ◆ でたたむ（◆は残る）· チェックオフで完全非表示
+                    </p>
+                  </div>
+                ) : null}
+              </div>
               {is3d ? (
-                <>
+                <div className="rounded border border-fuchsia-500/30 bg-fuchsia-950/25 px-2 py-1.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowSettings(false);
-                      setShowDragonLineup(true);
-                    }}
-                    className="rounded border border-amber-500/40 bg-amber-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-amber-200 transition hover:bg-amber-900/35 active:scale-[0.98]"
+                    onClick={() => setShowModelingShowcaseSettings((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-fuchsia-100 transition hover:text-fuchsia-50 active:scale-[0.99]"
+                    aria-expanded={showModelingShowcaseSettings}
                   >
-                    ドラゴン10体展示
+                    <span>モデリング展示</span>
+                    <span className="text-[9px] font-normal text-fuchsia-200/55">
+                      {showModelingShowcaseSettings ? "▲" : "▼"}
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSettings(false);
-                      setShowMonsterLineup(true);
-                    }}
-                    className="rounded border border-rose-500/40 bg-rose-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-rose-200 transition hover:bg-rose-900/35 active:scale-[0.98]"
-                  >
-                    敵32体展示
-                  </button>
-                </>
+                  {showModelingShowcaseSettings ? (
+                    <div className="mt-1.5 flex flex-col gap-1.5 border-t border-fuchsia-500/20 pt-1.5">
+                      {MOE_MODELING_SHOWCASE_GROUPS.map((group) => (
+                        <div key={group.dateLabel}>
+                          <p className="px-0.5 text-[8px] font-bold text-fuchsia-200/80">
+                            {group.dateLabel}モデリング展示
+                          </p>
+                          <div className="mt-0.5 flex flex-col gap-0.5">
+                            {group.items.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() =>
+                                  openModelingShowcase(item.actionId)
+                                }
+                                className={`rounded border px-2 py-1 text-left text-[10px] font-bold transition active:scale-[0.98] ${
+                                  item.theme === "rose"
+                                    ? "border-rose-500/40 bg-rose-950/40 text-rose-200 hover:bg-rose-900/35"
+                                    : "border-amber-500/40 bg-amber-950/40 text-amber-200 hover:bg-amber-900/35"
+                                }`}
+                              >
+                                {item.title}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
-              <div className="rounded border border-violet-500/30 bg-violet-950/30 px-2 py-1.5">
-                <p className="text-[10px] font-bold text-violet-100/95">
-                  ペットスキル
-                </p>
-                <p className="mt-0.5 text-[9px] leading-snug text-violet-100/70">
-                  現在: {moePetSkillModeLabel(petSkillMode)}
-                </p>
-                <div className="mt-1.5 grid grid-cols-1 gap-1">
+              <div className="rounded border border-amber-500/35 bg-amber-950/25 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEnemyRespawnSettings((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-amber-100 transition hover:text-amber-50 active:scale-[0.99]"
+                  aria-expanded={showEnemyRespawnSettings}
+                >
+                  <span>敵リポップ</span>
+                  <span className="text-[9px] font-normal text-amber-200/55">
+                    {showEnemyRespawnSettings ? "▲" : "▼"}
+                  </span>
+                </button>
+                {showEnemyRespawnSettings ? (
+                  <div className="mt-1.5 flex flex-col gap-1 border-t border-amber-500/20 pt-1.5">
+                    {MOE_ENEMY_RESPAWN_BANDS.map((band) => (
+                      <label
+                        key={band.id}
+                        className="flex items-center justify-between gap-2 text-[10px] font-bold text-amber-50"
+                      >
+                        <span>{band.label}</span>
+                        <select
+                          value={enemyRespawnSeconds[band.id]}
+                          onChange={(e) => {
+                            const sec = Number(e.target.value);
+                            const next = {
+                              ...enemyRespawnSecondsRef.current,
+                              [band.id]: sec,
+                            };
+                            enemyRespawnSecondsRef.current = next;
+                            setEnemyRespawnSeconds(next);
+                            saveMoeEnemyRespawnSeconds(next);
+                          }}
+                          className="rounded border border-amber-400/40 bg-zinc-950/80 px-1.5 py-0.5 text-[11px] font-bold text-amber-50"
+                        >
+                          {MOE_ENEMY_RESPAWN_CHOICES.map((choice) => (
+                            <option key={choice.sec} value={choice.sec}>
+                              {choice.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                    <p className="text-[8px] leading-snug text-amber-200/55">
+                      10秒刻みと分刻み。大ボスはLvに関係なく150帯
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+              {is3d ? (
+                <div className="rounded border border-sky-500/35 bg-sky-950/25 px-2 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPlayerLookAheadSettings((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-sky-100 transition hover:text-sky-50 active:scale-[0.99]"
+                    aria-expanded={showPlayerLookAheadSettings}
+                  >
+                    <span>プレイヤー初期位置</span>
+                    <span className="text-[9px] font-normal text-sky-200/55">
+                      {showPlayerLookAheadSettings ? "▲" : "▼"}
+                    </span>
+                  </button>
+                  {showPlayerLookAheadSettings ? (
+                    <div className="mt-1.5 flex flex-col items-center gap-1.5 border-t border-sky-500/20 pt-1.5">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="プレイヤーを画面の上へ"
+                          disabled={playerLookAhead <= MOE_PLAYER_LOOK_AHEAD_MIN}
+                          onClick={() => {
+                            const next = nudgeMoePlayerLookAhead(
+                              playerLookAheadRef.current,
+                              "up"
+                            );
+                            playerLookAheadRef.current = next;
+                            setPlayerLookAhead(next);
+                            saveMoePlayerLookAhead(next);
+                          }}
+                          className="rounded border border-sky-400/45 bg-zinc-950/80 px-3 py-1 text-sm font-bold text-sky-50 transition hover:bg-sky-900/40 active:scale-95 disabled:opacity-35"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="プレイヤーを画面の下へ"
+                          disabled={playerLookAhead >= MOE_PLAYER_LOOK_AHEAD_MAX}
+                          onClick={() => {
+                            const next = nudgeMoePlayerLookAhead(
+                              playerLookAheadRef.current,
+                              "down"
+                            );
+                            playerLookAheadRef.current = next;
+                            setPlayerLookAhead(next);
+                            saveMoePlayerLookAhead(next);
+                          }}
+                          className="rounded border border-sky-400/45 bg-zinc-950/80 px-3 py-1 text-sm font-bold text-sky-50 transition hover:bg-sky-900/40 active:scale-95 disabled:opacity-35"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                      <p className="text-center text-[8px] leading-snug text-sky-200/60">
+                        ↑で画面の上、↓で下
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <MoePetSettingsSection
+                petLoyaltyGate100={petLoyaltyGate100}
+                onPetLoyaltyGate100Change={(autoOnly) => {
+                  setPetLoyaltyGate100(autoOnly);
+                  saveMoePetLoyaltyGate100(autoOnly);
+                  setPetAutoSkillEnabled(autoOnly);
+                  saveMoePetAutoSkillEnabled(autoOnly);
+                }}
+                petSkillMode={petSkillMode}
+                onPetSkillModeChange={(mode) => {
+                  setPetSkillMode(mode);
+                  saveMoePetSkillMode(mode);
+                }}
+                trainingSkillMode={trainingSkillMode}
+                onTrainingSkillModeChange={(mode) => {
+                  setTrainingSkillMode(mode);
+                  saveMoeTrainingSkillMode(mode);
+                }}
+                skillSuccess100={skillSuccess100}
+                onSkillSuccess100Change={(v) => {
+                  setSkillSuccess100(v);
+                  saveMoePlayerSkillSuccess100(v);
+                }}
+              />
+              <div className="rounded border border-amber-500/25 bg-amber-950/25 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPetExpSaveSettings((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-amber-100 transition hover:text-amber-50 active:scale-[0.99]"
+                  aria-expanded={showPetExpSaveSettings}
+                >
+                  <span>ペットEXPを保存</span>
+                  <span className="text-[9px] font-normal text-amber-200/55">
+                    {showPetExpSaveSettings ? "▲" : "▼"}
+                  </span>
+                </button>
+                {showPetExpSaveSettings ? (
+                  <div className="mt-1.5 flex flex-col gap-1 border-t border-amber-500/20 pt-1.5">
+                    <p className="text-[9px] font-bold text-amber-100/90">
+                      ペットEXP · 外部保存
+                    </p>
+                    <p className="text-[8px] leading-snug text-amber-100/65">
+                      JSON を追加保存（上書きしません）。読み込みは
+                      <strong className="text-emerald-200/95">
+                        {" "}
+                        moe-save-*.json を1つ選ぶだけ
+                      </strong>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleExternalSave}
+                      className="rounded border border-amber-500/45 bg-amber-950/45 px-2 py-1 text-left text-[10px] font-bold text-amber-200 transition hover:bg-amber-900/35 active:scale-[0.98]"
+                    >
+                      {externalSaveFolderLabel ||
+                      getMoeExternalSaveLocationHint().folderName
+                        ? "ペットEXPを新規保存"
+                        : "保存先を選んで新規保存…"}
+                    </button>
+                    <div className="rounded border border-amber-600/20 bg-amber-950/20 px-2 py-1">
+                      {(() => {
+                        const hint = getMoeExternalSaveLocationHint();
+                        const folderName =
+                          externalSaveFolderLabel ?? hint.folderName ?? null;
+                        const fileHint = formatMoeExternalSaveFileHint(
+                          hint.fileName
+                        );
+                        return (
+                          <div className="space-y-0.5 text-[8px] leading-snug text-amber-100/95">
+                            <p className="font-semibold text-amber-50/95">
+                              {formatMoeExternalSavePlaceStatus(folderName)}
+                            </p>
+                            {fileHint ? (
+                              <p className="text-amber-200/75">{fileHint}</p>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                      {saveDirPickerSupported ? (
+                        <button
+                          type="button"
+                          onClick={handleChangeExternalSaveFolder}
+                          className="mt-1 text-left text-[9px] font-bold text-amber-200/85 underline-offset-2 hover:text-amber-50 hover:underline active:scale-[0.98]"
+                        >
+                          保存フォルダを変更…
+                        </button>
+                      ) : (
+                        <p className="mt-0.5 text-[8px] text-amber-200/55">
+                          このブラウザではフォルダの記憶・変更はできません
+                        </p>
+                      )}
+                      {externalSaveFolderActionMsg ? (
+                        <p
+                          className="mt-1 whitespace-pre-wrap rounded border border-amber-500/25 bg-amber-950/35 px-1.5 py-1 text-[8px] leading-snug text-amber-50/95"
+                          role="status"
+                        >
+                          {externalSaveFolderActionMsg}
+                        </p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExternalSaveImportPick}
+                      className="rounded border border-emerald-600/40 bg-emerald-950/35 px-2 py-1 text-left text-[10px] font-bold text-emerald-200 transition hover:bg-emerald-900/30 active:scale-[0.98]"
+                    >
+                      外部保存を読み込む…
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="rounded border border-rose-500/30 bg-rose-950/25 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowProgressSettings((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-bold text-rose-100 transition hover:text-rose-50 active:scale-[0.99]"
+                  aria-expanded={showProgressSettings}
+                >
+                  <span>◆注意　進行　リセット</span>
+                  <span className="text-[9px] font-normal text-rose-200/55">
+                    {showProgressSettings ? "▲" : "▼"}
+                  </span>
+                </button>
+                {showProgressSettings ? (
+                  <div className="mt-1.5 flex flex-col gap-1 border-t border-rose-500/20 pt-1.5">
+                    <button
+                      type="button"
+                      onClick={handlePetExpReset}
+                      className="w-full rounded border border-rose-600/60 bg-rose-950/80 py-1 text-[10px] font-bold text-rose-100 transition hover:bg-rose-900/90 active:scale-[0.98]"
+                    >
+                      ペットEXP・Lv リセット
+                    </button>
+                    <p className="text-[8px] leading-snug text-white/45">
+                      ペットの Lv・EXP等はこのブラウザ保存
+                    </p>
+                    <div className="flex w-full items-center justify-between gap-2 text-pink-100/95">
+                      <span className="shrink-0 text-[10px]">訓練士EXP</span>
+                      <span className="min-w-0 shrink text-right font-mono text-[9px] tabular-nums">
+                        {trainerStatus.exp}/{trainerStatus.nextExp}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full border border-pink-800/50 bg-pink-950/80">
+                      <div
+                        className="h-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-500 transition-all duration-500"
+                        style={{ width: `${trainerExpPct}%` }}
+                      />
+                    </div>
+                    <p className="text-[8px] leading-snug text-white/45">
+                      敵撃破で加算・localStorage 保存
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+        </div>
+      </MoeFieldSettingsPanel>
+
+      {petExpResetAskOpen ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pet-exp-reset-ask"
+          onClick={() => setPetExpResetAskOpen(false)}
+        >
+          <div
+            className="w-full max-w-[15rem] rounded-lg border border-rose-400/55 bg-zinc-950/96 px-3 py-3 text-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              id="pet-exp-reset-ask"
+              className="text-center text-[13px] font-bold text-rose-100"
+            >
+              リセットしますか？
+            </p>
+            <p className="mt-1 text-center text-[10px] leading-snug text-white/55">
+              いまのペットを Lv.{INITIAL_MOE_PET_LEVEL}・EXP 0・HP/MP全快に戻します
+            </p>
+            <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={() => {
-                      setPetSkillMode(MOE_PET_SKILL_MODE_ALL);
-                      saveMoePetSkillMode(MOE_PET_SKILL_MODE_ALL);
-                      setToast("ペットスキル: 全部使える");
-                    }}
-                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
-                      petSkillMode === MOE_PET_SKILL_MODE_ALL
-                        ? "border-violet-300/70 bg-violet-800/70 text-violet-50 ring-1 ring-violet-200/35"
-                        : "border-violet-600/35 bg-violet-950/40 text-violet-100 hover:bg-violet-900/35"
-                    }`}
-                  >
-                    全部使える（未習得も表示）
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPetSkillMode(MOE_PET_SKILL_MODE_LEARNED);
-                      saveMoePetSkillMode(MOE_PET_SKILL_MODE_LEARNED);
-                      setToast("ペットスキル: 習得済みのみ");
-                    }}
-                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
-                      petSkillMode === MOE_PET_SKILL_MODE_LEARNED
-                        ? "border-violet-300/70 bg-violet-800/70 text-violet-50 ring-1 ring-violet-200/35"
-                        : "border-violet-600/35 bg-violet-950/40 text-violet-100 hover:bg-violet-900/35"
-                    }`}
-                  >
-                    習得済みのみ（MOE風）
-                  </button>
-                </div>
-              </div>
-              <div className="rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1.5">
-                <p className="text-[10px] font-bold text-orange-100/95">
-                  鳳凰・龍神スキル
-                </p>
-                <p className="mt-0.5 text-[9px] leading-snug text-orange-100/70">
-                  現在: {moeTrainingSkillModeLabel(trainingSkillMode)}
-                </p>
-                <div className="mt-1.5 grid grid-cols-1 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTrainingSkillMode(MOE_TRAINING_SKILL_MODE_ALL);
-                      saveMoeTrainingSkillMode(MOE_TRAINING_SKILL_MODE_ALL);
-                      setToast("鳳凰・龍神スキル: 全部使える");
-                    }}
-                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
-                      trainingSkillMode === MOE_TRAINING_SKILL_MODE_ALL
-                        ? "border-orange-300/70 bg-orange-800/70 text-orange-50 ring-1 ring-orange-200/35"
-                        : "border-orange-600/35 bg-orange-950/40 text-orange-100 hover:bg-orange-900/35"
-                    }`}
-                  >
-                    全部使える（未習得も表示）
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTrainingSkillMode(MOE_TRAINING_SKILL_MODE_LEARNED);
-                      saveMoeTrainingSkillMode(MOE_TRAINING_SKILL_MODE_LEARNED);
-                      setToast("鳳凰・龍神スキル: 習得済みのみ");
-                    }}
-                    className={`rounded border px-2 py-1.5 text-left text-[11px] font-bold transition active:scale-[0.98] ${
-                      trainingSkillMode === MOE_TRAINING_SKILL_MODE_LEARNED
-                        ? "border-orange-300/70 bg-orange-800/70 text-orange-50 ring-1 ring-orange-200/35"
-                        : "border-orange-600/35 bg-orange-950/40 text-orange-100 hover:bg-orange-900/35"
-                    }`}
-                  >
-                    習得済みのみ（MOE風）
-                  </button>
-                </div>
-              </div>
-              <div className="rounded border border-amber-500/25 bg-amber-950/25 px-2 py-1.5">
-                <p className="text-[10px] font-bold text-amber-100/95">
-                  ペットEXP · 外部保存
-                </p>
-                <p className="mt-1 text-[9px] leading-snug text-amber-100/70">
-                  保存は JSON を追加（上書きしません）。読み込みは
-                  <strong className="text-emerald-200/95"> moe-save-*.json を1つ選ぶだけ</strong>
-                  （フォルダ記憶は不要）
-                </p>
-                <p className="mt-0.5 text-[8px] leading-snug text-amber-200/55">
-                  大切なのはデスクトップ・ダウンロード等のどの場所かです（life3d
-                  フォルダ直下の JSON でも可）
-                </p>
-                <div className="mt-1.5 flex flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={handleExternalSave}
-                    className="rounded border border-amber-500/45 bg-amber-950/45 px-2 py-1.5 text-left text-[11px] font-bold text-amber-200 transition hover:bg-amber-900/35 active:scale-[0.98]"
-                  >
-                    {externalSaveFolderLabel || getMoeExternalSaveLocationHint().folderName
-                      ? "ペットEXPを新規保存"
-                      : "保存先を選んで新規保存…"}
-                  </button>
-                  <div className="rounded border border-amber-600/20 bg-amber-950/20 px-2 py-1.5">
-                    {(() => {
-                      const hint = getMoeExternalSaveLocationHint();
-                      const folderName =
-                        externalSaveFolderLabel ?? hint.folderName ?? null;
-                      const fileHint = formatMoeExternalSaveFileHint(hint.fileName);
-                      return (
-                        <div className="space-y-0.5 text-[9px] leading-snug text-amber-100/95">
-                          <p className="font-semibold text-amber-50/95">
-                            {formatMoeExternalSavePlaceStatus(folderName)}
-                          </p>
-                          {fileHint ? (
-                            <p className="text-amber-200/75">{fileHint}</p>
-                          ) : null}
-                        </div>
-                      );
-                    })()}
-                    {saveDirPickerSupported ? (
-                      <button
-                        type="button"
-                        onClick={handleChangeExternalSaveFolder}
-                        className="mt-1 text-left text-[10px] font-bold text-amber-200/85 underline-offset-2 hover:text-amber-50 hover:underline active:scale-[0.98]"
-                      >
-                        保存フォルダを変更…
-                      </button>
-                    ) : (
-                      <p className="mt-0.5 text-[8px] text-amber-200/55">
-                        このブラウザではフォルダの記憶・変更はできません
-                      </p>
-                    )}
-                    {externalSaveFolderActionMsg ? (
-                      <p
-                        className="mt-1.5 whitespace-pre-wrap rounded border border-amber-500/25 bg-amber-950/35 px-1.5 py-1 text-[9px] leading-snug text-amber-50/95"
-                        role="status"
-                      >
-                        {externalSaveFolderActionMsg}
-                      </p>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleExternalSaveImportPick}
-                    className="rounded border border-emerald-600/40 bg-emerald-950/35 px-2 py-1.5 text-left text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-900/30 active:scale-[0.98]"
-                  >
-                    外部保存を読み込む…（JSONファイルを選ぶ）
-                  </button>
-                </div>
-              </div>
+                onClick={() => setPetExpResetAskOpen(false)}
+                className="flex-1 rounded border border-zinc-500/60 bg-zinc-900 py-1.5 text-[11px] font-bold text-zinc-100 transition hover:bg-zinc-800 active:scale-[0.98]"
+              >
+                いいえ
+              </button>
+              <button
+                type="button"
+                onClick={confirmPetExpReset}
+                className="flex-1 rounded border border-rose-400/70 bg-rose-800 py-1.5 text-[11px] font-bold text-rose-50 transition hover:bg-rose-700 active:scale-[0.98]"
+              >
+                はい
+              </button>
             </div>
           </div>
-        )}
         </div>
+      ) : null}
 
         {showMonsterLineup && is3d && (
           <div
@@ -8215,7 +8608,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             {is3d ? (
               <>
                 <p>WASD＝移動 · Shift＝走る · 🐉転生＝羽根をミステリードラゴンに使用 · 🔮ローダ＝{MOE_SOUL_MEMORY_RHODA_FIELD.directionHint}</p>
-                <p>🐉<strong className="text-amber-200">ドラゴン10体</strong> · 👾<strong className="text-rose-200">敵32体</strong>＝設定メニューから一覧（マップ上には配置なし）</p>
+                <p>設定→<strong className="text-fuchsia-200">モデリング展示</strong>＝ドラゴン10体 · 敵32体など（マップ上にも実物あり）</p>
                 <p>★中ボス＝<strong className="text-amber-200">エルビン バイソン</strong>（スタート東の丘） · 🐊<strong className="text-emerald-300">ギュスターヴ Lv80</strong>＝スタートから北（ミニマップ上）へ体7つ分</p>
                 <p className="text-zinc-400">方角は全体マップに合わせてください（<strong className="text-zinc-200">南＝下 · 北＝上</strong> · Sキーで南へ）</p>
                 <p>敵クリック＝ターゲット · 設定→外部保存でペットEXPをバックアップ · Space＝ジャンプ（詠唱中は中断）</p>
@@ -8242,10 +8635,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             )}
           </div>
         )}
-      </div>
 
       <MoeNpcDialogue
         open={!!petMasterDialogue}
+        alignTop
         mode={
           petMasterView === "menu"
             ? "menu"
@@ -8281,6 +8674,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={expVendorOpen && expVendorView === "lines"}
+        alignTop
         mode="lines"
         lines={MOE_PET_EXP_VENDOR_SECRET_LINES}
         lineIndex={expVendorLineIndex}
@@ -8298,6 +8692,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={expVendorOpen && expVendorView === "catalog"}
+        alignTop
         mode="catalog"
         catalogTitle={`${MOE_PET_EXP_VENDOR_NPC.shopLabel}（カタログ）`}
         catalogNote="効果の実装・購入はこれから。Wiki EXP表ベースの参考リストです。"
@@ -8340,6 +8735,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={rhodaOpen && rhodaView === "lines"}
+        alignTop
         mode="lines"
         lines={MOE_SOUL_MEMORY_RHODA_LINES}
         lineIndex={rhodaLineIndex}
@@ -8357,6 +8753,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={rhodaOpen && rhodaView === "catalog"}
+        alignTop
         mode="catalog"
         catalogTitle={`${MOE_SOUL_MEMORY_RHODA_NPC.shopLabel}`}
         catalogNote={`${MOE_SOUL_MEMORY_RHODA_NPC.title} · 魂の記憶者ローダ\n経験値の上下を調整する粉とキューブを配布します（無料 · ボックスに空きが必要）`}
@@ -8369,6 +8766,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "lines"}
+        alignTop
         mode="lines"
         lines={MOE_JOSEPH_EXP_CRYSTAL_LINES}
         lineIndex={josephLineIndex}
@@ -8386,6 +8784,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "catalog"}
+        alignTop
         mode="catalog"
         catalogTitle={`${MOE_JOSEPH_NPC.shopLabel}（${MOE_JOSEPH_NPC.villageNote}）`}
         catalogNote={`時の釜 · Lv100以上のペットを選んで結晶化 · 決定するまで一覧に残る${hasPetDebugSnapshot || josephCrystallizedPetIds.length ? " · お試し中" : ""}\n${formatJosephFullTierProbabilityNote()}`}
@@ -8418,6 +8817,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "pick_sacrifice"}
+        alignTop
         mode="menu"
         menuPrompt={formatJosephSacrificePickPrompt()}
         menuActions={josephSacrificeMenuActions}
@@ -8429,6 +8829,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "ritual_wait"}
+        alignTop
         mode="message"
         message={MOE_JOSEPH_RITUAL_WAIT_MESSAGE}
         onComplete={handleJosephRitualWaitNext}
@@ -8441,6 +8842,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "ritual_process"}
+        alignTop
         mode="message"
         message={MOE_JOSEPH_RITUAL_PROCESS_MESSAGE}
         onComplete={handleJosephRitualProcessNext}
@@ -8453,6 +8855,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephOpen && josephView === "result" && !!josephResultMessage}
+        alignTop
         mode="menu"
         menuPrompt={
           josephResultMessage
@@ -8475,6 +8878,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephSynthOpen && josephSynthView === "lines"}
+        alignTop
         mode="lines"
         lines={MOE_JOSEPH_SYNTH_LINES}
         lineIndex={josephSynthLineIndex}
@@ -8492,6 +8896,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephSynthOpen && josephSynthView === "catalog"}
+        alignTop
         mode="catalog"
         catalogTitle={`${MOE_JOSEPH_SYNTH_NPC.shopLabel} · ${currentPetDisplay.name}`}
         catalogNote={`連れ歩き Lv.${petLevelDisplay} · 累積 ${petTotalExp.toLocaleString()} EXP${hasPetDebugSnapshot ? " · お試し中" : ""}\nクリスタル量は Lv100〜150想定 · 段階（失敗/成功/大成功/ミラクル）を選んで合成`}
@@ -8513,6 +8918,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       <MoeNpcDialogue
         open={josephSynthOpen && josephSynthView === "pick_tier"}
+        alignTop
         mode="menu"
         menuPrompt={formatJosephSynthTierPickPrompt(josephSynthTrialPetLevel)}
         menuActions={josephSynthTierMenuActions}
@@ -8528,6 +8934,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           josephSynthView === "use_confirm" &&
           !!josephSynthCrystalPreview
         }
+        alignTop
         mode="menu"
         menuPrompt={
           josephSynthCrystalPreview && josephSynthLastCrystal
@@ -8556,6 +8963,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           josephSynthView === "use_done" &&
           !!josephSynthResultMessage
         }
+        alignTop
         mode="message"
         message={josephSynthResultMessage}
         onComplete={() => {
@@ -8570,8 +8978,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         npc={MOE_JOSEPH_SYNTH_NPC}
       />
 
-      {is3d && nearPetHouse && !petMasterDialogue && !expVendorOpen && !josephOpen && !josephSynthOpen && (
-        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
+      {is3d && houseTalkMenu && !petMasterDialogue && !expVendorOpen && !josephOpen && !josephSynthOpen && (
+        <div className="absolute top-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
           <button
             type="button"
             onClick={handlePetMasterTalk}
@@ -8604,51 +9012,29 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         </div>
       )}
 
-      {is3d && nearRhoda && !rhodaOpen && (
-        <div className="absolute bottom-28 left-1/2 z-[54] flex -translate-x-1/2 flex-col items-stretch gap-2">
-          <button
-            type="button"
-            onClick={handleRhodaTalk}
-            className="rounded-xl border-2 border-indigo-400/50 bg-zinc-950/92 px-4 py-2 text-xs font-bold leading-snug text-indigo-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
-          >
-            {MOE_SOUL_MEMORY_RHODA_BUTTON.emoji}{" "}
-            {MOE_SOUL_MEMORY_RHODA_BUTTON.label}
-          </button>
-        </div>
-      )}
-
-      {is3d && nearCashShop && !cashShopOpen && !altarOpen && !nearAltar && (
-        <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4 -translate-y-56">
-          <button
-            type="button"
-            onClick={handleCashShopTalk}
-            className="pointer-events-auto rounded-xl border-2 border-fuchsia-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-fuchsia-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
-          >
-            {MOE_CASH_SHOP_BUTTON.emoji} {MOE_CASH_SHOP_BUTTON.label}
-          </button>
-        </div>
-      )}
-
       {is3d &&
-        nearAltar &&
+        altarMenu &&
         !altarOpen &&
         !tomorrowMemoOpen &&
         !showAgeHubPanel && (
         <div className="pointer-events-none fixed inset-0 z-[54] flex items-center justify-center p-4">
-          <div className="pointer-events-auto flex w-full max-w-xs flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => setTomorrowMemoOpen(true)}
-              className="rounded-xl border-2 border-violet-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-violet-100 shadow-lg backdrop-blur-sm transition hover:bg-violet-950/90 active:scale-95"
-            >
-              📋 明日やることメモ
-            </button>
+          <div className="pointer-events-auto flex w-full max-w-xs -translate-y-[9.5rem] flex-col gap-2">
             <button
               type="button"
               onClick={handleAltarOpen}
               className="rounded-xl border-2 border-sky-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-sky-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
             >
               🌀 アルターで転送する
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTomorrowMemoOpen(true);
+                setAltarMenu(null);
+              }}
+              className="rounded-xl border-2 border-violet-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-violet-100 shadow-lg backdrop-blur-sm transition hover:bg-violet-950/90 active:scale-95"
+            >
+              📋 明日やることメモ
             </button>
           </div>
         </div>
@@ -8740,6 +9126,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           onPetDoubleClick={() => handlePetDoubleClick()}
           onRhodaClick={handleRhodaShrineClick}
           onCashShopClick={handleCashShopNpcClick}
+          onPetHouseClick={handlePetHouseClick}
           onCampfireClick={openAgeHubCampfireMenu}
           campfireRestActiveRef={campfireRestActiveRef}
           onAltarClick={handleAltarClickById}
@@ -9050,7 +9437,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerPosRef={playerPosRef}
           playerJumpRef={playerJumpRef}
           kintounFlyRef={kintounFlyRef}
+          kintounOnRef={kintounOnRef}
+          kintounApproachRef={kintounApproachRef}
+          skateboardOnRef={skateboardOnRef}
+          skateboardApproachRef={skateboardApproachRef}
           playerSprintRef={playerSprintRef}
+          playerMoveInputRef={playerMoveInputRef}
           petRunAnimRef={petRunAnimRef}
           petPosRef={petPosRef}
           petSpawnEpochRef={petSpawnEpochRef}
@@ -9066,6 +9458,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           enemyStrikeVariantRef={enemyStrikeVariantRef}
           moe3dCombatExtentsRef={moe3dCombatExtentsRef}
           playerSummonFxRef={playerSummonFxRef}
+          playerLookAheadRef={playerLookAheadRef}
         />
         <MoeField3DBattleOverlay
           battlePopups={battlePopups.filter((p) => p.space === "world")}
@@ -9090,7 +9483,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
         {world.mode3d && mini3Player && (
           <MoeDraggableMinimapPanel
-            storageKey="life-rpg-moe-minimap-pos-3d"
+            storageKey={MOE_MINIMAP_POS_STORAGE_3D}
             dockPanelId={MOE_DOCK_PANEL_MINIMAP_3D}
             hint="黄＝視界 · 紫＝自分 · 🔮＝ローダ · 🏠＝AGE拠点 · 🌀＝転送 · 赤＝敵 · 南↓北↑"
           >
@@ -9895,7 +10288,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
       {world.rowLayout && (
         <MoeDraggableMinimapPanel
-          storageKey="life-rpg-moe-minimap-pos-2d"
+          storageKey={MOE_MINIMAP_POS_STORAGE_2D}
           hint="黄枠＝現在の画面 · 紫＝自分 · 赤＝敵"
         >
           <svg

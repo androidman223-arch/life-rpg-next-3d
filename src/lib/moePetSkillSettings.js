@@ -1,4 +1,4 @@
-/** ペットスキル — 習得済みのみ / 全部使える */
+/** ペットスキル — 習得済みのみ / 仮習得済（Lv未達も使用可） */
 export const MOE_PET_SKILL_MODE_STORAGE_KEY = "life-rpg-moe-pet-skill-mode";
 
 /** @typedef {"learned" | "all"} MoePetSkillMode */
@@ -26,5 +26,5 @@ export function saveMoePetSkillMode(mode) {
 }
 
 export function moePetSkillModeLabel(mode) {
-  return mode === MOE_PET_SKILL_MODE_LEARNED ? "習得済みのみ" : "全部使える";
+  return mode === MOE_PET_SKILL_MODE_LEARNED ? "習得済みのみ" : "仮習得済";
 }

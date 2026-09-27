@@ -2,7 +2,7 @@
  * プレイヤー（トレーナー）忍者スキル
  *
  * 横10枠のプレイヤースキルアイコンバー用。
- * スロット1〜3: 忍び足 / 神速 / 隠れ蓑 — 4〜10は将来用（空き）
+ * スロット1〜3: 忍び足 / （板乗りは龍神スキル） / 隠れ蓑 — 4〜10は将来用（空き）
  */
 
 /** @typedef {'toggle' | 'press' | 'instant' | 'timed'} MoePlayerSkillActivation */
@@ -29,10 +29,9 @@ export const MOE_PLAYER_SKILL_SLOT_COUNT = 10;
 export const MOE_PLAYER_SKILL_UNLOCK_STORAGE_KEY =
   "life-rpg-moe-player-skill-unlocks";
 
-/** 固定スロット（0=忍び足, 1=神速, 2=隠れ蓑） */
+/** 固定スロット（0=忍び足, 2=隠れ蓑） */
 const MOE_PLAYER_SKILL_SLOT_BY_ID = {
   ninja_shinobiashi: 0,
-  ninja_shinsoku: 1,
   ninja_kakuremino: 2,
 };
 
@@ -48,19 +47,6 @@ export const MOE_PLAYER_NINJA_SKILLS = [
     iconComponent: "MoeShinobiashiIcon",
     description: "足音索敵されない。視野（扇）には入ると気付かれる。",
     moeReference: "自然調和 Lv1 サイレントラン",
-    status: "done",
-  },
-  {
-    id: "ninja_shinsoku",
-    level: 30,
-    name: "神速",
-    nameEn: "Shinsoku",
-    category: "movement",
-    activation: "toggle",
-    iconComponent: "MoeShinsokuIcon",
-    description:
-      "トグル ON で Shift 走行中の移動速度をさらに3倍（合計6倍速）。いつでも切替可能。",
-    moeReference: "ツイスターラン ＋ 神速の勾玉",
     status: "done",
   },
   {

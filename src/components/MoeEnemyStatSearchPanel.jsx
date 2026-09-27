@@ -7,8 +7,9 @@ import {
   buildMoeEnemyStatSearchView,
   formatMoeEnemyStealthNote,
   moeEnemyLiveHearingReach,
-  MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY,
 } from "@/lib/moeEnemyStatSearch";
+import { MOE_PANEL_ID_ENEMY_STAT_SEARCH } from "@/lib/moePanelStack";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
 
 const WINDOW_W = 168;
 
@@ -46,7 +47,7 @@ export default function MoeEnemyStatSearchPanel({
     []
   );
   const { pos, sizeRef, onDragPointerDown } = useMoeDraggablePos(
-    MOE_ENEMY_STAT_SEARCH_PANEL_POS_KEY,
+    MOE_PANEL_ID_ENEMY_STAT_SEARCH,
     getDefaultPos
   );
   const view = buildMoeEnemyStatSearchView(enemy);
@@ -130,13 +131,14 @@ export default function MoeEnemyStatSearchPanel({
   const prefix = view.superBoss ? "◆ " : view.midBoss ? "★ " : "";
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={MOE_PANEL_ID_ENEMY_STAT_SEARCH}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[58] pointer-events-auto select-none"
+      className="fixed pointer-events-auto select-none"
       style={{ left: pos.x, top: pos.y, width: WINDOW_W }}
       role="dialog"
       aria-label="敵ステサーチ"
@@ -306,7 +308,7 @@ export default function MoeEnemyStatSearchPanel({
           </ul>
         </div>
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }
 

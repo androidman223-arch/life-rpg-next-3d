@@ -34,8 +34,14 @@ export const MOE_SUBSYSTEMS = {
     purpose: "Three.js 描画・クリック判定・キャラアニメ。座標は player.x / player.y (= Three.js x/z)。",
     layer: "canvas",
     stateOwner: "MoeField3DCanvas.jsx",
-    files: ["src/components/MoeField3DCanvas.jsx"],
-    doNot: ["ゲームルール（MP消費・バフ時間）を canvas 内に書かない"],
+    files: [
+      "src/components/MoeField3DCanvas.jsx",
+      "src/lib/moePlayerLookAhead.js",
+    ],
+    doNot: [
+      "ゲームルール（MP消費・バフ時間）を canvas 内に書かない",
+      "画面上のプレイヤー上下は moePlayerLookAhead。ワールド座標の初期スポーンと混ぜない",
+    ],
     related: ["supportTargeting"],
   },
 
@@ -43,9 +49,9 @@ export const MOE_SUBSYSTEMS = {
     purpose: "敵ターゲット（攻撃対象）。3Dクリック → targetEnemyId。",
     layer: "orchestrator",
     stateOwner: "MoeFieldMap (targetEnemyId / targetEnemyIdRef)",
-    files: ["src/components/MoeTargetWindow.jsx"],
+    files: ["src/components/MoeField3DCanvas.jsx"],
     doNot: ["支援スキルの味方ターゲットと混同しない"],
-    related: ["supportTargeting"],
+    related: ["supportTargeting", "floatingPanelStack"],
   },
 
   supportTargeting: {
@@ -57,7 +63,6 @@ export const MOE_SUBSYSTEMS = {
       "src/lib/moeAllyTargetSettings.js",
       "src/components/MoePlayerHpWindow.jsx",
       "src/components/MoePetHpWindow.jsx",
-      "src/components/MoeTargetWindow.jsx (支援ターゲット欄)",
     ],
     doNot: [
       "petFocused（ペット命令フォーカス）と allyTarget を同一視しない",
@@ -118,7 +123,28 @@ export const MOE_SUBSYSTEMS = {
       "src/data/moePlayerUtilitySkills.js",
     ],
     doNot: ["パネル内にスキル効果ロジックを書かない → lib + MoeFieldMap handler"],
-    related: ["enemyStatSearch", "playerUtilitySkills"],
+    related: ["enemyStatSearch", "playerUtilitySkills", "floatingPanelStack"],
+  },
+
+  floatingPanelStack: {
+    purpose:
+      "ドラッグ可能 HUD の z-index スタック。クリックで手前（capture フェーズ）。panelId は storageKey と揃える。",
+    layer: "ui",
+    stateOwner: "MoePanelStackContext (MoeFieldMapGate で Provider)",
+    files: [
+      "src/lib/moePanelStack.js",
+      "src/context/MoePanelStackContext.jsx",
+      "src/components/MoeFloatingPanelRoot.jsx",
+      "src/lib/moePanelDock.js",
+      "src/components/MoeFieldMapGate.jsx",
+    ],
+    doNot: [
+      "MoeFieldMap 内で Provider を二重にしない",
+      "z-index 60+ のモーダルと混同しない",
+      "ドラッグヘッダだけ onPointerDown では前面化できない（stopPropagation）",
+      "ミニマップは stack id と pos storage が別（MOE_PANEL_STACK_POS_STORAGE）",
+    ],
+    related: ["skillPanels"],
   },
 
   playerUtilitySkills: {
@@ -162,12 +188,15 @@ export const MOE_SUBSYSTEMS = {
       "src/lib/moeEnemyDetection.js",
       "src/lib/moeEnemyFieldActive.js",
       "src/lib/moeEnemyFieldChase.js",
+      "src/lib/moeEnemyRespawn.js",
+      "src/lib/moeEnemyRespawnPlace.js",
       "src/lib/moePlayerStealth.js",
       "src/data/moeMonsterFieldRegistry.js",
     ],
     doNot: [
       "ペット索敵と混同しない（MOE操作はプレイヤー主体）",
       "ヘイト（戦闘優先度）と aggro（フィールド追跡）を混同しない",
+      "撃破リポップは moeEnemyRespawn（Lv帯・10秒〜10分）。撃破フレームで座標を戻さない",
       "扇形描画を stat search パネルに書かない → MoeField3DCanvas",
     ],
     related: ["enemyStatSearch", "petCommands"],

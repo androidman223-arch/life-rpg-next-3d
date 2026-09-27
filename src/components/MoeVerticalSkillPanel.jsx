@@ -6,6 +6,9 @@ import { useMoeSkillSlotSwap } from "@/hooks/useMoeSkillSlotSwap";
 import { useMoeVerticalSkillPanelLayout } from "@/hooks/useMoeVerticalSkillPanelLayout";
 import { moeVerticalSkillLabelFontPx } from "@/lib/moeVerticalSkillPanelLayout";
 import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
+import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import { moeFloatingDragTitle } from "@/lib/moePanelStack";
 
 /** MOE風 — 枠からはみ出した文字は途中で切る（…なし） */
 const MOE_SKILL_LABEL_CLIP =
@@ -15,32 +18,76 @@ const MOE_VERTICAL_SLOT_DIVIDER = "border-b border-white/[0.12]";
 
 const VARIANTS = {
   amber: {
-    border: "border-amber-500/35",
-    header: "text-amber-200/95",
+    border: "border-orange-500/55",
+    shell: "bg-gradient-to-b from-red-950/92 to-orange-950/88",
+    headerBar: "bg-gradient-to-b from-orange-600 to-red-800",
+    header: "text-orange-50",
+    preview:
+      "border-orange-300/35 bg-orange-950/55 text-orange-100/80",
     skillBtn:
-      "border-amber-600/50 bg-gradient-to-b from-amber-700/90 to-orange-900/90 text-amber-50 hover:from-amber-600/95 hover:to-orange-800/95 disabled:hover:from-amber-700/90 disabled:hover:to-orange-900/90",
+      "border-orange-500/55 bg-gradient-to-b from-orange-600/95 to-red-900/95 text-orange-50 hover:from-orange-500/95 hover:to-red-800/95 disabled:hover:from-orange-600/95 disabled:hover:to-red-900/95",
     skillActive:
-      "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-indigo-950 text-cyan-50 ring-1 ring-cyan-200/40",
+      "border-orange-200/85 bg-gradient-to-b from-orange-400/95 via-red-600/95 to-red-950 text-orange-50 ring-1 ring-orange-200/50",
     skillCooldown:
-      "cursor-not-allowed border-zinc-600/50 bg-gradient-to-b from-zinc-800/90 to-zinc-950 text-amber-200/90 opacity-90",
+      "cursor-not-allowed border-red-900/60 bg-gradient-to-b from-orange-950/90 to-red-950 text-orange-200/85 opacity-90",
     topOn:
-      "border-yellow-300/70 bg-gradient-to-b from-yellow-500/95 to-amber-700/95 text-amber-950 ring-1 ring-yellow-200/50",
+      "border-orange-200/75 bg-gradient-to-b from-orange-400/95 to-red-700/95 text-orange-950 ring-1 ring-orange-100/50",
     topOff:
-      "border-zinc-500/50 bg-gradient-to-b from-zinc-700/90 to-zinc-900/90 text-zinc-100 hover:from-zinc-600/95 hover:to-zinc-800/95",
+      "border-orange-800/55 bg-gradient-to-b from-orange-900/90 to-red-950/90 text-orange-100 hover:from-orange-800/95 hover:to-red-900/95",
   },
   emerald: {
-    border: "border-emerald-500/35",
-    header: "text-emerald-200/95",
+    border: "border-sky-500/45",
+    shell: "bg-gradient-to-b from-sky-950/92 to-blue-950/88",
+    headerBar: "bg-gradient-to-b from-sky-700 to-blue-900",
+    header: "text-sky-50",
+    preview: "border-sky-300/35 bg-sky-950/50 text-sky-100/80",
     skillBtn:
-      "border-emerald-600/50 bg-gradient-to-b from-emerald-700/90 to-emerald-950/90 text-emerald-50 hover:from-emerald-600/95 hover:to-emerald-900/95 disabled:hover:from-emerald-700/90 disabled:hover:to-emerald-950/90",
+      "border-sky-500/50 bg-gradient-to-b from-sky-700/95 to-blue-950/95 text-sky-50 hover:from-sky-600/95 hover:to-blue-900/95 disabled:hover:from-sky-700/95 disabled:hover:to-blue-950/95",
     skillActive:
-      "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-indigo-950 text-cyan-50 ring-1 ring-cyan-200/40",
+      "border-sky-200/80 bg-gradient-to-b from-sky-400/95 via-blue-600/95 to-blue-950 text-sky-50 ring-1 ring-sky-200/45",
     skillCooldown:
-      "cursor-not-allowed border-zinc-600/50 bg-gradient-to-b from-zinc-800/90 to-zinc-950 text-amber-200/90 opacity-90",
+      "cursor-not-allowed border-sky-900/60 bg-gradient-to-b from-sky-950/90 to-blue-950 text-sky-200/85 opacity-90",
     topOn:
-      "border-emerald-300/70 bg-gradient-to-b from-emerald-500/95 to-emerald-800/95 text-emerald-950 ring-1 ring-emerald-200/50",
+      "border-sky-200/70 bg-gradient-to-b from-sky-400/95 to-blue-700/95 text-sky-950 ring-1 ring-sky-100/50",
     topOff:
-      "border-zinc-500/50 bg-gradient-to-b from-zinc-700/90 to-zinc-900/90 text-zinc-100 hover:from-zinc-600/95 hover:to-zinc-800/95",
+      "border-sky-800/50 bg-gradient-to-b from-sky-900/90 to-blue-950/90 text-sky-100 hover:from-sky-800/95 hover:to-blue-900/95",
+  },
+  phoenix: {
+    border: "border-orange-500/55",
+    shell: "bg-gradient-to-b from-red-950/92 to-orange-950/88",
+    headerBar:
+      "bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-500",
+    header: "text-orange-950",
+    preview:
+      "border-yellow-300/40 bg-orange-950/55 text-yellow-100/85",
+    skillBtn:
+      "border-orange-400/60 bg-gradient-to-b from-yellow-500/95 via-orange-600/95 to-red-900/95 text-orange-50 hover:from-yellow-400/95 hover:via-orange-500/95 hover:to-red-800/95 disabled:hover:from-yellow-500/95 disabled:hover:via-orange-600/95 disabled:hover:to-red-900/95",
+    skillActive:
+      "border-yellow-200/90 bg-gradient-to-b from-yellow-400/95 via-orange-500/95 to-red-900 text-orange-950 ring-1 ring-yellow-200/60",
+    skillCooldown:
+      "cursor-not-allowed border-orange-900/60 bg-gradient-to-b from-yellow-950/80 to-red-950 text-yellow-200/85 opacity-90",
+    topOn:
+      "border-yellow-200/80 bg-gradient-to-b from-yellow-400/95 to-orange-600/95 text-orange-950 ring-1 ring-yellow-100/55",
+    topOff:
+      "border-orange-800/55 bg-gradient-to-b from-orange-900/90 to-red-950/90 text-orange-100 hover:from-orange-800/95 hover:to-red-900/95",
+  },
+  dragon: {
+    border: "border-sky-500/45",
+    shell: "bg-gradient-to-b from-sky-950/92 to-blue-950/88",
+    headerBar:
+      "bg-gradient-to-r from-lime-300 via-yellow-300 to-emerald-500",
+    header: "text-emerald-950",
+    preview: "border-sky-300/35 bg-sky-950/50 text-sky-100/80",
+    skillBtn:
+      "border-sky-500/50 bg-gradient-to-b from-sky-700/95 to-blue-950/95 text-sky-50 hover:from-sky-600/95 hover:to-blue-900/95 disabled:hover:from-sky-700/95 disabled:hover:to-blue-950/95",
+    skillActive:
+      "border-sky-200/80 bg-gradient-to-b from-sky-400/95 via-blue-600/95 to-blue-950 text-sky-50 ring-1 ring-sky-200/45",
+    skillCooldown:
+      "cursor-not-allowed border-sky-900/60 bg-gradient-to-b from-sky-950/90 to-blue-950 text-sky-200/85 opacity-90",
+    topOn:
+      "border-sky-200/70 bg-gradient-to-b from-sky-400/95 to-blue-700/95 text-sky-950 ring-1 ring-sky-100/50",
+    topOff:
+      "border-sky-800/50 bg-gradient-to-b from-sky-900/90 to-blue-950/90 text-sky-100 hover:from-sky-800/95 hover:to-blue-900/95",
   },
 };
 
@@ -50,12 +97,14 @@ const VARIANTS = {
  *   storageKey: string,
  *   defaultPos?: () => { x: number, y: number },
  *   title: string,
- *   variant?: 'amber' | 'emerald',
+ *   variant?: 'amber' | 'emerald' | 'phoenix' | 'dragon',
  *   topAction?: { label: string, active?: boolean, title?: string, onClick: () => void } | null,
  *   headerExtra?: React.ReactNode,
  *   reorderable?: boolean,
  *   onSwapSlots?: (from: number, to: number) => void,
  *   layoutInheritFrom?: string[],
+ *   onClose?: () => void,
+ *   collapsed?: boolean,
  *   slots: {
  *     label: string,
  *     disabled?: boolean,
@@ -80,6 +129,8 @@ export default function MoeVerticalSkillPanel({
   reorderable = false,
   onSwapSlots,
   layoutInheritFrom,
+  onClose,
+  collapsed = false,
   slots,
 }) {
   const getDefaultPos = useCallback(
@@ -103,42 +154,61 @@ export default function MoeVerticalSkillPanel({
 
   const theme = VARIANTS[variant] ?? VARIANTS.amber;
 
-  if (!pos || !panelLayout) return null;
+  if (!pos) return null;
+  if (!collapsed && !panelLayout) return null;
 
-  const { width, slotHeight } = panelLayout;
+  const { width, slotHeight } = panelLayout ?? { width: 0, slotHeight: 0 };
   const rowStyle = { minHeight: slotHeight, height: slotHeight };
 
   return (
-    <div
+    <MoeFloatingPanelRoot
+      panelId={storageKey}
       ref={(el) => {
         if (el) {
           sizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
         }
       }}
-      className="fixed z-[46]"
+      className="fixed"
       style={{ left: pos.x, top: pos.y }}
     >
       <div
-        className={`relative flex max-h-[min(72vh,480px)] flex-col gap-0 overflow-y-auto overscroll-contain rounded-lg border bg-black/70 p-0 text-white backdrop-blur-md [scrollbar-width:thin] [scrollbar-gutter:stable] ${theme.border}`}
-        style={{ width }}
+        className="relative"
+        style={{ width: collapsed ? Math.max(width || 0, 88) : width }}
+      >
+      <div
+        className={`flex max-h-[min(72vh,480px)] flex-col gap-0 overflow-y-auto overscroll-contain rounded-lg border p-0 text-white backdrop-blur-md [scrollbar-width:thin] [scrollbar-gutter:stable] ${theme.border} ${theme.shell}`}
       >
         {headerExtra ? (
           <div
-            className="sticky top-0 z-10 shrink-0 cursor-grab touch-none border-b border-white/10 bg-black/85 active:cursor-grabbing"
+            className={`relative sticky top-0 z-10 min-h-5 shrink-0 cursor-grab touch-none border-b border-white/15 pl-5 active:cursor-grabbing ${theme.headerBar} ${theme.header}`}
             onPointerDown={onDragPointerDown}
-            title="ドラッグで移動 · 右下で幅・高さ変更"
+            title={moeFloatingDragTitle("ドラッグで移動 · 右下で幅・高さ変更")}
           >
+            {onClose ? (
+              <MoeSkillPanelCloseButton
+                collapsed={collapsed}
+                onClose={onClose}
+              />
+            ) : null}
             {headerExtra}
           </div>
         ) : (
           <p
-            className={`sticky top-0 z-10 shrink-0 cursor-grab touch-none border-b border-white/10 bg-black/85 py-px text-center text-[7px] font-bold leading-none active:cursor-grabbing ${theme.header}`}
+            className={`relative sticky top-0 z-10 min-h-5 shrink-0 cursor-grab touch-none border-b border-white/15 py-1 pl-5 text-center text-[7px] font-bold leading-none active:cursor-grabbing ${theme.headerBar} ${theme.header}`}
             onPointerDown={onDragPointerDown}
-            title="ドラッグで移動 · 右下で幅・高さ変更"
+            title={moeFloatingDragTitle("ドラッグで移動 · 右下で幅・高さ変更")}
           >
+            {onClose ? (
+              <MoeSkillPanelCloseButton
+                collapsed={collapsed}
+                onClose={onClose}
+              />
+            ) : null}
             {title}
           </p>
         )}
+        {!collapsed ? (
+        <>
         {topAction && (
           <button
             type="button"
@@ -164,7 +234,7 @@ export default function MoeVerticalSkillPanel({
                 key={`slot-${i}-${slot.label}`}
                 title={slot.title ?? slot.label}
                 style={rowStyle}
-                className={`shrink-0 overflow-hidden rounded-none border-0 border-dashed border-fuchsia-400/30 bg-fuchsia-950/25 py-0 text-center font-bold leading-none text-fuchsia-100/75 ${MOE_VERTICAL_SLOT_DIVIDER}`}
+                className={`shrink-0 overflow-hidden rounded-none border-0 border-dashed py-0 text-center font-bold leading-none ${MOE_VERTICAL_SLOT_DIVIDER} ${theme.preview}`}
               >
                 <span
                   className={`${MOE_SKILL_LABEL_CLIP} flex h-full w-full items-center justify-center`}
@@ -250,11 +320,15 @@ export default function MoeVerticalSkillPanel({
             </MoeCompactSkillTip>
           );
         })}
+        </>
+        ) : null}
+      </div>
+      {!collapsed ? (
         <div
           role="separator"
           aria-orientation="horizontal"
           aria-label="縦スキルパネルサイズ変更"
-          className="sticky bottom-0 z-20 flex h-4 w-4 shrink-0 cursor-nwse-resize touch-none self-end"
+          className="absolute bottom-0 right-0 z-30 flex h-5 w-5 cursor-nwse-resize touch-none items-end justify-end rounded-br-lg pb-0.5 pr-0.5"
           onPointerDown={onResizePointerDown}
           title="右下をドラッグで幅・ボタン高さを変更"
         >
@@ -262,7 +336,7 @@ export default function MoeVerticalSkillPanel({
             width="10"
             height="10"
             viewBox="0 0 10 10"
-            className="pointer-events-none ml-auto mt-auto text-white/40"
+            className="pointer-events-none text-white/80 drop-shadow-[0_0_1px_rgba(0,0,0,0.9)]"
             aria-hidden
           >
             <path
@@ -281,7 +355,8 @@ export default function MoeVerticalSkillPanel({
             />
           </svg>
         </div>
+      ) : null}
       </div>
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

@@ -22,7 +22,7 @@ const JOSEPH_CRYSTALLIZED_KEY = "life-rpg-moe-joseph-crystallized";
 export const MOE_SAVED_PET_INITIAL_LEVEL = 10;
 
 /**
- * @typedef {{ totalExp?: number, hp?: number, mp?: number, level?: number, expIntoLevel?: number, rebornPhoenix?: boolean, activeSkillSet?: 1|2 }} MoePetSlot
+ * @typedef {{ totalExp?: number, hp?: number, mp?: number, level?: number, expIntoLevel?: number, rebornPhoenix?: boolean, activeSkillSet?: 1|2, loyalty?: number, loyaltyPityMiss?: boolean }} MoePetSlot
  * @typedef {{ totalExp: number, hp: number, mp: number }} MoePetDebugSnapshot
  * @typedef {{ activeId: string, byId: Record<string, MoePetSlot>, debugSnapshots?: Record<string, MoePetDebugSnapshot> }} MoePetSaveFile
  */
@@ -84,6 +84,10 @@ function serializeMoePetSlotFields(pet) {
   };
   if (pet.rebornPhoenix) slot.rebornPhoenix = true;
   if (pet.activeSkillSet === 2) slot.activeSkillSet = 2;
+  if (pet.loyalty != null && !Number.isNaN(Number(pet.loyalty))) {
+    slot.loyalty = Math.max(0, Math.min(100, Math.floor(Number(pet.loyalty))));
+  }
+  if (pet.loyaltyPityMiss) slot.loyaltyPityMiss = true;
   return slot;
 }
 
@@ -407,6 +411,11 @@ export function petFromSaveSlot(petId, slot) {
     mpMax,
     rebornPhoenix,
     activeSkillSet,
+    loyalty:
+      slot.loyalty != null && !Number.isNaN(Number(slot.loyalty))
+        ? Math.max(0, Math.min(100, Math.floor(Number(slot.loyalty))))
+        : undefined,
+    loyaltyPityMiss: !!slot.loyaltyPityMiss,
     phoenixHpBonus,
     x: 120,
     y: 120,

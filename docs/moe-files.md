@@ -2,6 +2,8 @@
 
 「どのファイルに何があるか」の早見表。コードは動かさず参照用。
 
+**全体目次（ゲームの流れ・ルート・コード層）** → [`moe-overview.md`](./moe-overview.md)
+
 開発中はコンソール `__MOE_DEV__.guide()` でもサブシステム一覧が見られます。
 
 **育成設計（鳳凰/龍 · 修行 · ボス）** → [`moe-player-progression.md`](./moe-player-progression.md)  
@@ -57,8 +59,19 @@
 | `src/lib/moePlayerSummonPrefetch.js` | 召喚 GLB 先読み |
 | `src/lib/moePlayerSkillSlotUi.js` | スキル枠の表示・クリック定義 |
 | `src/lib/moeSkillPanelModeSettings.js` | 技①/②/③/ペット の切替 |
+| `src/lib/moeSkillPanelVisibilitySettings.js` | 縦横スキルパネル・アイコンバーの表示/非表示 |
+| `src/lib/moeSkillPanelCollapseSettings.js` | スキルパネル折りたたみ |
+| `src/lib/moePlayerSkillSuccessSettings.js` | スキル成功率100%デバッグ設定 |
+| `src/lib/moeDragonSkateboard.js` | 龍スケボー（神速置換）· 速度・ダッシュ |
+| `src/lib/moeDragonSkateboardEffect.js` | スケボー 3D 演出 |
+| `src/lib/moeDragonKintoun.js` | 筋斗雲 · 速度・ステルス |
+| `src/lib/moeDragonKintounEffect.js` | 筋斗雲 3D 演出 |
+| `src/data/moeModelingShowcases.js` | モデリングショーケース一覧（日付グループ） |
 | `src/components/MoeMergedSkillIconBar.jsx` | 横スキルバー |
 | `src/components/MoeMergedVerticalSkillPanel.jsx` | 縦スキルパネル |
+| `src/components/MoeTrainingSkillIconBar.jsx` | 修行用横スキルバー |
+| `src/components/MoeSkillPanelCloseButton.jsx` | スキルパネル ◆ 閉じるボタン |
+| `src/components/icons/MoeSkateboardIcon.jsx` | スケボーアイコン SVG |
 
 ---
 
@@ -74,7 +87,7 @@
 | `src/lib/moeEnemyFieldActive.js` | アクティブ / ノンアクティブ（先制・追跡の可否） |
 | `src/lib/moeEnemyFieldChase.js` | 索敵後の追跡・接触バトル（`aggro` ランタイム） |
 | `src/components/MoeEnemyStatSearchPanel.jsx` | 敵ステ表示ウィンドウ |
-| `src/components/MoeTargetWindow.jsx` | 敵ターゲット HP バー・支援ターゲット |
+| `src/components/MoeField3DCanvas.jsx` | ターゲットの水晶マーカー（頭上） |
 
 ---
 
@@ -136,9 +149,11 @@
 
 ## ペット
 
+設計メモ: [`moe-pet-loyalty.md`](./moe-pet-loyalty.md)（愛着100でスキル手動解禁 · オートAI）
+
 | ファイル | 役割 |
 |----------|------|
-| `src/data/moePets.js` | ペットステ・成長 |
+| `src/data/moePets.js` | ペットステ・成長 · `loyaltyMin` · `delaySec` |
 | `src/data/moePetCombatSkills.js` | 戦闘スキル |
 | `src/data/moePhoenixDragon.js` | フェニックス系 |
 | `src/lib/moePetSave.js` | ペットセーブ/ロード |
@@ -180,6 +195,7 @@
 
 | ファイル | 役割 |
 |----------|------|
+| `docs/moe-overview.md` | **全体目次（1枚）** — ゲームの流れ・コード層 |
 | `src/lib/moe/moeSubsystemGuide.js` | サブシステム地図（`__MOE_DEV__.guide()`） |
 | `src/lib/moe/moeStorageRegistry.js` | localStorage キー一覧 |
 | `src/lib/moe/moeFieldInvariants.js` | 状態矛盾チェック |
@@ -187,6 +203,21 @@
 | `docs/moe-lessons.md` | 落とし穴メモ（短い） |
 | `.cursor/skills/macro-0/SKILL.md` | マクロ０整備手順 |
 | `.cursor/skills/macro-0/BACKLOG.md` | マクロ０ · 後回し一覧 |
+
+---
+
+## フローティング UI（クリックで手前）
+
+| ファイル | 役割 |
+|----------|------|
+| `src/lib/moePanelStack.js` | panelId 定数 · 初期 z 順 · `bringMoePanelToFront` |
+| `src/context/MoePanelStackContext.jsx` | React コンテキスト · `useMoePanelStack` |
+| `src/context/MoePanelDockContext.jsx` | バトルログ横ドッキング bounds |
+| `src/components/MoeFloatingPanelRoot.jsx` | ドラッグ UI 外枠（クリックで前面化） |
+| `src/components/MoeFieldMapGate.jsx` | `MoePanelStackProvider` のマウント位置 |
+| `src/lib/moePanelDock.js` | バトルログ←全体マップ横ドッキング（id は stack と同値） |
+
+新しいドラッグ可能パネルは `MOE_PANEL_ID_*` を `moePanelStack.js` に追加し、`MOE_PANEL_DEFAULT_ORDERS` に初期順を登録、`MoeFloatingPanelRoot` で包む。一覧は `MOE_PANEL_STACK_ID_LIST` · 位置 storage は `MOE_PANEL_DRAG_POS_KEYS`（`moeStorageRegistry` へ自動登録）。
 
 ---
 
@@ -202,4 +233,8 @@
 - **フィールド BGM** — 面ごと自動切替 · 戦闘終了 2s フェード · `moeFieldBgmMap.js`
 - **外部セーブ UI** — 設定パネル · `moeExternalSaveLabels.js` · インポートは file input
 - **3D 先読み** — `MoeFieldPrefetchBoot` + `MoeFieldMapGate`（副作用 import 禁止）
+- **フローティング UI 前面化** — クリックで z-index スタック · `moePanelStack.js` · `MoeFloatingPanelRoot`
+- **全体目次** — `docs/moe-overview.md`（ゲームの流れ・ルート・サブシステム早見）
+- **龍スケボー・筋斗雲** — 神速置換 · `moeDragonSkateboard.js` · `moeDragonKintoun.js`
+- **スキルパネル表示切替** — `moeSkillPanelVisibilitySettings.js` · ◆ 閉じる
 - **プレイヤー召喚スキル** — 技③ · 生活改鳳/自力整龍 · GLB VFX · `moePlayerPreSkillActivate.js`

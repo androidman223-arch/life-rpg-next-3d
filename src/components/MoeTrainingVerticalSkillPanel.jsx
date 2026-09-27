@@ -7,24 +7,28 @@ import {
   buildDragonTrainingVerticalSlots,
   buildPhoenixTrainingVerticalSlots,
 } from "@/lib/moeTrainingSkillVerticalUi";
+import {
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_A,
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_B,
+} from "@/lib/moePanelStack";
 
 /** @typedef {'phoenix' | 'dragon'} MoeTrainingSkillPanelKind */
 
 /** 既存縦スキル（技①②③）のサイズを初回だけ引き継ぐ */
 const LAYOUT_INHERIT_FROM = [
-  "life-rpg-moe-merged-skill-panel-a",
-  "life-rpg-moe-merged-skill-panel-b",
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_A,
+  MOE_PANEL_ID_MERGED_SKILL_PANEL_B,
 ];
 
 const PANEL_META = {
   phoenix: {
     title: "鳳凰スキル",
-    variant: "amber",
+    variant: "phoenix",
     track: "phoenix",
   },
   dragon: {
     title: "龍神スキル",
-    variant: "emerald",
+    variant: "dragon",
     track: "dragon",
   },
 };
@@ -37,6 +41,8 @@ const PANEL_META = {
  *   defaultPos?: () => { x: number, y: number },
  *   onActivateSkill?: (track: 'phoenix' | 'dragon', level: number) => void,
  *   skillMode?: import("@/lib/moeTrainingSkillSettings").MoeTrainingSkillMode,
+ *   onClose?: () => void,
+ *   collapsed?: boolean,
  * }} props
  */
 export default function MoeTrainingVerticalSkillPanel({
@@ -45,6 +51,8 @@ export default function MoeTrainingVerticalSkillPanel({
   defaultPos,
   onActivateSkill,
   skillMode = "all",
+  onClose,
+  collapsed = false,
 }) {
   const meta = PANEL_META[kind] ?? PANEL_META.phoenix;
   const [practiceLevel, setPracticeLevel] = useState(() =>
@@ -90,8 +98,8 @@ export default function MoeTrainingVerticalSkillPanel({
       variant={meta.variant}
       headerExtra={
         <p
-          className={`cursor-grab touch-none border-b border-white/10 bg-black/85 py-px text-center text-[7px] font-bold leading-none active:cursor-grabbing ${
-            kind === "dragon" ? "text-emerald-200/95" : "text-amber-200/95"
+          className={`cursor-grab touch-none border-b border-white/10 py-px text-center text-[7px] font-bold leading-none active:cursor-grabbing ${
+            kind === "dragon" ? "text-emerald-950" : "text-orange-950"
           }`}
           title="ドラッグで移動 · 右下で幅・高さ変更"
         >
@@ -102,6 +110,8 @@ export default function MoeTrainingVerticalSkillPanel({
         </p>
       }
       slots={slots}
+      onClose={onClose}
+      collapsed={collapsed}
     />
   );
 }

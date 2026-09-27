@@ -6,7 +6,7 @@ import {
 } from "@/data/moeMacro2OfficialSizeTiers";
 import { MOE_MONSTER_FAMILIES } from "@/data/moeMonsterLineup";
 
-/** @sync MOE_PLAYER_MODEL_HEIGHT in moeField3DModels.js */
+/** 敵サイズの公式比率の基準背高。フィールドのプレイヤー表示高さとは別 */
 export const MOE_MACRO2_PLAYER_REF_HEIGHT = 1.52;
 
 /**

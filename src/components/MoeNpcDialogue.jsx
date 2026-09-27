@@ -35,6 +35,7 @@ const ADVANCE_KEYS = new Set(["Enter", " ", "z", "Z", "x", "X"]);
  *   onClose: () => void,
  *   petData: { name: string, emoji: string },
  *   npc?: { name: string, emoji: string },
+ *   alignTop?: boolean,
  * }} props
  */
 export default function MoeNpcDialogue({
@@ -64,6 +65,7 @@ export default function MoeNpcDialogue({
   onClose,
   petData,
   npc = MOE_PET_MASTER_NPC,
+  alignTop = false,
 }) {
   const isPagedMode = mode === "lines" || mode === "message";
   const isLastLine =
@@ -130,7 +132,7 @@ export default function MoeNpcDialogue({
     const { label, emoji } = resolveSpeaker("master");
     const allRows = [...catalogItems, ...catalogSkills];
     return (
-      <DialogShell npc={npc} onClose={onClose}>
+      <DialogShell npc={npc} onClose={onClose} alignTop={alignTop}>
         <SpeakerHeader emoji={emoji} label={label} />
         <p className="text-xs font-bold text-amber-200/95">{catalogTitle}</p>
         {catalogNote ? (
@@ -272,7 +274,7 @@ export default function MoeNpcDialogue({
   if (mode === "menu") {
     const { label, emoji } = resolveSpeaker("master");
     return (
-      <DialogShell npc={npc} onClose={onClose}>
+      <DialogShell npc={npc} onClose={onClose} alignTop={alignTop}>
         <SpeakerHeader emoji={emoji} label={label} />
         <p className="min-h-[2.5rem] whitespace-pre-line text-sm leading-relaxed text-zinc-100">
           {menuPrompt}
@@ -311,6 +313,7 @@ export default function MoeNpcDialogue({
         onClose={onClose}
         onBackdropAction={handleAdvance}
         onPanelAdvance={handleAdvance}
+        alignTop={alignTop}
       >
         <SpeakerHeader emoji={emoji} label={label} />
         <p className="min-h-[3.5rem] whitespace-pre-line text-sm leading-relaxed text-zinc-100">
@@ -364,6 +367,7 @@ export default function MoeNpcDialogue({
       onClose={onClose}
       onBackdropAction={handleAdvance}
       onPanelAdvance={handleAdvance}
+      alignTop={alignTop}
     >
       <SpeakerHeader emoji={emoji} label={label} />
       <p className="min-h-[3.5rem] text-sm leading-relaxed text-zinc-100">
@@ -405,10 +409,19 @@ export default function MoeNpcDialogue({
   );
 }
 
-function DialogShell({ npc, onClose, onBackdropAction, onPanelAdvance, children }) {
+function DialogShell({
+  npc,
+  onClose,
+  onBackdropAction,
+  onPanelAdvance,
+  alignTop = false,
+  children,
+}) {
   return (
     <div
-      className="fixed inset-0 z-[57] flex items-end justify-center bg-black/50 p-4 pb-8 backdrop-blur-[2px] sm:items-center"
+      className={`fixed inset-0 z-[57] flex justify-center bg-black/50 p-4 backdrop-blur-[2px] ${
+        alignTop ? "items-start pt-24" : "items-end pb-8 sm:items-center"
+      }`}
       onClick={onBackdropAction ?? onClose}
       role="presentation"
     >

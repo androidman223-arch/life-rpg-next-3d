@@ -9,7 +9,6 @@ import {
 } from "@/data/moeMonsterFieldRegistry";
 import {
   moe3dBiskHubAnchor,
-  moe3dBiskNpcHubAnchor,
 } from "@/lib/moe3dBiskHubLayout";
 import { MOE_MEERIM_SPECIAL_BOSS_SPAWNS } from "@/data/moeMeerimEnemies";
 import { moe3dMapSlotNormSpawnPosition } from "@/lib/moe3dMonsterMapSpawns";
@@ -73,13 +72,12 @@ export function petTintForId(petId) {
 
 /** ペット id → 表示高さ（fitModelToGround 目標） */
 export const MOE_PET_HEIGHT_BY_ID = {
-  /** 基準 0.58 × 3 倍表示 */
-  sun_spirit: 1.74,
-  mystery_dragon: 1.68,
+  sun_spirit: 1.48,
+  mystery_dragon: 2.02,
   bold_eagle: 1.35,
-  elemental_atrum: 1.45,
-  calgoche: 2.44,
-  carnival_elephant: 2.1,
+  elemental_atrum: 1.2,
+  calgoche: 1.62,
+  carnival_elephant: 2.9,
   abinyan: 1.05,
 };
 
@@ -211,8 +209,8 @@ export const MOE_PET_TINT_DEFAULT = 0x4ade80;
 export const MOE_PLAYER_COGNITE_MALE_MODEL_URL =
   "/assets/models/player/CogniteMale.glb";
 export const MOE_PLAYER_MODEL_URL = MOE_PLAYER_COGNITE_MALE_MODEL_URL;
-/** fitModelToGround 目標（背高・細身） */
-export const MOE_PLAYER_MODEL_HEIGHT = 1.52;
+/** fitModelToGround 目標。敵の公式比率は 1.52 のまま */
+export const MOE_PLAYER_MODEL_HEIGHT = 1.85;
 
 /** glb 内の表示高さ（ワールド単位） */
 export const MOE_PET_MODEL_HEIGHT = 0.475;
@@ -1015,12 +1013,13 @@ export function moe3dPetStartNearPlayer(playerPos, offset = { dx: 1.6, dy: -1.2 
   };
 }
 
-/** ペット小屋 — ビスク中央広場の南西 */
+/** ペット小屋 — 中央アルターの西（x -50 付近 · ローダより南） */
 export function moe3dPetHousePosition(halfW = MOE_3D_HALF_W, halfD = MOE_3D_HALF_D) {
-  const hub = moe3dBiskNpcHubAnchor();
+  void halfW;
+  void halfD;
   return {
-    x: hub.x - 12,
-    y: hub.y + 10,
+    x: -56,
+    y: -14,
   };
 }
 
@@ -1029,12 +1028,13 @@ export function moe3dIsNearPetHouse(px, py, halfW, halfD, radius = 11) {
   return Math.hypot(px - house.x, py - house.y) <= radius;
 }
 
-/** 魂の記憶者ローダ — ビスク中央広場の南（経験値粉） */
+/** 魂の記憶者ローダ — 中央アルターの西（x -50 付近 · 小屋より北） */
 export function moe3dRhodaPosition(halfW = MOE_3D_HALF_W, halfD = MOE_3D_HALF_D) {
-  const hub = moe3dBiskNpcHubAnchor();
+  void halfW;
+  void halfD;
   return {
-    x: hub.x - 6,
-    y: hub.y + 14,
+    x: -44,
+    y: 12,
   };
 }
 

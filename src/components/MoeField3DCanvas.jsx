@@ -88,6 +88,8 @@ import {
 } from "@/lib/moeField3DModels";
 import { createMoePhoenixTailFireEffect } from "@/lib/moePhoenixTailFireEffect";
 import { createMoePlayerSummonEffect } from "@/lib/moePlayerSummonEffect";
+import { createMoeKintounCloudEffect } from "@/lib/moeDragonKintounEffect";
+import { createMoeSkateboardEffect } from "@/lib/moeDragonSkateboardEffect";
 import {
   checkMoeEnemyPlayerDetection,
   moeEnemyUsesHearingSearch,
@@ -180,6 +182,7 @@ import {
   moe3dSulfurKazanTerrainGroundY,
   attachMoe3dSulfurKazanTemple,
 } from "@/lib/moe3dSulfurKazanTemple";
+import { MOE_PLAYER_LOOK_AHEAD_DEFAULT } from "@/lib/moePlayerLookAhead";
 
 const MAP_URL = "/assets/map/3D_MoeMapField02.glb";
 const TERRAIN_EDGE_MARGIN = 5;
@@ -187,8 +190,8 @@ const PLAYER_HEIGHT = 0.8;
 const CAM_DISTANCE = 17;
 const CAM_PITCH = 0.55;
 const MOUSE_SENS = 0.004;
-const PITCH_MIN = 0.12;
-const PITCH_MAX = 1.35;
+/** 右ドラッグ上下。上で近づく、下で離れる */
+const CAM_ZOOM_DRAG = 0.045;
 const DIST_MIN = 5;
 const DIST_MAX = 40;
 
@@ -844,6 +847,7 @@ export default function MoeField3DCanvas({
   onPetDoubleClick = () => {},
   onRhodaClick,
   onCashShopClick,
+  onPetHouseClick,
   onCampfireClick,
   campfireRestActiveRef,
   onAltarClick,
@@ -864,7 +868,12 @@ export default function MoeField3DCanvas({
   playerPosRef,
   playerJumpRef,
   kintounFlyRef,
+  kintounOnRef,
+  kintounApproachRef,
+  skateboardOnRef,
+  skateboardApproachRef,
   playerSprintRef,
+  playerMoveInputRef,
   petRunAnimRef,
   petPosRef,
   petSpawnEpochRef,
@@ -883,6 +892,7 @@ export default function MoeField3DCanvas({
   moe3dCombatExtentsRef,
   hiddenShowcaseIds = { monsters: [], dragons: [] },
   playerSummonFxRef,
+  playerLookAheadRef,
 }) {
   const mountRef = useRef(null);
   const stateRef = useRef({
@@ -901,6 +911,7 @@ export default function MoeField3DCanvas({
   const onPetDoubleClickRef = useRef(onPetDoubleClick);
   const onRhodaClickRef = useRef(onRhodaClick);
   const onCashShopClickRef = useRef(onCashShopClick);
+  const onPetHouseClickRef = useRef(onPetHouseClick);
   const onCampfireClickRef = useRef(onCampfireClick);
   const campfireRestActiveRefStable = useRef(campfireRestActiveRef);
   const onAltarClickRef = useRef(onAltarClick);
@@ -910,7 +921,12 @@ export default function MoeField3DCanvas({
   const playerPosRefStable = useRef(playerPosRef);
   const playerJumpRefStable = useRef(playerJumpRef);
   const kintounFlyRefStable = useRef(kintounFlyRef);
+  const kintounOnRefStable = useRef(kintounOnRef);
+  const kintounApproachRefStable = useRef(kintounApproachRef);
+  const skateboardOnRefStable = useRef(skateboardOnRef);
+  const skateboardApproachRefStable = useRef(skateboardApproachRef);
   const playerSprintRefStable = useRef(playerSprintRef);
+  const playerMoveInputRefStable = useRef(playerMoveInputRef);
   const petRunAnimRefStable = useRef(petRunAnimRef);
   const petPosRefStable = useRef(petPosRef);
   const petSpawnEpochRefStable = useRef(petSpawnEpochRef);
@@ -933,6 +949,7 @@ export default function MoeField3DCanvas({
   const enemyDetectionOptsRefStable = useRef(enemyDetectionOptsRef);
   const playerKakureminoUntilRefStable = useRef(playerKakureminoUntilRef);
   const playerSummonFxRefStable = useRef(playerSummonFxRef);
+  const playerLookAheadRefStable = useRef(playerLookAheadRef);
 
   stateRef.current = {
     enemies,
@@ -950,6 +967,7 @@ export default function MoeField3DCanvas({
   onPetDoubleClickRef.current = onPetDoubleClick;
   onRhodaClickRef.current = onRhodaClick;
   onCashShopClickRef.current = onCashShopClick;
+  onPetHouseClickRef.current = onPetHouseClick;
   onCampfireClickRef.current = onCampfireClick;
   campfireRestActiveRefStable.current = campfireRestActiveRef;
   onAltarClickRef.current = onAltarClick;
@@ -959,7 +977,12 @@ export default function MoeField3DCanvas({
   playerPosRefStable.current = playerPosRef;
   playerJumpRefStable.current = playerJumpRef;
   kintounFlyRefStable.current = kintounFlyRef;
+  kintounOnRefStable.current = kintounOnRef;
+  kintounApproachRefStable.current = kintounApproachRef;
+  skateboardOnRefStable.current = skateboardOnRef;
+  skateboardApproachRefStable.current = skateboardApproachRef;
   playerSprintRefStable.current = playerSprintRef;
+  playerMoveInputRefStable.current = playerMoveInputRef;
   petRunAnimRefStable.current = petRunAnimRef;
   petPosRefStable.current = petPosRef;
   petSpawnEpochRefStable.current = petSpawnEpochRef;
@@ -982,6 +1005,7 @@ export default function MoeField3DCanvas({
   enemyDetectionOptsRefStable.current = enemyDetectionOptsRef;
   playerKakureminoUntilRefStable.current = playerKakureminoUntilRef;
   playerSummonFxRefStable.current = playerSummonFxRef;
+  playerLookAheadRefStable.current = playerLookAheadRef;
 
   const petIdStable = useRef(petId);
   petIdStable.current = petId;
@@ -1149,6 +1173,8 @@ export default function MoeField3DCanvas({
     scene.add(popupGroup);
     const phoenixTailFire = createMoePhoenixTailFireEffect(scene);
     const playerSummonFx = createMoePlayerSummonEffect(scene);
+    const kintounCloudFx = createMoeKintounCloudEffect(scene);
+    const skateboardFx = createMoeSkateboardEffect(scene);
 
     let targetMarker = null;
     /** @type {{ group: THREE.Group, visionLine: THREE.Line, hearingLine: THREE.LineLoop, visionMat: THREE.LineBasicMaterial, hearingMat: THREE.LineBasicMaterial } | null} */
@@ -1355,27 +1381,45 @@ export default function MoeField3DCanvas({
             depthTest: false,
           });
           sprite = new THREE.Sprite(mat);
-          sprite.scale.set(showLv ? 3.8 : 3.2, 0.42, 1);
+          sprite.scale.set(3.2, 0.42, 1);
           sprite.renderOrder = 997;
           enemyNameSprites.set(en.id, sprite);
           popupGroup.add(sprite);
         }
-        sprite.scale.set(showLv ? 3.8 : 3.2, 0.42, 1);
         const canvas2d = sprite.material.map.image;
+        const fontPx = showLv ? 44 : 16;
+        const font = `bold ${fontPx}px sans-serif`;
+        const measureCtx = canvas2d.getContext("2d");
+        measureCtx.font = font;
+        const textW = Math.ceil(measureCtx.measureText(line1).width);
+        const labelW = showLv ? textW + 48 : 320;
+        const labelH = showLv ? 84 : 32;
+        if (canvas2d.width !== labelW || canvas2d.height !== labelH) {
+          canvas2d.width = labelW;
+          canvas2d.height = labelH;
+          sprite.material.map.dispose();
+          const tex = new THREE.CanvasTexture(canvas2d);
+          sprite.material.map = tex;
+        }
+        const scaleY = showLv ? 1.15 : 0.42;
+        const scaleX = showLv ? scaleY * (labelW / labelH) : 3.2;
+        sprite.scale.set(scaleX, scaleY, 1);
         const ctx = canvas2d.getContext("2d");
         ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
         ctx.textAlign = "center";
-        ctx.font = showLv ? "bold 14px sans-serif" : "bold 16px sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.font = font;
         ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = showLv ? 6 : 3;
         const textX = canvas2d.width / 2;
-        ctx.strokeText(line1, textX, 20);
+        const textY = canvas2d.height / 2;
+        ctx.strokeText(line1, textX, textY);
         ctx.fillStyle = chasing ? "#fca5a5" : showLv ? "#bfdbfe" : "#ffffff";
-        ctx.fillText(line1, textX, 20);
+        ctx.fillText(line1, textX, textY);
         sprite.material.map.needsUpdate = true;
         const entry = enemyMeshes.get(en.id);
         const { nameY } = uiYsForEnemy(en, entry);
-        const nameLift = showLv ? MOE_3D_ENEMY_UI_NAME_TARGET_EXTRA : 0;
+        const nameLift = showLv ? MOE_3D_ENEMY_UI_NAME_TARGET_EXTRA + 0.36 : 0;
         const { x, z } = enemyWorldPos(en, entry);
         sprite.position.set(x, nameY + nameLift, z);
         sprite.visible = true;
@@ -1833,6 +1877,7 @@ export default function MoeField3DCanvas({
     let mountainBisonTerrainPos = null;
     let roughBisonTerrainPos = null;
     let gustavJuniorTerrainPos = null;
+    let housePickGroup = null;
     let rhodaPickGroup = null;
     let cashShopPickGroup = null;
     let restCampPickGroup = null;
@@ -1870,6 +1915,19 @@ export default function MoeField3DCanvas({
       return node?.userData?.moeAltarId ?? null;
     };
 
+    const pickFieldSpotFromPointer = () => {
+      if (housePickGroup && raycaster.intersectObject(housePickGroup, true).length) {
+        return "house";
+      }
+      if (rhodaPickGroup && raycaster.intersectObject(rhodaPickGroup, true).length) {
+        return "rhoda";
+      }
+      if (cashShopPickGroup && raycaster.intersectObject(cashShopPickGroup, true).length) {
+        return "cash";
+      }
+      return null;
+    };
+
     const onPointerDown = (e) => {
       if (e.button === 2) {
         e.preventDefault();
@@ -1879,6 +1937,21 @@ export default function MoeField3DCanvas({
           onAltarClickRef.current?.(altarId);
           return;
         }
+        onAltarClickRef.current?.(null);
+        const spot = pickFieldSpotFromPointer();
+        if (spot === "house") {
+          onPetHouseClickRef.current?.();
+          return;
+        }
+        if (spot === "rhoda") {
+          onRhodaClickRef.current?.();
+          return;
+        }
+        if (spot === "cash") {
+          onCashShopClickRef.current?.();
+          return;
+        }
+        onPetHouseClickRef.current?.("dismiss");
         isCamDragging = true;
         lastPointerX = e.clientX;
         lastPointerY = e.clientY;
@@ -1886,6 +1959,11 @@ export default function MoeField3DCanvas({
         return;
       }
       if (e.button !== 0 || !mapReady) return;
+      const altarId = pickAltarFromPointer(e.clientX, e.clientY);
+      if (altarId) {
+        onAltarClickRef.current?.(altarId);
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2050,10 +2128,10 @@ export default function MoeField3DCanvas({
       lastPointerX = e.clientX;
       lastPointerY = e.clientY;
       camYaw -= dx * MOUSE_SENS;
-      camPitch = THREE.MathUtils.clamp(
-        camPitch + dy * MOUSE_SENS,
-        PITCH_MIN,
-        PITCH_MAX
+      camDistance = THREE.MathUtils.clamp(
+        camDistance + dy * CAM_ZOOM_DRAG,
+        DIST_MIN,
+        DIST_MAX
       );
     };
 
@@ -2476,6 +2554,7 @@ export default function MoeField3DCanvas({
         );
         door.position.set(0, 0.82, 1.82);
         houseGroup.add(door);
+        housePickGroup = houseGroup;
         scene.add(houseGroup);
 
         const rhodaIntent = moe3dRhodaPosition(
@@ -3625,11 +3704,27 @@ export default function MoeField3DCanvas({
 
       if (playerAnimCtrl) {
         const sprinting = playerSprintRefStable.current?.current ?? false;
+        const moveInput = playerMoveInputRefStable.current?.current ?? false;
+        const kintounOnRide = Boolean(kintounOnRefStable.current?.current);
+        const skateboardOnRide = Boolean(skateboardOnRefStable.current?.current);
+        const rideOn = kintounOnRide || skateboardOnRide;
         const playerSpeed =
           Math.hypot(pl.x - lastPlayerX, pl.y - lastPlayerY) / Math.max(dt, 0.001);
-        const moving = playerSpeed > 0.35;
+        const moving = playerSpeed > 0.35 || (rideOn && moveInput);
         let mode = "idle";
-        if (moving && sprinting) {
+        if (rideOn) {
+          if (moving) {
+            mode = "run";
+            if (playerAnimCtrl.setRunTimeScale) {
+              playerAnimCtrl.setRunTimeScale(
+                MOE_SNAKE_RUN_CLIP_DURATION_SEC /
+                  (sprinting
+                    ? MOE_PLAYER_RUN_BOB_CYCLE_SEC * 0.82
+                    : MOE_PLAYER_WALK_BOB_CYCLE_SEC)
+              );
+            }
+          }
+        } else if (moving && sprinting) {
           mode = "run";
           if (playerAnimCtrl.setRunTimeScale) {
             playerAnimCtrl.setRunTimeScale(
@@ -3660,7 +3755,20 @@ export default function MoeField3DCanvas({
       }
       const petGY = heightAt(pt.x, pt.y, petFootHint);
       lastPetFootY = petGY;
-      let petGroundY = petGY + petGroundLift + petFloatLift;
+      const kintounOnRide = Boolean(kintounOnRefStable.current?.current);
+      const skateboardOnRide = Boolean(skateboardOnRefStable.current?.current);
+      const petOnKintoun =
+        kintounOnRide &&
+        Math.hypot(pt.x - pl.x, pt.y - pl.y) <
+          3.8;
+      const petOnSkateboard =
+        skateboardOnRide &&
+        Math.hypot(pt.x - pl.x, pt.y - pl.y) < 2.8;
+      let petGroundY = petOnKintoun
+        ? pgY + kintounFlyY + petGroundLift + petFloatLift
+        : petOnSkateboard
+          ? pgY + petGroundLift + petFloatLift
+          : petGY + petGroundLift + petFloatLift;
       const inCombatCharge = duelNow?.phase === "simultaneous_charge";
       const nowMs = performance.now();
       const petSettling =
@@ -3724,6 +3832,25 @@ export default function MoeField3DCanvas({
       }
       playerSummonFx.update(dt, playerRoot);
 
+      kintounCloudFx.update(
+        dt,
+        playerRoot,
+        pgY,
+        kintounApproachRefStable.current?.current ?? null,
+        Boolean(kintounOnRefStable.current?.current),
+        jumpY,
+        kintounFlyY
+      );
+
+      skateboardFx.update(
+        dt,
+        playerRoot,
+        pgY,
+        skateboardApproachRefStable.current?.current ?? null,
+        Boolean(skateboardOnRefStable.current?.current),
+        jumpY
+      );
+
       syncPopups(pops || []);
 
       const overlayOut = overlayProjectRefStable.current;
@@ -3775,12 +3902,19 @@ export default function MoeField3DCanvas({
       }
 
       const focus = playerRoot.position.clone();
-      const desiredCam = focus
-        .clone()
-        .add(cameraOffsetFromOrbit(camYaw, camPitch, camDistance));
+      const camOffset = cameraOffsetFromOrbit(camYaw, camPitch, camDistance);
+      const desiredCam = focus.clone().add(camOffset);
+      const look = focus.clone();
+      const aheadLen = Math.hypot(camOffset.x, camOffset.z);
+      const lookAhead =
+        playerLookAheadRefStable.current?.current ?? MOE_PLAYER_LOOK_AHEAD_DEFAULT;
+      if (aheadLen > 0.001 && lookAhead > 0) {
+        look.x -= (camOffset.x / aheadLen) * lookAhead;
+        look.z -= (camOffset.z / aheadLen) * lookAhead;
+      }
       const camLerp = 1 - Math.exp(-10 * dt);
       camera.position.lerp(desiredCam, camLerp);
-      camera.lookAt(focus);
+      camera.lookAt(look);
 
       const yawOut = cameraYawRefStable.current;
       if (yawOut) yawOut.current = camYaw;
@@ -3807,6 +3941,8 @@ export default function MoeField3DCanvas({
       disposePetModel();
       phoenixTailFire.dispose();
       playerSummonFx.dispose();
+      kintounCloudFx.dispose();
+      skateboardFx.dispose();
       for (const fx of campfireRestFxList) {
         fx.dispose();
       }

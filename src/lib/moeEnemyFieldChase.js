@@ -13,7 +13,7 @@ import { MOE_SHINOBIASHI_SOUND_MULT } from "./moePlayerStealth.js";
 export { MOE_SHINOBIASHI_SOUND_MULT };
 
 /** 3D プレイヤー歩行速度（MoeFieldMap MOVE_SPEED_3D * 60） */
-export const MOE_PLAYER_FIELD_SPEED_3D = 0.2 * 60;
+export const MOE_PLAYER_FIELD_SPEED_3D = 0.14 * 60;
 /** 敵追跡はプレイヤー歩行の約 1/3 */
 export const MOE_ENEMY_CHASE_SPEED_RATIO = 1 / 3;
 export const MOE_ENEMY_CHASE_ENGAGE_DIST_3D = 2.85;

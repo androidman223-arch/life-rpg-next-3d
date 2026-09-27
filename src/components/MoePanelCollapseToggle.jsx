@@ -2,12 +2,14 @@
 
 /**
  * パネル左上 — ◆ でヘッダーだけ残して折りたたみ
- * @param {{ collapsed: boolean, onToggle: () => void, className?: string }} props
+ * children を渡すとその印に差し替える（ペットパネルの花飾りなど）
+ * @param {{ collapsed: boolean, onToggle: () => void, className?: string, children?: import("react").ReactNode }} props
  */
 export default function MoePanelCollapseToggle({
   collapsed,
   onToggle,
   className = "",
+  children = null,
 }) {
   return (
     <button
@@ -21,7 +23,7 @@ export default function MoePanelCollapseToggle({
       onPointerDown={(e) => e.stopPropagation()}
       className={`absolute left-0.5 top-1/2 z-20 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-sm text-[9px] leading-none transition hover:bg-white/15 active:scale-95 ${collapsed ? "text-amber-200/95" : "text-white/75"} ${className}`}
     >
-      ◆
+      {children ?? "◆"}
     </button>
   );
 }

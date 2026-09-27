@@ -29,8 +29,9 @@ export const MOE_DRAGON_SKILL_GET_CATALOG = [
   },
   {
     level: 40,
-    name: "神速",
-    hint: "トグルでダッシュ速度強化（Shift走行）",
+    name: "板乗り",
+    hint:
+      "地上を滑走 · 筋斗雲の地上版（旧神速）· トレーナーLv30または龍神Lv40で解禁",
     status: "done",
   },
   {

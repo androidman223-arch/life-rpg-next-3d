@@ -2,6 +2,7 @@
  * MOE プレイヤー隠密 — 忍び足・隠れ蓑（索敵第3段）
  */
 
+import { isMoeKintounStealthActive } from "./moeDragonKintoun.js";
 import { moeStealthVisualAvoidRate } from "./moePlayerSkillSuccessRate.js";
 
 /** 忍び足 — 足音は感知されない（聴覚索敵オフ） */
@@ -82,12 +83,19 @@ export function activateMoeKakuremino(nowMs = performance.now()) {
  *   kakureminoUntilMs?: number,
  *   stealthProficiency?: number,
  *   stealthRequiredLevel?: number,
+ *   kintounOn?: boolean,
+ *   kintounFlyY?: number,
  *   nowMs?: number,
  * }} p
  */
 export function buildMoeEnemyDetectionOpts(p) {
   const nowMs = p.nowMs ?? performance.now();
-  const stealthFull = isMoeKakureminoActive(p.kakureminoUntilMs ?? 0, nowMs);
+  const kintounStealth = isMoeKintounStealthActive(
+    p.kintounOn,
+    p.kintounFlyY ?? 0
+  );
+  const stealthFull =
+    isMoeKakureminoActive(p.kakureminoUntilMs ?? 0, nowMs) || kintounStealth;
   const shinobiashiOn = Boolean(p.shinobiashiOn) && !stealthFull;
   const stealthVisualAvoidPct = shinobiashiOn
     ? moeStealthVisualAvoidRate(

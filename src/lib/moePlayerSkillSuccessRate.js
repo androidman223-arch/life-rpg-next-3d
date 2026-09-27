@@ -6,9 +6,12 @@
  * - 熟練 48 → 約 99%
  */
 
+import { isMoePlayerSkillSuccess100Enabled } from "./moePlayerSkillSuccessSettings.js";
+
 /** @param {number} proficiency 現在の熟練度 Lv */
 /** @param {number} requiredLevel スキル習得・安定ラインの Lv */
 export function moeSkillSuccessRate(proficiency, requiredLevel = 40) {
+  if (isMoePlayerSkillSuccess100Enabled()) return 1;
   const prof = Number(proficiency) || 0;
   const req = Number(requiredLevel) || 0;
   const diff = prof - req;
@@ -24,6 +27,9 @@ export function moeSkillSuccessRate(proficiency, requiredLevel = 40) {
  * @param {() => number} [rng]
  */
 export function rollMoeSkillSuccess(proficiency, requiredLevel, rng = Math.random) {
+  if (isMoePlayerSkillSuccess100Enabled()) {
+    return { ok: true, rate: 1, ratePct: 100 };
+  }
   const rate = moeSkillSuccessRate(proficiency, requiredLevel);
   const ok = rng() < rate;
   return {

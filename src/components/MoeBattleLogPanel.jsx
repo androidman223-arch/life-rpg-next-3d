@@ -6,7 +6,9 @@ import { useMoePanelCollapsed } from "@/hooks/useMoePanelCollapsed";
 import { useMoePanelDockBounds } from "@/hooks/useMoePanelDockBounds";
 import MoePanelCollapseToggle from "@/components/MoePanelCollapseToggle";
 import { useMoePanelDockOptional } from "@/context/MoePanelDockContext";
-import { MOE_DOCK_PANEL_BATTLE_LOG } from "@/lib/moePanelDock";
+import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
+import { MOE_PANEL_ID_BATTLE_LOG } from "@/lib/moePanelStack";
+import { moeFloatingDragTitle } from "@/lib/moePanelStack";
 
 /**
  * @param {{
@@ -22,11 +24,11 @@ export default function MoeBattleLogPanel({ open, entries }) {
     onDragPointerDown,
     onResizeWidthPointerDown,
     onResizeHeightPointerDown,
-  } = useMoeBattleLogPanelLayout({ dockPanelId: MOE_DOCK_PANEL_BATTLE_LOG });
+  } = useMoeBattleLogPanelLayout({ dockPanelId: MOE_PANEL_ID_BATTLE_LOG });
   const { collapsed, toggleCollapsed } = useMoePanelCollapsed("battle-log");
   const dock = useMoePanelDockOptional();
   const snapHighlight = dock?.snapHighlight ?? false;
-  useMoePanelDockBounds(MOE_DOCK_PANEL_BATTLE_LOG, panelRef, [
+  useMoePanelDockBounds(MOE_PANEL_ID_BATTLE_LOG, panelRef, [
     layout?.x,
     layout?.y,
     layout?.width,
@@ -44,9 +46,10 @@ export default function MoeBattleLogPanel({ open, entries }) {
   if (!open || !layout) return null;
 
   return (
-    <div
+    <MoeFloatingPanelRoot
       ref={panelRef}
-      className={`pointer-events-auto fixed z-[45] flex flex-col overflow-hidden rounded border bg-black/90 shadow-lg transition-[box-shadow,border-color] duration-100 ${
+      panelId={MOE_PANEL_ID_BATTLE_LOG}
+      className={`pointer-events-auto fixed flex flex-col overflow-hidden rounded border bg-black/90 shadow-lg transition-[box-shadow,border-color] duration-100 ${
         snapHighlight
           ? "border-cyan-300/90 shadow-[0_0_0_2px_rgba(34,211,238,0.45),0_0_18px_rgba(34,211,238,0.35)]"
           : "border-[#444]"
@@ -64,7 +67,9 @@ export default function MoeBattleLogPanel({ open, entries }) {
       <div
         className="relative shrink-0 cursor-move touch-none border-b border-[#333] bg-[rgba(0,40,0,0.55)] py-1 pr-2 pl-5 text-center text-[10px] text-[#6a6] select-none hover:text-[#afa]"
         onPointerDown={onDragPointerDown}
-        title="ドラッグで移動 · 全体マップの右端に近づけて合体"
+        title={moeFloatingDragTitle(
+          "ドラッグで移動 · 全体マップの右端に近づけて合体"
+        )}
       >
         <MoePanelCollapseToggle
           collapsed={collapsed}
@@ -109,6 +114,6 @@ export default function MoeBattleLogPanel({ open, entries }) {
           />
         </>
       ) : null}
-    </div>
+    </MoeFloatingPanelRoot>
   );
 }

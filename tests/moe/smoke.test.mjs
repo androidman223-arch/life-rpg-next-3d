@@ -310,7 +310,7 @@ describe("vertical skill panel layout", () => {
     assert.equal(phoenix[0].label, "鳳凰の呼吸");
     assert.equal(phoenix[3].label, "フライングフェザー");
     assert.equal(dragon[0].label, "龍神の呼吸");
-    assert.equal(dragon[3].label, "神速");
+    assert.equal(dragon[3].label, "板乗り");
 
     assert.equal(isTrainingSkillUnlocked({ level: 30 }, 35), true);
     assert.equal(isTrainingSkillUnlocked({ level: 40 }, 35), false);
@@ -343,6 +343,76 @@ describe("vertical skill panel layout", () => {
     );
     assert.equal(phoenixAll[3].unusable, false);
     assert.equal(phoenixAll[3].active, true);
+  });
+
+  it("persists skill panel visibility settings", async () => {
+    const {
+      loadMoeSkillPanelVisibility,
+      setMoeSkillPanelVisible,
+      MOE_SKILL_PANEL_LABELS,
+    } = await import("../../src/lib/moeSkillPanelVisibilitySettings.js");
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.localStorage = mockStorage;
+
+    const def = loadMoeSkillPanelVisibility();
+    assert.equal(def.vertical1, true);
+    assert.equal(def.horizontal3, true);
+    assert.ok(MOE_SKILL_PANEL_LABELS.horizontal4.includes("龍神"));
+
+    const hidden = setMoeSkillPanelVisible(def, "vertical2", false);
+    assert.equal(hidden.vertical2, false);
+    assert.equal(loadMoeSkillPanelVisibility().vertical2, false);
+
+    delete globalThis.localStorage;
+  });
+
+  it("lists modeling showcase groups by date", async () => {
+    const { MOE_MODELING_SHOWCASE_GROUPS } = await import(
+      "../../src/data/moeModelingShowcases.js"
+    );
+    assert.ok(MOE_MODELING_SHOWCASE_GROUPS.length >= 1);
+    const sep27 = MOE_MODELING_SHOWCASE_GROUPS.find(
+      (g) => g.dateLabel === "9月27日"
+    );
+    assert.ok(sep27);
+    assert.equal(sep27.items.length, 2);
+    assert.ok(sep27.items.some((i) => i.actionId === "dragon-lineup"));
+  });
+
+  it("persists skill panel collapse settings", async () => {
+    const {
+      loadMoeSkillPanelCollapse,
+      setMoeSkillPanelCollapsed,
+    } = await import("../../src/lib/moeSkillPanelCollapseSettings.js");
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.localStorage = mockStorage;
+
+    const def = loadMoeSkillPanelCollapse();
+    assert.equal(def.vertical1, false);
+
+    const collapsed = setMoeSkillPanelCollapsed(def, "horizontal3", true);
+    assert.equal(collapsed.horizontal3, true);
+    assert.equal(loadMoeSkillPanelCollapse().horizontal3, true);
+
+    delete globalThis.localStorage;
   });
 
   it("persists training skill mode setting", async () => {
@@ -391,6 +461,10 @@ describe("vertical skill panel layout", () => {
     assert.equal(
       getTrainingSkillBridgeAction("phoenix", 10)?.skillId,
       "jiriki_seiran"
+    );
+    assert.equal(
+      getTrainingSkillBridgeAction("dragon", 40)?.skillId,
+      "dragon_skateboard"
     );
     assert.equal(
       getTrainingSkillBridgeAction("dragon", 80)?.skillId,
@@ -1006,11 +1080,11 @@ describe("macro1 sulfur mine official check", () => {
     assert.equal(MOE_PLAYER_HEAL_LIGHT_COOLDOWN_SEC, 4);
     assert.equal(MOE_PLAYER_HEAL_HEALING_COOLDOWN_SEC, 5);
     assert.equal(MOE_PLAYER_HEAL_ALL_COOLDOWN_SEC, 6);
-    assert.match(fieldSrc, /healCdSec\.light/);
-    assert.match(fieldSrc, /moePlayerHealCooldownLabel/);
+    assert.match(fieldSrc, /healCdSec,/);
+    assert.match(slotUiSrc, /healCdSec\.light/);
     assert.match(fieldSrc, /pushWorldHealPopup/);
-    assert.match(fieldSrc, /moePlayerHealSkillTitle/);
     assert.match(slotUiSrc, /cooldownSec: cd > 0 \? cd : null/);
+    assert.match(slotUiSrc, /moePlayerHealCooldownLabel/);
     assert.match(slotUiSrc, /moePlayerHealSkillTitle/);
 
     const { formatWorldHealPopupAmount } = await import(
@@ -2364,7 +2438,7 @@ describe("buff ui", () => {
       now
     );
     assert.equal(player.length, MOE_PLAYER_BUFF_SLOT_COUNT);
-    assert.equal(player.filter(Boolean).length, 5);
+    assert.equal(player.filter(Boolean).length, 4);
     assert.equal(player[0]?.id, "banana_milk");
     const pet = buildMoePetBuffStrip(
       {
@@ -2572,12 +2646,48 @@ describe("player skill2 progress", () => {
 
 describe("player skill success rate", () => {
   it("matches MOE-style anchors at required 40", async () => {
+    const { resetMoePlayerSkillSuccess100Cache } = await import(
+      "../../src/lib/moePlayerSkillSuccessSettings.js"
+    );
+    resetMoePlayerSkillSuccess100Cache();
     const { moeSkillSuccessRate } = await import(
       "../../src/lib/moePlayerSkillSuccessRate.js"
     );
     assert.equal(moeSkillSuccessRate(46, 40), 0.8);
     assert.equal(moeSkillSuccessRate(48, 40), 0.99);
     assert.equal(moeSkillSuccessRate(40, 40), 0.5);
+  });
+
+  it("forces 100% when setting is enabled", async () => {
+    const {
+      saveMoePlayerSkillSuccess100,
+      resetMoePlayerSkillSuccess100Cache,
+    } = await import("../../src/lib/moePlayerSkillSuccessSettings.js");
+    const { rollMoeSkillSuccess, moeSkillSuccessRate } = await import(
+      "../../src/lib/moePlayerSkillSuccessRate.js"
+    );
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.localStorage = mockStorage;
+    resetMoePlayerSkillSuccess100Cache();
+    saveMoePlayerSkillSuccess100(true);
+
+    assert.equal(moeSkillSuccessRate(1, 40), 1);
+    const roll = rollMoeSkillSuccess(1, 40, () => 0.99);
+    assert.equal(roll.ok, true);
+    assert.equal(roll.ratePct, 100);
+
+    saveMoePlayerSkillSuccess100(false);
+    resetMoePlayerSkillSuccess100Cache();
+    delete globalThis.localStorage;
   });
 });
 
@@ -2621,6 +2731,58 @@ describe("altar tomorrow memo", () => {
   });
 });
 
+describe("dragon skateboard skill", () => {
+  it("boosts ground speed and dash on skateboard", async () => {
+    const {
+      MOE_SKATEBOARD_DASH_EXTRA_MULT,
+      MOE_SKATEBOARD_WALK_SPEED_MULT,
+      moeSkateboardMoveSpeedMult,
+    } = await import("../../src/lib/moeDragonSkateboard.js");
+    assert.equal(moeSkateboardMoveSpeedMult(false, false), 1);
+    assert.equal(
+      moeSkateboardMoveSpeedMult(false, true),
+      MOE_SKATEBOARD_WALK_SPEED_MULT
+    );
+    assert.equal(
+      moeSkateboardMoveSpeedMult(true, true),
+      MOE_SKATEBOARD_WALK_SPEED_MULT * MOE_SKATEBOARD_DASH_EXTRA_MULT
+    );
+  });
+
+  it("rushes skateboard in then mounts", async () => {
+    const {
+      beginSkateboardApproach,
+      tickSkateboardApproach,
+      MOE_SKATEBOARD_APPROACH_START_DIST,
+    } = await import("../../src/lib/moeDragonSkateboard.js");
+    const state = beginSkateboardApproach(0);
+    assert.ok(
+      Math.hypot(state.ox, state.oz) >= MOE_SKATEBOARD_APPROACH_START_DIST - 1
+    );
+    let jumped = false;
+    let done = false;
+    for (let i = 0; i < 260 && !done; i += 1) {
+      const step = tickSkateboardApproach(state, 0.016);
+      if (step.triggerJump) jumped = true;
+      if (step.done) done = true;
+    }
+    assert.ok(jumped);
+    assert.ok(done);
+    assert.equal(state.ox, 0);
+    assert.equal(state.oz, 0);
+  });
+
+  it("places pet ride slot behind player on skateboard", async () => {
+    const {
+      skateboardPetRideSlot,
+      MOE_SKATEBOARD_PET_BEHIND_DIST,
+    } = await import("../../src/lib/moeDragonSkateboard.js");
+    const slot = skateboardPetRideSlot(10, 20, 0);
+    assert.ok(Math.abs(slot.x - 10) < 0.01);
+    assert.ok(Math.abs(slot.y - (20 - MOE_SKATEBOARD_PET_BEHIND_DIST)) < 0.01);
+  });
+});
+
 describe("dragon kintoun skill", () => {
   it("doubles walk speed and quadruples dash without shinsoku", async () => {
     const {
@@ -2639,6 +2801,55 @@ describe("dragon kintoun skill", () => {
     assert.equal(tickKintounFlyOffset(14, false, 1), 0);
   });
 
+  it("grants stealth while kintoun is high enough", async () => {
+    const { isMoeKintounStealthActive, MOE_KINTOUN_STEALTH_MIN_ALTITUDE } =
+      await import("../../src/lib/moeDragonKintoun.js");
+    const { buildMoeEnemyDetectionOpts } = await import(
+      "../../src/lib/moePlayerStealth.js"
+    );
+    assert.equal(isMoeKintounStealthActive(true, 0), false);
+    assert.equal(
+      isMoeKintounStealthActive(true, MOE_KINTOUN_STEALTH_MIN_ALTITUDE),
+      true
+    );
+    const opts = buildMoeEnemyDetectionOpts({
+      kintounOn: true,
+      kintounFlyY: MOE_KINTOUN_STEALTH_MIN_ALTITUDE + 1,
+    });
+    assert.equal(opts.stealthFull, true);
+  });
+
+  it("places pet ride slot behind player on kintoun", async () => {
+    const {
+      kintounPetRideSlot,
+      MOE_KINTOUN_PET_BEHIND_DIST,
+    } = await import("../../src/lib/moeDragonKintoun.js");
+    const slot = kintounPetRideSlot(10, 20, 0);
+    assert.ok(Math.abs(slot.x - 10) < 0.01);
+    assert.ok(Math.abs(slot.y - (20 - MOE_KINTOUN_PET_BEHIND_DIST)) < 0.01);
+  });
+
+  it("rushes kintoun cloud in then mounts", async () => {
+    const {
+      beginKintounApproach,
+      tickKintounApproach,
+      MOE_KINTOUN_APPROACH_START_DIST,
+    } = await import("../../src/lib/moeDragonKintoun.js");
+    const state = beginKintounApproach(0);
+    assert.ok(Math.hypot(state.ox, state.oz) >= MOE_KINTOUN_APPROACH_START_DIST - 1);
+    let jumped = false;
+    let done = false;
+    for (let i = 0; i < 240 && !done; i += 1) {
+      const step = tickKintounApproach(state, 0.016);
+      if (step.triggerJump) jumped = true;
+      if (step.done) done = true;
+    }
+    assert.ok(jumped);
+    assert.ok(done);
+    assert.equal(state.ox, 0);
+    assert.equal(state.oz, 0);
+  });
+
   it("unlocks kintoun at dragon practice Lv80", async () => {
     const { buildPlayerDragonSkillById } = await import(
       "../../src/data/moePlayerDragonSkills.js"
@@ -2647,13 +2858,32 @@ describe("dragon kintoun skill", () => {
     assert.equal(buildPlayerDragonSkillById(80).dragon_kintoun?.name, "筋斗雲");
   });
 
+  it("unlocks board ride at trainer Lv30 or dragon Lv40", async () => {
+    const {
+      buildPlayerDragonSkillById,
+      isDragonSkateboardUnlocked,
+    } = await import("../../src/data/moePlayerDragonSkills.js");
+    assert.equal(isDragonSkateboardUnlocked(0, { trainerLevel: 29 }), false);
+    assert.equal(isDragonSkateboardUnlocked(0, { trainerLevel: 30 }), true);
+    assert.equal(buildPlayerDragonSkillById(0, { trainerLevel: 30 }).dragon_skateboard?.name, "板乗り");
+    assert.equal(buildPlayerDragonSkillById(39).dragon_skateboard, undefined);
+    assert.equal(buildPlayerDragonSkillById(40).dragon_skateboard?.name, "板乗り");
+  });
+
+  it("migrates shinsoku slot key to board ride", async () => {
+    const { migratePlayerSkillSlotKey } = await import(
+      "../../src/data/moePlayerSkillSlotOrder.js"
+    );
+    assert.equal(migratePlayerSkillSlotKey("ninja_shinsoku"), "dragon_skateboard");
+  });
+
   it("lists nine dragon skill get entries", async () => {
     const { MOE_DRAGON_SKILL_GET_CATALOG } = await import(
       "../../src/data/moeDragonSkillGetCatalog.js"
     );
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG.length, 9);
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[0].name, "龍神の呼吸");
-    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[3].name, "神速");
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[3].name, "板乗り");
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[7].name, "筋斗雲");
   });
 });
@@ -3195,7 +3425,8 @@ describe("AGE continent maps", () => {
       join(root, "src/components/MoeAgeHubHousePanel.jsx"),
       "utf8"
     );
-    assert.match(panelSrc, /生命爆神/);
+    assert.match(panelSrc, /ペット敵 LV 育成表/);
+    assert.doesNotMatch(panelSrc, /生命爆神/);
     assert.match(panelSrc, /moePetTrainingGuideForAgeHub/);
     const altarSrc = readFileSync(join(root, "src/data/moeAltarWarps.js"), "utf8");
     assert.match(altarSrc, /yug_coast:[\s\S]*家AGE番地の入口/);
@@ -3645,6 +3876,64 @@ describe("battle log", () => {
     assert.ok(clamped.x >= 4);
     assert.ok(clamped.y >= 4);
   });
+
+  it("raises panel z-index on click-to-front stack", async () => {
+    const {
+      bringMoePanelToFront,
+      moePanelResolvedZIndex,
+      moePanelStackOrder,
+      moePanelStackSize,
+      moePanelStackZIndex,
+      MOE_PANEL_DEFAULT_ORDERS,
+      MOE_PANEL_STACK_BASE_Z,
+      MOE_PANEL_STACK_MAX_Z,
+    } = await import("../../src/lib/moePanelStack.js");
+
+    const after = bringMoePanelToFront(
+      { "battle-log": 0, "minimap-3d": 1 },
+      "battle-log"
+    );
+    const size = moePanelStackSize(after);
+    assert.ok(
+      moePanelResolvedZIndex(after, "battle-log") >
+        moePanelResolvedZIndex(after, "minimap-3d")
+    );
+    assert.equal(moePanelStackOrder(after, "battle-log"), size - 1);
+    const many = bringMoePanelToFront(MOE_PANEL_DEFAULT_ORDERS, "battle-log");
+    const manySize = moePanelStackSize(many);
+    const topZ = moePanelStackZIndex(manySize - 1, manySize);
+    const secondZ = moePanelStackZIndex(manySize - 2, manySize);
+    assert.equal(topZ, MOE_PANEL_STACK_MAX_Z);
+    assert.ok(topZ > secondZ);
+    const { MOE_PANEL_ID_ITEM_BOX } = await import(
+      "../../src/lib/moePanelStack.js"
+    );
+    assert.ok(MOE_PANEL_DEFAULT_ORDERS[MOE_PANEL_ID_ITEM_BOX] > 0);
+    assert.equal(
+      moePanelStackOrder({}, MOE_PANEL_ID_ITEM_BOX),
+      MOE_PANEL_DEFAULT_ORDERS[MOE_PANEL_ID_ITEM_BOX]
+    );
+
+    const { MOE_PANEL_STACK_ID_LIST, MOE_PANEL_ID_TARGET_WINDOW } =
+      await import("../../src/lib/moePanelStack.js");
+    assert.equal(
+      MOE_PANEL_STACK_ID_LIST.length,
+      Object.keys(MOE_PANEL_DEFAULT_ORDERS).length
+    );
+    assert.ok(MOE_PANEL_DEFAULT_ORDERS[MOE_PANEL_ID_TARGET_WINDOW] > 0);
+
+    const {
+      MOE_PANEL_DRAG_POS_KEYS,
+      MOE_PANEL_STACK_POS_STORAGE,
+    } = await import("../../src/lib/moePanelStack.js");
+    for (const key of MOE_PANEL_DRAG_POS_KEYS) {
+      assert.ok(
+        MOE_PANEL_DEFAULT_ORDERS[key] != null,
+        `panel drag pos missing from stack: ${key}`
+      );
+    }
+    assert.equal(Object.keys(MOE_PANEL_STACK_POS_STORAGE).length, 2);
+  });
 });
 
 describe("phoenix rebirth once", () => {
@@ -3686,6 +3975,334 @@ describe("phoenix rebirth once", () => {
   });
 });
 
+describe("pet skill delay", () => {
+  it("uses wiki band averages when delaySec is missing", async () => {
+    const {
+      moeDefaultDelaySecForSkillLevel,
+      moePetSkillEffectiveDelaySec,
+    } = await import("../../src/lib/moePetSkillDelay.js");
+
+    assert.equal(moeDefaultDelaySecForSkillLevel(20), 17);
+    assert.equal(moeDefaultDelaySecForSkillLevel(40), 17);
+    assert.equal(moeDefaultDelaySecForSkillLevel(60), 28);
+    assert.equal(moeDefaultDelaySecForSkillLevel(80), 35);
+    assert.equal(moeDefaultDelaySecForSkillLevel(100), 55);
+    assert.equal(moePetSkillEffectiveDelaySec({ level: 60 }), 28);
+    assert.equal(moePetSkillEffectiveDelaySec({ level: 30, delaySec: 25 }), 25);
+  });
+
+  it("counts down pet skill delay remain seconds", async () => {
+    const {
+      markMoePetSkillDelay,
+      moePetSkillDelayRemainSec,
+    } = await import("../../src/lib/moePetAutoSkill.js");
+
+    const skill = { id: "straight", name: "キャッツ ストレート", delaySec: 25 };
+    const cooldownUntil = {};
+    const nowMs = 1_000_000;
+    markMoePetSkillDelay(cooldownUntil, skill, nowMs);
+    assert.equal(moePetSkillDelayRemainSec(cooldownUntil, skill, nowMs), 25);
+    assert.equal(
+      moePetSkillDelayRemainSec(cooldownUntil, skill, nowMs + 1000),
+      24
+    );
+    assert.equal(
+      moePetSkillDelayRemainSec(cooldownUntil, skill, nowMs + 25_000),
+      0
+    );
+  });
+});
+
+describe("pet loyalty gain", () => {
+  it("requires enemy 7+ levels above pet", async () => {
+    const {
+      moePetLoyaltyQualifiesForGain,
+      rollMoePetLoyaltyGain,
+    } = await import("../../src/lib/moePetLoyaltyGain.js");
+
+    assert.equal(moePetLoyaltyQualifiesForGain(16, 10), false);
+    assert.equal(moePetLoyaltyQualifiesForGain(17, 10), true);
+
+    const fail = rollMoePetLoyaltyGain(
+      { loyalty: 50 },
+      20,
+      10,
+      () => 0.9
+    );
+    assert.equal(fail.gained, false);
+    assert.equal(fail.loyaltyPityMiss, true);
+
+    const pity = rollMoePetLoyaltyGain(
+      { loyalty: 50, loyaltyPityMiss: true },
+      20,
+      10,
+      () => 0.99
+    );
+    assert.equal(pity.gained, true);
+    assert.equal(pity.loyalty, 51);
+    assert.equal(pity.loyaltyPityMiss, false);
+  });
+});
+
+describe("pet auto skill", () => {
+  it("uses unlearned skills in ALL (仮習得済) mode for auto AI", async () => {
+    const { pickMoePetAutoSkill } = await import(
+      "../../src/lib/moePetAutoSkill.js"
+    );
+    const { MOE_PET_SKILL_MODE_ALL } = await import(
+      "../../src/lib/moePetSkillSettings.js"
+    );
+
+    const picked = pickMoePetAutoSkill({
+      petId: "abinyan",
+      pet: { mp: 50, hp: 80, hpMax: 100 },
+      petLevel: 10,
+      skills: [
+        { id: "atk", name: "アタック", level: 1, type: "attack" },
+        { id: "straight", name: "キャッツ ストレート", level: 30, delaySec: 25 },
+      ],
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs: 0,
+      cooldownUntil: {},
+    });
+    assert.equal(picked?.id, "straight");
+  });
+
+  it("ignores unlearned skills in learned-only mode for auto AI", async () => {
+    const { pickMoePetAutoSkill } = await import(
+      "../../src/lib/moePetAutoSkill.js"
+    );
+    const { MOE_PET_SKILL_MODE_LEARNED } = await import(
+      "../../src/lib/moePetSkillSettings.js"
+    );
+
+    const picked = pickMoePetAutoSkill({
+      petId: "abinyan",
+      pet: { mp: 50, hp: 80, hpMax: 100 },
+      petLevel: 10,
+      skills: [
+        { id: "atk", name: "アタック", level: 1, type: "attack" },
+        { id: "straight", name: "キャッツ ストレート", level: 30, delaySec: 25 },
+      ],
+      skillMode: MOE_PET_SKILL_MODE_LEARNED,
+      loyalty: 100,
+      nowMs: 0,
+      cooldownUntil: {},
+    });
+    assert.equal(picked, null);
+  });
+
+  it("picks highest level skill that passes loyalty MP delay and HP", async () => {
+    const {
+      pickMoePetAutoSkill,
+      moePetUsesMp,
+      markMoePetSkillDelay,
+      moePetSkillDelayReady,
+    } = await import("../../src/lib/moePetAutoSkill.js");
+    const { MOE_PET_SKILL_MODE_ALL } = await import(
+      "../../src/lib/moePetSkillSettings.js"
+    );
+
+    const skills = [
+      { id: "atk", name: "アタック", level: 1, type: "attack" },
+      { id: "hi", name: "火球", level: 5, mpCost: 10, delaySec: 2 },
+      { id: "lo", name: "弱弾", level: 2, mpCost: 3 },
+    ];
+    const nowMs = 1000;
+    const cooldownUntil = {};
+    const picked = pickMoePetAutoSkill({
+      petId: "phoenix_dragon",
+      pet: { mp: 20, hp: 50, hpMax: 100 },
+      petLevel: 50,
+      skills,
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs,
+      cooldownUntil,
+    });
+    assert.equal(picked?.id, "hi");
+
+    markMoePetSkillDelay(cooldownUntil, picked, nowMs);
+    assert.equal(moePetSkillDelayReady(cooldownUntil, picked, nowMs + 500), false);
+    assert.equal(moePetSkillDelayReady(cooldownUntil, picked, nowMs + 2001), true);
+
+    const lowMp = pickMoePetAutoSkill({
+      petId: "phoenix_dragon",
+      pet: { mp: 5, hp: 50, hpMax: 100 },
+      petLevel: 50,
+      skills,
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs: nowMs + 3000,
+      cooldownUntil,
+    });
+    assert.equal(lowMp?.id, "lo");
+  });
+
+  it("falls back to lower skills when higher skills are on delay", async () => {
+    const {
+      pickMoePetAutoSkill,
+      markMoePetSkillDelay,
+      findPetCombatSkillSlotIndex,
+    } = await import("../../src/lib/moePetAutoSkill.js");
+    const { MOE_PET_SKILL_MODE_ALL } = await import(
+      "../../src/lib/moePetSkillSettings.js"
+    );
+
+    const skills = [
+      { id: "hi", name: "火球", level: 80, mpCost: 10, delaySec: 25 },
+      { id: "mid", name: "中弾", level: 60, mpCost: 8, delaySec: 20 },
+      { id: "lo", name: "弱弾", level: 40, mpCost: 3, delaySec: 5 },
+    ];
+    const slots = skills;
+    const nowMs = 1000;
+    const cooldownUntil = {};
+    const hi = skills[0];
+    const mid = skills[1];
+
+    assert.equal(findPetCombatSkillSlotIndex(slots, hi), 0);
+    assert.equal(
+      findPetCombatSkillSlotIndex(
+        [{ name: "キャッツ ストレート", level: 30 }],
+        { name: "キャッツ ロケット", level: 80 }
+      ),
+      -1
+    );
+
+    markMoePetSkillDelay(cooldownUntil, hi, nowMs);
+    const duringHiDelay = pickMoePetAutoSkill({
+      petId: "phoenix_dragon",
+      pet: { mp: 20, hp: 50, hpMax: 100 },
+      petLevel: 50,
+      skills,
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs: nowMs + 500,
+      cooldownUntil,
+    });
+    assert.equal(duringHiDelay?.id, "mid");
+
+    markMoePetSkillDelay(cooldownUntil, mid, nowMs);
+    const duringHiAndMidDelay = pickMoePetAutoSkill({
+      petId: "phoenix_dragon",
+      pet: { mp: 20, hp: 50, hpMax: 100 },
+      petLevel: 50,
+      skills,
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs: nowMs + 500,
+      cooldownUntil,
+    });
+    assert.equal(duringHiAndMidDelay?.id, "lo");
+  });
+
+  it("skips skills below loyaltyMin and ignores MP for zero-MP pets", async () => {
+    const { pickMoePetAutoSkill, moePetUsesMp } = await import(
+      "../../src/lib/moePetAutoSkill.js"
+    );
+    const { MOE_PET_SKILL_MODE_ALL } = await import(
+      "../../src/lib/moePetSkillSettings.js"
+    );
+
+    assert.equal(moePetUsesMp("calgoche"), false);
+
+    const skills = [
+      { id: "secret", name: "奥義", level: 10, mpCost: 50, loyaltyMin: 100 },
+      { id: "mid", name: "中技", level: 4, mpCost: 1, loyaltyMin: 50 },
+    ];
+    const lowLoyalty = pickMoePetAutoSkill({
+      petId: "phoenix_dragon",
+      pet: { mp: 100, hp: 80, hpMax: 100 },
+      petLevel: 50,
+      skills,
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 60,
+      nowMs: 0,
+      cooldownUntil: {},
+    });
+    assert.equal(lowLoyalty?.id, "mid");
+
+    const noMpPet = pickMoePetAutoSkill({
+      petId: "calgoche",
+      pet: { mp: 0, hp: 80, hpMax: 100 },
+      petLevel: 50,
+      skills: [{ id: "blast", name: "爆撃", level: 3, mpCost: 99 }],
+      skillMode: MOE_PET_SKILL_MODE_ALL,
+      loyalty: 100,
+      nowMs: 0,
+      cooldownUntil: {},
+    });
+    assert.equal(noMpPet?.id, "blast");
+  });
+
+  it("blocks manual pet skills in auto-only mode regardless of loyalty", async () => {
+    const { moePetManualSkillLoyaltyOk } = await import(
+      "../../src/lib/moePetAutoSkill.js"
+    );
+
+    assert.equal(moePetManualSkillLoyaltyOk({ loyalty: 99 }, true), false);
+    assert.equal(moePetManualSkillLoyaltyOk({ loyalty: 100 }, true), false);
+    assert.equal(moePetManualSkillLoyaltyOk({ loyalty: 50 }, false), true);
+    assert.equal(moePetManualSkillLoyaltyOk({}, true), false);
+    assert.equal(moePetManualSkillLoyaltyOk({ loyalty: null }, true), false);
+  });
+
+  it("loads and saves pet loyalty gate setting", async () => {
+    const {
+      loadMoePetLoyaltyGate100,
+      saveMoePetLoyaltyGate100,
+    } = await import("../../src/lib/moePetLoyaltyGateSettings.js");
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.window = { localStorage: mockStorage };
+    globalThis.localStorage = mockStorage;
+
+    assert.equal(loadMoePetLoyaltyGate100(), true);
+    saveMoePetLoyaltyGate100(false);
+    assert.equal(loadMoePetLoyaltyGate100(), false);
+
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  });
+
+  it("loads and saves pet auto skill toggle", async () => {
+    const {
+      loadMoePetAutoSkillEnabled,
+      saveMoePetAutoSkillEnabled,
+    } = await import("../../src/lib/moePetAutoSkillSettings.js");
+
+    const mockStorage = {
+      store: {},
+      getItem(k) {
+        return this.store[k] ?? null;
+      },
+      setItem(k, v) {
+        this.store[k] = v;
+      },
+    };
+    globalThis.window = { localStorage: mockStorage };
+    globalThis.localStorage = mockStorage;
+
+    assert.equal(loadMoePetAutoSkillEnabled(), true);
+    saveMoePetAutoSkillEnabled(false);
+    assert.equal(loadMoePetAutoSkillEnabled(), false);
+    saveMoePetAutoSkillEnabled(true);
+    assert.equal(loadMoePetAutoSkillEnabled(), true);
+
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  });
+});
+
 describe("item box layout", () => {
   it("reflows 5x4 grid to 7x3 with one blank when shortened vertically", async () => {
     const {
@@ -3717,5 +4334,71 @@ describe("item box layout", () => {
     assert.match(panelSrc, /useMoeItemBoxLayout/);
     assert.match(panelSrc, /onResizePointerDown/);
     assert.match(panelSrc, /MOE_ITEM_BOX_SLOT_PX/);
+  });
+});
+
+describe("enemy respawn delay", () => {
+  it("sets 10-second and minute steps per level band", async () => {
+    const {
+      MOE_ENEMY_RESPAWN_CHOICES,
+      MOE_ENEMY_RESPAWN_DEFAULT_SECONDS,
+      clampMoeEnemyRespawnSeconds,
+      defaultMoeEnemyRespawnSeconds,
+      moeEnemyRespawnBandId,
+      moeEnemyRespawnSecondsFor,
+      moeEnemyRespawnMs,
+      moeEnemyRespawnReady,
+      moeMarkEnemyDefeated,
+      normalizeMoeEnemyRespawnSeconds,
+    } = await import("../../src/lib/moeEnemyRespawn.js");
+    assert.equal(MOE_ENEMY_RESPAWN_CHOICES[0].sec, 10);
+    assert.equal(MOE_ENEMY_RESPAWN_CHOICES.at(-1).sec, 600);
+    assert.equal(MOE_ENEMY_RESPAWN_DEFAULT_SECONDS, 60);
+    assert.equal(clampMoeEnemyRespawnSeconds(10), 10);
+    assert.equal(clampMoeEnemyRespawnSeconds(25), 20);
+    assert.equal(moeEnemyRespawnMs(10), 10_000);
+    assert.equal(moeEnemyRespawnMs(60), 60_000);
+    assert.equal(moeEnemyRespawnBandId({ level: 20.9 }), "lv20");
+    assert.equal(moeEnemyRespawnBandId({ level: 50.3 }), "lv50");
+    assert.equal(moeEnemyRespawnBandId({ level: 18, superBoss: true }), "lv150");
+    assert.deepEqual(normalizeMoeEnemyRespawnSeconds("4"), {
+      lv20: 240,
+      lv50: 240,
+      lv100: 240,
+      lv150: 240,
+    });
+    assert.deepEqual(
+      normalizeMoeEnemyRespawnSeconds({ v: 2, lv20: 10, lv50: 180, lv100: 360, lv150: 600 }),
+      { lv20: 10, lv50: 180, lv100: 360, lv150: 600 }
+    );
+    const table = {
+      ...defaultMoeEnemyRespawnSeconds(),
+      lv20: 10,
+      lv50: 180,
+      lv100: 360,
+      lv150: 600,
+    };
+    assert.equal(moeEnemyRespawnSecondsFor({ level: 15 }, table), 10);
+    assert.equal(moeEnemyRespawnSecondsFor({ level: 41 }, table), 180);
+    const dead = moeMarkEnemyDefeated({ id: 1, hp: 40, level: 41, name: "海ヘビ" }, 1_000, table);
+    assert.equal(dead.respawnAt, 1_000 + 180_000);
+    assert.equal(moeEnemyRespawnReady(dead, dead.respawnAt - 1), false);
+    assert.equal(moeEnemyRespawnReady(dead, dead.respawnAt), true);
+  });
+});
+
+describe("player look ahead", () => {
+  it("nudges the on-screen player in half steps", async () => {
+    const {
+      MOE_PLAYER_LOOK_AHEAD_DEFAULT,
+      clampMoePlayerLookAhead,
+      nudgeMoePlayerLookAhead,
+    } = await import("../../src/lib/moePlayerLookAhead.js");
+    assert.equal(MOE_PLAYER_LOOK_AHEAD_DEFAULT, 7);
+    assert.equal(clampMoePlayerLookAhead(7.2), 7);
+    assert.equal(nudgeMoePlayerLookAhead(7, "down"), 7.5);
+    assert.equal(nudgeMoePlayerLookAhead(7, "up"), 6.5);
+    assert.equal(nudgeMoePlayerLookAhead(0, "up"), 0);
+    assert.equal(nudgeMoePlayerLookAhead(14, "down"), 14);
   });
 });

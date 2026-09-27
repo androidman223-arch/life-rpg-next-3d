@@ -33,6 +33,12 @@
 - 緑コライダーは楕円円柱 · 箱分割はすき間ですり抜け · `MOE_GREEN_COLLIDER_OUTSET`
 - 山色は `moe3dMacro3MountainPalette.js` · リストは `moe3dMacro3MountainRegistry.js`
 
+### フローティング UI z-index
+- ドラッグパネルは `MoeFloatingPanelRoot` + `moePanelStack.js` の `panelId`（storageKey と揃える）
+- `MoePanelStackProvider` は `MoeFieldMap` 本体より外（`MoeFieldMapGate`）— 本体で `useMoePanelStack` しても context が null になる
+- ドラッグヘッダは `stopPropagation` する → 前面化は `onPointerDownCapture`（bubble だけだとタイトルバークリックで届かない）
+- ミニマップは stack id（`minimap-3d`）と pos キー（`MOE_MINIMAP_POS_STORAGE_*`）が別 · 一覧は `MOE_PANEL_DRAG_POS_KEYS`
+
 ### ミニマップ敵マーク
 - 大きい＋不透明だと地名が隠れる → 小さめ・半透明・近傍のみ、ラベルは最前面
 
