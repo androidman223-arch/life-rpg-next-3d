@@ -30,7 +30,7 @@
     syncGuide: null,
     phoenixUi: {
       buttonSubHint:
-        "（自力思考、めいそう、メモ整理、習慣整え、休む、断捨離、人生の目標、 ALL OK）",
+        "（静かに整える、自力思考、めいそう、メモ整理、習慣整え、休む、断捨離、人生の目標、 ALL OK）",
       reflectionPlaceholder: "今日わかったこと（一行・任意）…",
       reflectionKinds: ["phoenix"],
     },

@@ -56,6 +56,7 @@ export const MOE_PANEL_ID_PET_SKILL_ICON_BAR =
 export const MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR =
   "life-rpg-moe-player-skill-icon-bar-pos";
 export const MOE_PANEL_ID_FIELD_SETTINGS = "life-rpg-moe-field-settings-pos";
+export const MOE_PANEL_ID_SKILL_MACRO = "life-rpg-moe-skill-macro-panel-pos";
 
 /** ミニマップ位置 storage（stack id は MINIMAP_3D / 2D — 2D/3D で別キー） */
 export const MOE_MINIMAP_POS_STORAGE_3D = "life-rpg-moe-minimap-pos-3d";
@@ -92,6 +93,7 @@ export const MOE_PANEL_DRAG_POS_KEYS = Object.freeze([
   MOE_PANEL_ID_PET_SKILL_ICON_BAR,
   MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR,
   MOE_PANEL_ID_FIELD_SETTINGS,
+  MOE_PANEL_ID_SKILL_MACRO,
 ]);
 
 /** 位置 storage 監査用（drag pos + ミニマップ pos） */
@@ -135,6 +137,7 @@ export const MOE_PANEL_DEFAULT_ORDERS = {
   [MOE_PANEL_ID_PET_SKILL_ICON_BAR]: 17,
   [MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR]: 18,
   [MOE_PANEL_ID_FIELD_SETTINGS]: 19,
+  [MOE_PANEL_ID_SKILL_MACRO]: 20,
 };
 
 /** @type {readonly string[]} */

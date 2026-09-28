@@ -35,13 +35,13 @@ export default function MoeAltarWarpPanel({
         className="mb-6 flex max-h-[min(88vh,720px)] w-full max-w-md shrink-0 flex-col overflow-hidden rounded-2xl border border-sky-400/35 bg-zinc-950/95 shadow-2xl backdrop-blur-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <MoeAltarTomorrowMemo />
-        <div className="border-b border-white/10 px-4 py-3">
+        <MoeAltarTomorrowMemo compact />
+        <div className="border-b border-sky-400/25 bg-sky-950/40 px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-sky-300/80">
             アルター
           </div>
-          <div className="text-base font-bold text-sky-50">{altar.nameJa}</div>
-          <div className="mt-0.5 text-xs text-zinc-400">
+          <div className="text-lg font-bold text-sky-50">{altar.nameJa}</div>
+          <div className="mt-0.5 text-sm font-semibold text-sky-200/90">
             転送先を選んでください（時空間移動）
           </div>
         </div>
@@ -65,11 +65,11 @@ export default function MoeAltarWarpPanel({
                         type="button"
                         disabled={!dest.available}
                         onClick={() => dest.available && onSelect(dest.id)}
-                        className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99] ${
+                        className={`flex w-full items-start gap-2 rounded-xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${
                           dest.available
                             ? dest.group === "newmap"
-                              ? "border-amber-400/55 bg-amber-950/35 hover:bg-amber-900/45"
-                              : "border-sky-500/40 bg-zinc-900/90 hover:bg-zinc-800/95"
+                              ? "border-amber-300/70 bg-amber-950/50 shadow-amber-900/30 hover:bg-amber-900/55"
+                              : "border-sky-400/55 bg-sky-950/40 hover:bg-sky-900/50"
                             : "cursor-not-allowed border-zinc-700/50 bg-zinc-900/40 opacity-55"
                         }`}
                       >

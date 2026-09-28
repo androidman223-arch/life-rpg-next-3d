@@ -30,6 +30,36 @@ import {
   writeMoePetsSave,
 } from "@/lib/moePetSave";
 import {
+  applyMoeWorshipNature,
+  moePetIsDead,
+} from "@/lib/moePetWorshipNature";
+import {
+  MOE_SOUL_MASTER_ALTAR_ID,
+  MOE_SOUL_RETURN_MS,
+  MOE_SOUL_WARP_MS,
+  moeSoulMasterStandPos,
+} from "@/lib/moeSoulMaster";
+import {
+  MOE_WHITE_ANGEL_ROD_CAST_MS,
+  MOE_WHITE_ANGEL_ROD_LINES,
+  MOE_WHITE_ANGEL_ROD_NPC,
+} from "@/lib/moeWhiteAngelRod";
+import {
+  MOE_MINING_PICKUP_VANISH_MS,
+  MOE_MINING_RESPAWN_MS,
+  MOE_MINING_ROCK_HP,
+  MOE_MINING_SWING_MS,
+  MOE_MINING_SWINGS,
+  applyMoeMiningSwing,
+  emptyMoeMiningPickup,
+  createMoeMiningChest,
+  formatMoeMiningBreakNote,
+  moeMiningInReach,
+  rollMoeMiningGem,
+  rollMoeMiningOre,
+  takeMoeMiningPickup,
+} from "@/lib/moeMining";
+import {
   formatMoeExternalSaveFileHint,
   formatMoeExternalSaveFieldHint,
   formatMoeExternalSaveLocationBlock,
@@ -85,14 +115,17 @@ import MoeAgeHubHousePanel from "@/components/MoeAgeHubHousePanel";
 import MoeMacroSessionTimer from "@/components/MoeMacroSessionTimer";
 import {
   MOE_ALTARS,
+  moeAltarDefById,
   moeAltarDestinationById,
 } from "@/data/moeAltarWarps";
 import { moe3dClampFieldMove } from "@/lib/moe3dFieldColliders";
 import {
+  moe3dAltarWorldPos,
   moe3dDefaultPlayerSpawn,
   moe3dEstimatedTileSize,
   moe3dFindNearbyAltar,
   moe3dSlotSpawnWorld,
+  moe3dSpawnBesideMapAltar,
   moe3dWarpDestSpawnWorld,
 } from "@/lib/moe3dAltarWarp";
 import { MOE_ELVIN_KEIKOKU_MAP_SLOT_ID } from "@/lib/moe3dElvinValleyGlb";
@@ -195,13 +228,34 @@ import MoeCrystalMarker from "@/components/MoeCrystalMarker";
 import MoeNpcDialogue from "@/components/MoeNpcDialogue";
 import MoePetHpWindow from "@/components/MoePetHpWindow";
 import MoePlayerHpWindow from "@/components/MoePlayerHpWindow";
+import MoeTargetWindow from "@/components/MoeTargetWindow";
 import MoePlayerStatusPanel from "@/components/MoePlayerStatusPanel";
 import MoeDuelTimeBarWindow from "@/components/MoeDuelTimeBarWindow";
 import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
 import MoeMergedSkillIconBar from "@/components/MoeMergedSkillIconBar";
 import MoeMergedVerticalSkillPanel from "@/components/MoeMergedVerticalSkillPanel";
-import MoeTrainingVerticalSkillPanel from "@/components/MoeTrainingVerticalSkillPanel";
-import MoeTrainingSkillIconBar from "@/components/MoeTrainingSkillIconBar";
+import {
+  copyMoeSkillIntoSet,
+  emptyMoeSkillSetCopies,
+  loadMoeSkillSetCopies,
+  saveMoeSkillSetCopies,
+  swapMoeSkillSetSlots,
+} from "@/lib/moeSkillSetCopies";
+import {
+  emptyMoeSkillMacros,
+  loadMoeSkillMacros,
+  saveMoeSkillMacros,
+  setMoeSkillMacroSkill,
+  setMoeSkillMacroWait,
+  planMoeSkillMacroRun,
+  MOE_SKILL_MACRO_COUNT,
+} from "@/lib/moeSkillMacro";
+import MoeSkillMacroPanel from "@/components/MoeSkillMacroPanel";
+import {
+  buildDragonTrainingVerticalSlots,
+  buildPhoenixTrainingVerticalSlots,
+} from "@/lib/moeTrainingSkillVerticalUi";
+import { renderPetSkillIcon } from "@/lib/moePetSkillIcons";
 import {
   loadMoeSkillPanelVisibility,
   MOE_SKILL_PANEL_IDS,
@@ -268,7 +322,6 @@ import { buildPlayerDragonSkillById } from "@/data/moePlayerDragonSkills";
 import {
   beginKintounApproach,
   kintounPetRideSlot,
-  lerpKintounPetRideSlot,
   moeKintounMoveSpeedMult,
   tickKintounApproach,
   tickKintounFlyOffset,
@@ -411,6 +464,7 @@ import {
   updateMoeDevSnapshot,
 } from "@/lib/moe";
 import MoeItemBox from "@/components/MoeItemBox";
+import MoeMiningPickupWindow from "@/components/MoeMiningPickupWindow";
 import {
   createMoeFieldTreasureDrop,
   moeTreasureDropPositionNearEnemy,
@@ -1212,6 +1266,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [trainingSkillMode, setTrainingSkillMode] = useState(
     MOE_TRAINING_SKILL_MODE_ALL
   );
+  const [trainingPracticeLevels, setTrainingPracticeLevels] = useState({
+    phoenix: 0,
+    dragon: 0,
+  });
+  const [skillSetCopies, setSkillSetCopies] = useState(emptyMoeSkillSetCopies);
+  const [skillMacros, setSkillMacros] = useState(emptyMoeSkillMacros);
+  const [showSkillMacro, setShowSkillMacro] = useState(false);
+  const [skillMacroIndex, setSkillMacroIndex] = useState(0);
+  const skillMacroIndexRef = useRef(0);
+  const skillMacroRunTimerRef = useRef(null);
+  const runSkillMacroRef = useRef((_index) => {});
+  skillMacroIndexRef.current = skillMacroIndex;
   const [skillSuccess100, setSkillSuccess100] = useState(false);
   const [skillPanelVisibility, setSkillPanelVisibility] = useState(() =>
     loadMoeSkillPanelVisibility()
@@ -1251,6 +1317,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   );
   const playerSkillUnlocksRef = useRef(playerSkillUnlocks);
   const [gustavResetPromptOpen, setGustavResetPromptOpen] = useState(false);
+  const [soulMasterPromptOpen, setSoulMasterPromptOpen] = useState(false);
   const pendingGustavDuelIdRef = useRef(null);
   /** ペットLvアップだけ大きく長めに表示（通常トーストに埋もれないようにする） */
   const [petLevelUpFlash, setPetLevelUpFlash] = useState(null);
@@ -1319,6 +1386,51 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setSkillPanelCollapsed(loadMoeSkillPanelCollapse());
     setEnemyRespawnSeconds(loadMoeEnemyRespawnSeconds());
     setPlayerLookAhead(loadMoePlayerLookAhead());
+    setSkillSetCopies(loadMoeSkillSetCopies());
+    setSkillMacros(loadMoeSkillMacros());
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (skillMacroRunTimerRef.current != null) {
+        window.clearTimeout(skillMacroRunTimerRef.current);
+      }
+      if (soulWarpTimerRef.current != null) {
+        window.clearTimeout(soulWarpTimerRef.current);
+      }
+      if (petSoulReturnTimerRef.current != null) {
+        window.clearTimeout(petSoulReturnTimerRef.current);
+      }
+      if (angelRodTimerRef.current != null) {
+        window.clearTimeout(angelRodTimerRef.current);
+      }
+      if (miningSwingTimerRef.current != null) {
+        window.clearTimeout(miningSwingTimerRef.current);
+      }
+      if (miningRespawnTimerRef.current != null) {
+        window.clearTimeout(miningRespawnTimerRef.current);
+      }
+      if (miningPickupVanishTimerRef.current != null) {
+        window.clearTimeout(miningPickupVanishTimerRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const refresh = () => {
+      setTrainingPracticeLevels({
+        phoenix: loadPlayerExperienceTrack("phoenix").level ?? 0,
+        dragon: loadPlayerExperienceTrack("dragon").level ?? 0,
+      });
+    };
+    refresh();
+    const id = window.setInterval(refresh, 2000);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("storage", refresh);
+    };
   }, []);
 
   const toggleSkillPanelCollapse = useCallback((panelId) => {
@@ -1371,6 +1483,35 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   /** 3D: ペットに RUN アニメを出す（走行追従中） */
   const petRunAnimRef = useRef(false);
   const petPosRef = useRef(initial3dSpawn?.pet ?? { x: 100, y: 100 });
+  /** 死亡→復活で 3D の停止ポーズを解く */
+  const petLifeEpochRef = useRef(0);
+  /** 竜巻ワープ { until, standX, standY } */
+  const soulWarpRef = useRef(null);
+  const soulWarpTimerRef = useRef(null);
+  /** 魂が戻る演出 { started, until } */
+  const petSoulReturnRef = useRef(null);
+  const petSoulReturnTimerRef = useRef(null);
+  /** 天使の息吹 { started, until } */
+  const angelRodFxRef = useRef(null);
+  const angelRodTimerRef = useRef(null);
+  const [angelRodDialogue, setAngelRodDialogue] = useState(null);
+  const miningRockRef = useRef({
+    hp: MOE_MINING_ROCK_HP,
+    hpMax: MOE_MINING_ROCK_HP,
+    x: 0,
+    y: 0,
+    ready: false,
+  });
+  const miningSwingTimerRef = useRef(null);
+  const miningRespawnTimerRef = useRef(null);
+  const miningLockRef = useRef(false);
+  const miningPickupVanishTimerRef = useRef(null);
+  const [miningBusy, setMiningBusy] = useState(false);
+  const [miningBreakNote, setMiningBreakNote] = useState(null);
+  const miningPickupRef = useRef(emptyMoeMiningPickup());
+  const miningChestRef = useRef(null);
+  const [miningPickup, setMiningPickup] = useState(emptyMoeMiningPickup);
+  const [miningPickupIndex, setMiningPickupIndex] = useState(null);
 
   const snapPet3dNearPlayer = useCallback((halfW, halfD, playerPos = null) => {
     const hw = halfW ?? MOE_3D_HALF_W;
@@ -1805,6 +1946,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     setToast("🪽 リボーンワンスで復活！");
     playSfx("heal");
   }, [flushPersistActivePet, pushWorldHealPopup]);
+
+  const castWorshipNature = useCallback(() => {
+    if (angelRodDialogue || angelRodFxRef.current) return;
+    const result = applyMoeWorshipNature(petRef.current);
+    if (!result.ok) {
+      setToast(
+        result.reason === "alive"
+          ? "ペットはまだ生きています"
+          : "生き返らせるペットがいません"
+      );
+      return;
+    }
+    setAngelRodDialogue({ lineIndex: 0 });
+  }, [angelRodDialogue]);
 
   /** ワールド座標：技② EXP / Lvアップ（プレイヤー付近） */
   const triggerSkill2LevelUpFlash = useCallback((level) => {
@@ -2875,6 +3030,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const healAmt = skill.healFlat ?? 50;
         const mpCost = skill.mpCost ?? 0;
         setPet((prev) => {
+          if (moePetIsDead(prev)) return prev;
           if (mpCost > 0 && prev.mp < mpCost) return prev;
           const next = moeApplyFlatPetHpBonus(
             {
@@ -2893,6 +3049,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       } else if (skill.type === "heal") {
         const ratio = skill.healRatio ?? 1;
         setPet((prev) => {
+          if (moePetIsDead(prev)) return prev;
           const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
           const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
           const next = { ...prev, hp: nextHp };
@@ -3264,6 +3421,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (skill.type === "heal") {
         const ratio = skill.healRatio ?? 0.85;
         setPet((prev) => {
+          if (moePetIsDead(prev)) return prev;
           const healAmt = Math.max(1, Math.floor(prev.hpMax * ratio));
           const nextHp = Math.min(prev.hpMax, prev.hp + healAmt);
           const next = {
@@ -4258,11 +4416,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       sitRegenAccRef.current += dt;
       if (sitRegenAccRef.current >= 1) {
         sitRegenAccRef.current = 0;
-        setPet((prev) => ({
+        setPet((prev) => {
+          if (moePetIsDead(prev)) return prev;
+          return {
             ...prev,
-          hp: Math.min(prev.hpMax, prev.hp + PET_SIT_REGEN_HP),
-          mp: Math.min(prev.mpMax, prev.mp + PET_SIT_REGEN_MP),
-        }));
+            hp: Math.min(prev.hpMax, prev.hp + PET_SIT_REGEN_HP),
+            mp: Math.min(prev.mpMax, prev.mp + PET_SIT_REGEN_MP),
+          };
+        });
       }
     };
 
@@ -4281,6 +4442,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       regenAccRef.current -= MOE_PLAYER_REGEN_TICK_INTERVAL_SEC;
 
       setPet((prev) => {
+        if (moePetIsDead(prev)) return prev;
         if (
           prev.hp >= prev.hpMax &&
           (MOE_PLAYER_REGEN_MP_PER_TICK <= 0 || prev.mp >= prev.mpMax)
@@ -4374,7 +4536,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (gain <= 0) return;
 
       setPet((prev) => {
-        if (prev.hp >= prev.hpMax) return prev;
+        if (moePetIsDead(prev) || prev.hp >= prev.hpMax) return prev;
         const hpRaw = Math.min(prev.hpMax, prev.hp + gain);
         const hp = petUsesPreciseWikiStats(prev.id)
           ? roundPetStatInternal(hpRaw)
@@ -4403,6 +4565,17 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     };
 
     const tickPet3d = (speed, dt, now) => {
+      if (
+        soulWarpRef.current != null &&
+        performance.now() < soulWarpRef.current.until
+      ) {
+        petRunAnimRef.current = false;
+        return;
+      }
+      if (moePetIsDead(petRef.current)) {
+        petRunAnimRef.current = false;
+        return;
+      }
       if (!map3dReadyRef.current || !pet3dSpawnSyncedRef.current) return;
       const cel = petTenthCelebrationRef.current;
       if (cel?.active) {
@@ -4425,6 +4598,19 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       }
       const cmd = petCommandRef.current;
       tickSitRegen(cmd, dt);
+      if (
+        kintounOnRef.current &&
+        (cmd === "follow" || cmd === "auto") &&
+        !duelRef.current
+      ) {
+        const slot = kintounPetRideSlot(
+          playerPosRef.current.x,
+          playerPosRef.current.y,
+          playerFacingRef.current
+        );
+        petPosRef.current = { x: slot.x, y: slot.y };
+        return;
+      }
       const result = advancePetFieldPosition({
         pos: { ...petPosRef.current },
         cmd,
@@ -4451,23 +4637,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         petPosRef.current = { x: duelNow.slotX, y: duelNow.slotY };
       } else if (
         (cmd === "follow" || cmd === "auto") &&
-        !duelNow
+        !duelNow &&
+        skateboardOnRef.current
       ) {
-        if (kintounOnRef.current) {
-          const slot = kintounPetRideSlot(
-            playerPosRef.current.x,
-            playerPosRef.current.y,
-            playerFacingRef.current
-          );
-          const snapped = lerpKintounPetRideSlot(
-            petPosRef.current.x,
-            petPosRef.current.y,
-            slot.x,
-            slot.y,
-            dt
-          );
-          petPosRef.current = { x: snapped.x, y: snapped.y };
-        } else if (skateboardOnRef.current) {
           const slot = skateboardPetRideSlot(
             playerPosRef.current.x,
             playerPosRef.current.y,
@@ -4481,7 +4653,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             dt
           );
           petPosRef.current = { x: snapped.x, y: snapped.y };
-        }
       }
     };
 
@@ -4560,7 +4731,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       const k = keysRef.current;
       let inputX = 0;
       let inputZ = 0;
-      if (!campfireRestingRef.current) {
+      const soulWarping =
+        soulWarpRef.current != null &&
+        performance.now() < soulWarpRef.current.until;
+      if (!campfireRestingRef.current && !soulWarping) {
         if (k.up) inputZ -= 1;
         if (k.down) inputZ += 1;
         if (k.left) inputX -= 1;
@@ -4960,6 +5134,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
           const petBefore = petPosRef.current;
           let petResult;
+          if (moePetIsDead(petRef.current)) {
+            petResult = { x: petBefore.x, y: petBefore.y, reachedApproach: false };
+          } else {
           const cel = petTenthCelebrationRef.current;
           if (cel?.active) {
             const adv = advancePetTenthCelebration(
@@ -4993,6 +5170,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
               setTargetEnemyId: (id) => scheduleTargetEnemyIdRef.current(id),
               startDuelWithEnemyRef,
             });
+          }
           }
           if (
             petResult.reachedApproach &&
@@ -5097,7 +5275,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       if (cur.enemyId === id) return;
       return;
     }
-      const target = enemiesRef.current.find((en) => en.id === id);
+      if (moePetIsDead(petRef.current)) {
+      setToast("ペットは倒れています。ホワイトエンジェルロッドで生き返らせてください");
+      return;
+    }
+    const target = enemiesRef.current.find((en) => en.id === id);
     if (!target || target.hp <= 0) return;
       const ext = moe3dCombatExtentsRef.current;
       const slot = is3d
@@ -5379,6 +5561,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   }, [duel?.phase, duel?.enemyId, duel?.petChargeSec, duel?.enemyChargeSec, endActiveDuel]);
 
   const handleHeal = useCallback((amount, cooldownKey = null, cooldownSec = 0) => {
+    if (moePetIsDead(petRef.current)) {
+      setToast("ペットは倒れています。ホワイトエンジェルロッドで生き返らせてください");
+      return;
+    }
     const now = Date.now();
     if (cooldownKey) {
       if (now < healCdUntilRef.current[cooldownKey]) return;
@@ -5395,6 +5581,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     }
     playSfx("heal");
     setPet((prev) => {
+      if (moePetIsDead(prev)) return prev;
       const raw = Math.min(prev.hpMax, prev.hp + amount);
       const hp = petUsesPreciseWikiStats(prev.id)
         ? roundPetStatInternal(raw)
@@ -5561,6 +5748,158 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       return true;
     },
     [snapPet3dNearPlayer]
+  );
+
+  const goSoulMaster = useCallback(() => {
+    if (!is3d) return;
+    if (duelRef.current) {
+      setToast("戦闘中はたましいのマスターへ行けません");
+      return;
+    }
+    if (soulWarpRef.current && performance.now() < soulWarpRef.current.until) {
+      return;
+    }
+    const world = worldRef.current;
+    const altar = moeAltarDefById(MOE_SOUL_MASTER_ALTAR_ID);
+    const altarPos = moe3dAltarWorldPos(altar, world?.tileWidth, world?.tileDepth, {
+      halfW: world?.halfW,
+      halfD: world?.halfD,
+    });
+    const stand = moeSoulMasterStandPos(altarPos);
+    if (!stand) {
+      setToast("たましいのマスターの部屋が見つかりません");
+      return;
+    }
+    soulWarpRef.current = {
+      until: performance.now() + MOE_SOUL_WARP_MS,
+      standX: stand.x,
+      standY: stand.y,
+    };
+    setToast("🌀 竜巻が巻き上がる…");
+    if (soulWarpTimerRef.current != null) {
+      window.clearTimeout(soulWarpTimerRef.current);
+    }
+    soulWarpTimerRef.current = window.setTimeout(() => {
+      soulWarpTimerRef.current = null;
+      const warp = soulWarpRef.current;
+      soulWarpRef.current = null;
+      if (!warp) return;
+      const ok = warpPlayer3d(
+        warp.standX,
+        warp.standY,
+        "🕯️ たましいのマスターの部屋へ来た"
+      );
+      if (ok) playSfx("heal");
+    }, MOE_SOUL_WARP_MS);
+  }, [is3d, warpPlayer3d]);
+
+  const beginWhiteAngelRodCast = useCallback(() => {
+    setAngelRodDialogue(null);
+    if (
+      angelRodFxRef.current &&
+      performance.now() < angelRodFxRef.current.until
+    ) {
+      return;
+    }
+    const result = applyMoeWorshipNature(petRef.current);
+    if (!result.ok) {
+      setToast(
+        result.reason === "alive"
+          ? "ペットはまだ生きています"
+          : "生き返らせるペットがいません"
+      );
+      return;
+    }
+    const started = performance.now();
+    angelRodFxRef.current = {
+      started,
+      until: started + MOE_WHITE_ANGEL_ROD_CAST_MS,
+    };
+    setToast("✨ 天使の息吹…");
+    if (angelRodTimerRef.current != null) {
+      window.clearTimeout(angelRodTimerRef.current);
+    }
+    angelRodTimerRef.current = window.setTimeout(() => {
+      angelRodTimerRef.current = null;
+      angelRodFxRef.current = null;
+      const done = applyMoeWorshipNature(petRef.current);
+      if (!done.ok) {
+        setToast("ペットはまだ生きています");
+        return;
+      }
+      const next = done.pet;
+      petRef.current = next;
+      petStateRef.current = next;
+      petCommandRef.current = "follow";
+      petLifeEpochRef.current += 1;
+      setPet(next);
+      flushPersistActivePet(next);
+      cancelActiveDuel();
+      const pos = petPosRef.current;
+      const petName = MOE_PET_DATA[next.id]?.name ?? "ペット";
+      pushWorldHealPopup(pos.x, pos.y, next.hp);
+      battleLogApiRef.current?.pushLine(
+        `${petName}が天使の息吹で生き返った！`,
+        MOE_BATTLE_LOG_COLOR.heal
+      );
+      const world = worldRef.current;
+      const altarSpawn =
+        world?.mode3d && world.tileWidth && world.tileDepth
+          ? moe3dSpawnBesideMapAltar("bisk", world.tileWidth, world.tileDepth, {
+              halfW: world.halfW,
+              halfD: world.halfD,
+            })
+          : null;
+      if (altarSpawn) {
+        warpPlayer3d(altarSpawn.x, altarSpawn.y, "🪽 アルターへ帰還した");
+      } else {
+        setToast("🪽 ペットが生き返った");
+      }
+      playSfx("heal");
+    }, MOE_WHITE_ANGEL_ROD_CAST_MS);
+  }, [cancelActiveDuel, flushPersistActivePet, pushWorldHealPopup, warpPlayer3d]);
+
+  const finishSoulMasterRevive = useCallback(() => {
+    petSoulReturnRef.current = null;
+    const result = applyMoeWorshipNature(petRef.current);
+    if (!result.ok) {
+      setToast("ペットはまだ生きています");
+      return;
+    }
+    petRef.current = result.pet;
+    petStateRef.current = result.pet;
+    petCommandRef.current = "follow";
+    petLifeEpochRef.current += 1;
+    setPet(result.pet);
+    flushPersistActivePet(result.pet);
+    setToast("🕯️ 光が戻って、ペットが生き返った");
+    playSfx("heal");
+  }, [flushPersistActivePet]);
+
+  const answerSoulMaster = useCallback(
+    (yes) => {
+      setSoulMasterPromptOpen(false);
+      if (!yes) return;
+      if (!moePetIsDead(petRef.current)) {
+        setToast("ペットはまだ生きています");
+        return;
+      }
+      if (petSoulReturnRef.current) return;
+      const started = performance.now();
+      petSoulReturnRef.current = {
+        started,
+        until: started + MOE_SOUL_RETURN_MS,
+      };
+      setToast("ぽよぽよぽよーん…");
+      if (petSoulReturnTimerRef.current != null) {
+        window.clearTimeout(petSoulReturnTimerRef.current);
+      }
+      petSoulReturnTimerRef.current = window.setTimeout(() => {
+        petSoulReturnTimerRef.current = null;
+        finishSoulMasterRevive();
+      }, MOE_SOUL_RETURN_MS);
+    },
+    [finishSoulMasterRevive]
   );
 
   /** SOS — ペットをプレイヤー（またはすぐそば）へ即ワープ */
@@ -5791,6 +6130,184 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     return { selected: true, label: item.label ?? "ホーリーRレコード" };
   }, [itemBoxSelectedIndex]);
 
+  const clearMiningPickupVanish = useCallback(() => {
+    if (miningPickupVanishTimerRef.current != null) {
+      window.clearTimeout(miningPickupVanishTimerRef.current);
+      miningPickupVanishTimerRef.current = null;
+    }
+  }, []);
+
+  const armMiningChestVanish = useCallback(() => {
+    clearMiningPickupVanish();
+    miningPickupVanishTimerRef.current = window.setTimeout(() => {
+      miningPickupVanishTimerRef.current = null;
+      const chest = miningChestRef.current;
+      miningChestRef.current = null;
+      if (chest) {
+        setFieldTreasures((prev) => prev.filter((tr) => tr.id !== chest.id));
+      }
+      miningPickupRef.current = emptyMoeMiningPickup();
+      setMiningPickup(miningPickupRef.current);
+      setMiningPickupIndex(null);
+      setMiningBreakNote(null);
+      setToast("宝は消えた");
+    }, MOE_MINING_PICKUP_VANISH_MS);
+  }, [clearMiningPickupVanish]);
+
+  const closeMiningPickupView = useCallback(() => {
+    miningPickupRef.current = emptyMoeMiningPickup();
+    setMiningPickup(miningPickupRef.current);
+    setMiningPickupIndex(null);
+  }, []);
+
+  const handleMining = useCallback(() => {
+    if (miningLockRef.current) return;
+    const rock = miningRockRef.current;
+    if (!rock.ready) {
+      setToast("岩の場所がまだ決まっていません");
+      return;
+    }
+    if (rock.hp <= 0) {
+      setToast("岩は砕けている");
+      return;
+    }
+    const pl = playerPosRef.current;
+    if (!moeMiningInReach(pl.x, pl.y, rock.x, rock.y)) {
+      setToast("岩の前で採掘してください");
+      return;
+    }
+    miningLockRef.current = true;
+    setMiningBusy(true);
+    let swing = 0;
+    const finish = () => {
+      miningLockRef.current = false;
+      setMiningBusy(false);
+    };
+    const step = () => {
+      miningSwingTimerRef.current = null;
+      swing += 1;
+      const applied = applyMoeMiningSwing(miningRockRef.current.hp);
+      if (applied.broken) {
+        if (miningChestRef.current) {
+          miningRockRef.current.hp = 1;
+          finish();
+          setToast("宝箱がまだあります");
+          playSfx("miningHit");
+          return;
+        }
+        const ore = rollMoeMiningOre();
+        const gem = rollMoeMiningGem();
+        const drops = [
+          { id: ore.id, label: ore.label, emoji: ore.emoji },
+        ];
+        if (gem) {
+          drops.push({
+            id: gem.id,
+            label: gem.label,
+            emoji: gem.emoji,
+            sellGold: gem.sellGold,
+          });
+        }
+        const rockNow = miningRockRef.current;
+        const chest = createMoeMiningChest(
+          fieldTreasureIdRef.current++,
+          rockNow.x + 2.2,
+          rockNow.y,
+          drops
+        );
+        chest.note = formatMoeMiningBreakNote(ore, gem);
+        miningChestRef.current = chest;
+        setFieldTreasures((prev) => [...prev, chest]);
+        playSfx("miningHit");
+        miningRockRef.current.hp = 0;
+        finish();
+        armMiningChestVanish();
+        if (miningRespawnTimerRef.current != null) {
+          window.clearTimeout(miningRespawnTimerRef.current);
+        }
+        miningRespawnTimerRef.current = window.setTimeout(() => {
+          miningRespawnTimerRef.current = null;
+          miningRockRef.current.hp = MOE_MINING_ROCK_HP;
+        }, MOE_MINING_RESPAWN_MS);
+        return;
+      }
+      miningRockRef.current.hp = applied.hp;
+      playSfx("miningHit");
+      setToast(`⛏️ ${swing}回`);
+      if (swing >= MOE_MINING_SWINGS) {
+        finish();
+        return;
+      }
+      miningSwingTimerRef.current = window.setTimeout(step, MOE_MINING_SWING_MS);
+    };
+    step();
+  }, [armMiningChestVanish]);
+
+  const handleMiningChestClick = useCallback((treasureId) => {
+    const chest = miningChestRef.current;
+    if (!chest || chest.id !== treasureId) return;
+    const pl = playerPosRef.current;
+    if (!moeMiningInReach(pl.x, pl.y, chest.x, chest.y)) {
+      setToast("宝箱の前で右クリックしてください");
+      return;
+    }
+    const slots = chest.items.map((item) => item ?? null);
+    miningPickupRef.current = slots;
+    setMiningPickup(slots);
+    const first = slots.findIndex(Boolean);
+    setMiningPickupIndex(first >= 0 ? first : null);
+    setMiningBreakNote(chest.note ?? null);
+    chest.state = "open";
+    setFieldTreasures((prev) =>
+      prev.map((tr) => (tr.id === chest.id ? { ...tr, state: "open" } : tr))
+    );
+  }, []);
+
+  const handleMiningPickupGet = useCallback(() => {
+    const chest = miningChestRef.current;
+    const index = miningPickupIndex;
+    const item = index != null ? miningPickupRef.current[index] : null;
+    if (!chest || !item) {
+      setToast("取る石をクリックしてください");
+      return;
+    }
+    if (!addMoeItemBoxItem(item)) {
+      setToast("アイテムボックスに空きがありません");
+      return;
+    }
+    const taken = takeMoeMiningPickup(miningPickupRef.current, index);
+    miningPickupRef.current = taken.slots;
+    chest.items = taken.slots;
+    setMiningPickup(taken.slots);
+    setMiningPickupIndex(null);
+    setFieldTreasures((prev) =>
+      prev.map((tr) =>
+        tr.id === chest.id ? { ...tr, items: taken.slots } : tr
+      )
+    );
+    setToast(`${item.emoji ?? ""} ${item.label}を手に入れた`.trim());
+    if (!taken.slots.some(Boolean)) {
+      clearMiningPickupVanish();
+      miningChestRef.current = null;
+      setFieldTreasures((prev) => prev.filter((tr) => tr.id !== chest.id));
+      setMiningBreakNote(null);
+    }
+  }, [clearMiningPickupVanish, miningPickupIndex]);
+
+  const handleMiningPickupLeave = useCallback(() => {
+    const chest = miningChestRef.current;
+    closeMiningPickupView();
+    if (!chest) return;
+    chest.state = "closed";
+    chest.vanishAt = Date.now() + MOE_MINING_PICKUP_VANISH_MS;
+    setFieldTreasures((prev) =>
+      prev.map((tr) =>
+        tr.id === chest.id ? { ...tr, state: "closed", vanishAt: chest.vanishAt } : tr
+      )
+    );
+    armMiningChestVanish();
+  }, [armMiningChestVanish, closeMiningPickupView]);
+
   const playerOrderedSkillSlots = useMemo(() => {
     const ninjaById = {
       ninja_shinobiashi: playerSkillIconSlots[0],
@@ -5843,6 +6360,17 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       teleportRecordLabel: teleportRecordCtx.label,
       onHolyRecord: startHolyRecordChant,
       onTeleport: startTeleportChant,
+      onWorshipNature: castWorshipNature,
+      onSoulMaster: goSoulMaster,
+      onMining: handleMining,
+      miningBusy,
+      petDead: moePetIsDead(pet),
+      onEnemyStatSearch: handleEnemyStatSearch,
+      targetEnemy:
+        targetEnemyId != null
+          ? enemies.find((e) => e.id === targetEnemyId && e.hp > 0) ?? null
+          : null,
+      enemyStatSearchOpen,
       onLight: () =>
         handleHeal(
           MOE_PLAYER_HEAL_LIGHT_AMOUNT,
@@ -5877,8 +6405,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     regenActive,
     bananaMilkActive,
     allyTarget,
+    pet.hp,
     pet.mp,
     pet.mpMax,
+    castWorshipNature,
+    goSoulMaster,
+    handleMining,
+    miningBusy,
     playerVitals.mp,
     playerVitals.mpMax,
     shinobiashiOn,
@@ -5898,6 +6431,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     skillChantRemainSec,
     startHolyRecordChant,
     startTeleportChant,
+    handleEnemyStatSearch,
+    targetEnemyId,
+    enemies,
+    enemyStatSearchOpen,
     teleportRecordCtx,
   ]);
 
@@ -6040,7 +6577,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             ? petSkillDelayCdSec[delayKey]
             : null;
         return {
+          slotKey: skill?.id ? `pet:${skill.id}` : null,
           label: skillName || label,
+          icon: skill ? renderPetSkillIcon(skill.name, { size: 22 }) : "·",
           disabled: !skill || locked,
           cooldownSec,
           title: skill
@@ -6133,6 +6672,188 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     ]
   );
 
+  const phoenixVerticalSlots = useMemo(
+    () =>
+      buildPhoenixTrainingVerticalSlots(
+        trainingPracticeLevels.phoenix,
+        activateTrainingSkill,
+        trainingSkillMode
+      ),
+    [trainingPracticeLevels.phoenix, activateTrainingSkill, trainingSkillMode]
+  );
+  const dragonVerticalSlots = useMemo(
+    () =>
+      buildDragonTrainingVerticalSlots(
+        trainingPracticeLevels.dragon,
+        activateTrainingSkill,
+        trainingSkillMode
+      ),
+    [trainingPracticeLevels.dragon, activateTrainingSkill, trainingSkillMode]
+  );
+
+  const skillCopyCatalog = useMemo(
+    () => ({
+      player1: playerOrderedSkillSlots,
+      pet: petVerticalSkillSlots,
+      phoenix: phoenixVerticalSlots,
+      dragon: dragonVerticalSlots,
+    }),
+    [
+      playerOrderedSkillSlots,
+      petVerticalSkillSlots,
+      phoenixVerticalSlots,
+      dragonVerticalSlots,
+    ]
+  );
+
+  const resolveSkillSetRow = useCallback(
+    (refs) =>
+      refs.map((ref) => {
+        if (!ref) {
+          return {
+            slotKey: null,
+            label: "空き",
+            icon: "·",
+            disabled: true,
+            reorderable: true,
+            title: "長押ししたスキルをここにドロップしてコピー",
+          };
+        }
+        if (ref.source === "macro") {
+          const index = Number(String(ref.slotKey).slice("macro:".length));
+          return {
+            slotKey: `macro:${index}`,
+            label: `マクロ${index + 1}`,
+            icon: `${index + 1}`,
+            reorderable: true,
+            title: `マクロ${index + 1}を実行`,
+            onClick: () => runSkillMacroRef.current(index),
+          };
+        }
+        const found = (skillCopyCatalog[ref.source] || []).find(
+          (slot) => slot?.slotKey === ref.slotKey
+        );
+        if (!found) {
+          return {
+            slotKey: null,
+            label: "—",
+            icon: "·",
+            disabled: true,
+            reorderable: true,
+            title: "元のスキルがありません",
+          };
+        }
+        return { ...found, reorderable: true };
+      }),
+    [skillCopyCatalog]
+  );
+
+  const skillSet1Slots = useMemo(
+    () => resolveSkillSetRow(skillSetCopies.set1),
+    [resolveSkillSetRow, skillSetCopies.set1]
+  );
+  const skillSet2Slots = useMemo(
+    () => resolveSkillSetRow(skillSetCopies.set2),
+    [resolveSkillSetRow, skillSetCopies.set2]
+  );
+
+  const copySkillIntoSet = useCallback((source, slotKey, toPanel, toIndex) => {
+    if (toPanel === "macro") {
+      if (toIndex !== 0 && toIndex !== 2) return;
+      setSkillMacros((prev) => {
+        const next = setMoeSkillMacroSkill(
+          prev,
+          skillMacroIndexRef.current,
+          toIndex,
+          { source, slotKey }
+        );
+        saveMoeSkillMacros(next);
+        return next;
+      });
+      return;
+    }
+    if (toPanel !== "set1" && toPanel !== "set2") return;
+    setSkillSetCopies((prev) => {
+      const next = copyMoeSkillIntoSet(prev, toPanel, toIndex, {
+        source,
+        slotKey,
+      });
+      saveMoeSkillSetCopies(next);
+      return next;
+    });
+  }, []);
+
+  const pickSkillMacroWait = useCallback((sec) => {
+    setSkillMacros((prev) => {
+      const next = setMoeSkillMacroWait(prev, skillMacroIndexRef.current, sec);
+      saveMoeSkillMacros(next);
+      return next;
+    });
+  }, []);
+
+  const runSkillMacro = useCallback(
+    (index) => {
+      const plan = planMoeSkillMacroRun(skillMacros[index]);
+      if (!plan) {
+        setToast("マクロに技2つと待ち時間を入れてください");
+        return;
+      }
+      const findSlot = (ref) =>
+        (skillCopyCatalog[ref.source] || []).find(
+          (slot) => slot?.slotKey === ref.slotKey
+        );
+      const first = findSlot(plan.skillA);
+      const second = findSlot(plan.skillB);
+      if (typeof first?.onClick !== "function" || typeof second?.onClick !== "function") {
+        setToast("マクロの技が見つかりません");
+        return;
+      }
+      if (skillMacroRunTimerRef.current != null) {
+        window.clearTimeout(skillMacroRunTimerRef.current);
+        skillMacroRunTimerRef.current = null;
+      }
+      first.onClick();
+      setToast(
+        `マクロ${index + 1}：${first.label || "技"} → ${plan.waitSec}秒 → ${second.label || "技"}`
+      );
+      skillMacroRunTimerRef.current = window.setTimeout(() => {
+        skillMacroRunTimerRef.current = null;
+        second.onClick();
+      }, plan.waitSec * 1000);
+    },
+    [skillMacros, skillCopyCatalog, setToast]
+  );
+  runSkillMacroRef.current = runSkillMacro;
+
+  const skillMacroRunSlots = useMemo(
+    () =>
+      Array.from({ length: MOE_SKILL_MACRO_COUNT }, (_, i) => ({
+        label: `マクロ${i + 1}`,
+        icon: `${i + 1}`,
+        slotKey: `macro:${i}`,
+        title: `マクロ${i + 1}を実行。長押しでセットへコピー`,
+        onClick: () => runSkillMacro(i),
+        reorderable: false,
+      })),
+    [runSkillMacro]
+  );
+
+  const swapSkillSet1 = useCallback((from, to) => {
+    setSkillSetCopies((prev) => {
+      const next = swapMoeSkillSetSlots(prev, "set1", from, to);
+      saveMoeSkillSetCopies(next);
+      return next;
+    });
+  }, []);
+
+  const swapSkillSet2 = useCallback((from, to) => {
+    setSkillSetCopies((prev) => {
+      const next = swapMoeSkillSetSlots(prev, "set2", from, to);
+      saveMoeSkillSetCopies(next);
+      return next;
+    });
+  }, []);
+
   const mergedSkillPanelProps = {
     showPlayer: is3d,
     petLabel: activePetSkillTitle,
@@ -6147,15 +6868,20 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     },
     player1: {
       slots: playerVerticalSkillSlotsSet1,
-      reorderable: true,
-      onSwapSlots: swapPlayerSkillSlots,
     },
     player2: {
-      slots: playerVerticalSkillSlotsSet2,
+      slots: skillSet1Slots,
+      onSwapSlots: swapSkillSet1,
     },
+    macroSlots: skillMacroRunSlots,
+    onOpenMacroSettings: () => setShowSkillMacro(true),
     player3: {
-      slots: playerVerticalSkillSlotsSet3,
+      slots: skillSet2Slots,
+      onSwapSlots: swapSkillSet2,
     },
+    onCopySkill: copySkillIntoSet,
+    phoenixSlots: phoenixVerticalSlots,
+    dragonSlots: dragonVerticalSlots,
   };
 
   const petSkillIconBarSlots = useMemo(
@@ -6165,7 +6891,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         const key = moePetSkillDelayKey(skill);
         const cooldownSec =
           key && petSkillDelayCdSec[key] > 0 ? petSkillDelayCdSec[key] : null;
-        return { skill, cooldownSec };
+        return { skill, cooldownSec, slotKey: skill.id ? `pet:${skill.id}` : null };
       }),
     [skillIconSlots, petSkillDelayCdSec]
   );
@@ -6179,9 +6905,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       moePetManualSkillLoyaltyOk(pet, petLoyaltyGate100) &&
       isMoePetSkillUsableAtLevel(skill, petCombatLevel, petSkillMode),
     player1Slots: playerOrderedSkillSlots,
-    player2Slots: playerPhoenixOrderedSlots,
-    player3Slots: playerUtilityOrderedSlots,
-    onSwapPlayer1Slots: swapPlayerSkillSlots,
+    player2Slots: skillSet1Slots,
+    player3Slots: skillSet2Slots,
+    macroSlots: skillMacroRunSlots,
+    onOpenMacroSettings: () => setShowSkillMacro(true),
+    phoenixSlots: phoenixVerticalSlots,
+    dragonSlots: dragonVerticalSlots,
+    onSwapSet1: swapSkillSet1,
+    onSwapSet2: swapSkillSet2,
+    onCopySkill: copySkillIntoSet,
   };
 
   const visibleMonsterLineup = useMemo(
@@ -7219,6 +7951,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         barKey: "petBar",
       }
     : null;
+  const targetDuelUi =
+    duel && targetEnemy && duel.enemyId === targetEnemy.id
+      ? {
+          phase: duel.phase,
+          duelRef,
+          barKey: "enemyBar",
+        }
+      : null;
   const trainerExpPct = Math.min(
     100,
     Math.floor(
@@ -7257,6 +7997,36 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     >
       <MoeMacroSessionTimer onFinished={handleMacroTimerFinished} />
       <MoeBattleLogPanel open={showBattleLog} entries={battleLogEntries} />
+      <MoeTargetWindow
+        enemy={
+          targetEnemy
+            ? {
+                emoji: targetEnemy.emoji,
+                name: targetEnemy.name,
+                levelLabel: formatEnemyLevelUi(targetEnemy.level),
+                prefix: targetEnemy.superBoss
+                  ? "◆ "
+                  : targetEnemy.midBoss
+                    ? "★ "
+                    : "",
+                hp: targetEnemy.hp,
+                hpMax: targetEnemy.hpMax,
+              }
+            : null
+        }
+        player={{
+          name: trainerStatus.job ?? "プレイヤー",
+          hp: playerVitals.hp,
+          hpMax: playerVitals.hpMax,
+        }}
+        pet={{
+          emoji: currentPetDisplay.emoji,
+          name: currentPetDisplay.name,
+          hp: pet.hp,
+          hpMax: pet.hpMax,
+        }}
+        duelUi={targetDuelUi}
+      />
       <MoeEnemyStatSearchPanel
         enemy={targetEnemy}
         open={enemyStatSearchOpen}
@@ -7396,6 +8166,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             </div>
         </div>
       )}
+      <MoeMiningPickupWindow
+        slots={miningPickup}
+        selectedIndex={miningPickupIndex}
+        note={miningBreakNote}
+        onSelect={setMiningPickupIndex}
+        onGet={handleMiningPickupGet}
+        onLeave={handleMiningPickupLeave}
+      />
       {skillToast && (
         <div
           className={`pointer-events-none absolute left-1/2 z-[51] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border-2 border-amber-300/90 bg-gradient-to-br from-amber-600 to-orange-700 px-5 py-2.5 text-center text-sm font-bold text-amber-50 shadow-xl whitespace-pre-wrap break-words ${
@@ -7780,7 +8558,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       </MoeFloatingPanelRoot>
       )}
 
-      {/* 縦スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
+      {/* 縦スキル ×4 — 技①②③ / ペット / 鳳凰 / 龍神（←→） */}
       {skillPanelVisibility.vertical1 ? (
         <MoeMergedVerticalSkillPanel
           storageKey={MOE_PANEL_ID_MERGED_SKILL_PANEL_A}
@@ -7806,37 +8584,34 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         />
       ) : null}
 
-      {/* 縦スキル — 鳳凰 / 龍神 修行スキルゲット表 */}
       {is3d && skillPanelVisibility.verticalPhoenix ? (
-        <MoeTrainingVerticalSkillPanel
-          kind="phoenix"
+        <MoeMergedVerticalSkillPanel
           storageKey={MOE_PANEL_ID_PHOENIX_TRAINING_SKILL_PANEL}
-          onActivateSkill={activateTrainingSkill}
-          skillMode={trainingSkillMode}
+          defaultMode="phoenix"
           collapsed={skillPanelCollapsed.verticalPhoenix}
           onClose={() => toggleSkillPanelCollapse("verticalPhoenix")}
           defaultPos={() => ({
             x: 8,
             y: 8,
           })}
+          {...mergedSkillPanelProps}
         />
       ) : null}
       {is3d && skillPanelVisibility.verticalDragon ? (
-        <MoeTrainingVerticalSkillPanel
-          kind="dragon"
+        <MoeMergedVerticalSkillPanel
           storageKey={MOE_PANEL_ID_DRAGON_TRAINING_SKILL_PANEL}
-          onActivateSkill={activateTrainingSkill}
-          skillMode={trainingSkillMode}
+          defaultMode="dragon"
           collapsed={skillPanelCollapsed.verticalDragon}
           onClose={() => toggleSkillPanelCollapse("verticalDragon")}
           defaultPos={() => ({
             x: 8,
             y: 220,
           })}
+          {...mergedSkillPanelProps}
         />
       ) : null}
 
-      {/* 横スキル ×2 — 技①/技②/ペット合体（←→ループ） */}
+      {/* 横スキル ×4 — 技①②③ / ペット / 鳳凰 / 龍神（←→） */}
       {skillPanelVisibility.horizontal1 ? (
         <MoeMergedSkillIconBar
           storageKey={MOE_PANEL_ID_MERGED_ICON_BAR_A}
@@ -7862,33 +8637,30 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         />
       ) : null}
 
-      {/* 横スキル ×2 — 鳳凰 / 龍神 修行スキル */}
       {is3d && skillPanelVisibility.horizontal3 ? (
-        <MoeTrainingSkillIconBar
-          kind="phoenix"
+        <MoeMergedSkillIconBar
           storageKey={MOE_PANEL_ID_PHOENIX_TRAINING_ICON_BAR}
-          onActivateSkill={activateTrainingSkill}
-          skillMode={trainingSkillMode}
+          defaultMode="phoenix"
           collapsed={skillPanelCollapsed.horizontal3}
           onClose={() => toggleSkillPanelCollapse("horizontal3")}
           defaultPos={() => ({
             x: Math.max(8, (window.innerWidth - 380) / 2),
             y: Math.max(8, window.innerHeight - 296),
           })}
+          {...mergedIconBarProps}
         />
       ) : null}
       {is3d && skillPanelVisibility.horizontal4 ? (
-        <MoeTrainingSkillIconBar
-          kind="dragon"
+        <MoeMergedSkillIconBar
           storageKey={MOE_PANEL_ID_DRAGON_TRAINING_ICON_BAR}
-          onActivateSkill={activateTrainingSkill}
-          skillMode={trainingSkillMode}
+          defaultMode="dragon"
           collapsed={skillPanelCollapsed.horizontal4}
           onClose={() => toggleSkillPanelCollapse("horizontal4")}
           defaultPos={() => ({
             x: Math.max(8, (window.innerWidth - 380) / 2),
             y: Math.max(8, window.innerHeight - 368),
           })}
+          {...mergedIconBarProps}
         />
       ) : null}
 
@@ -7978,6 +8750,46 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         npc={MOE_GUSTAV_EVENT_NPC}
       />
 
+      <MoeNpcDialogue
+        open={soulMasterPromptOpen}
+        mode="menu"
+        alignTop
+        menuPrompt={"ソウルマスター\nペットを生き返らせてほしいのか？"}
+        menuActions={[
+          { id: "yes_revive", label: "はい" },
+          { id: "no_revive", label: "いいえ" },
+        ]}
+        onMenuSelect={(id) => answerSoulMaster(id === "yes_revive")}
+        onClose={() => setSoulMasterPromptOpen(false)}
+        petData={currentPetData}
+        npc={{ name: "ソウルマスター", emoji: "🕯️" }}
+      />
+
+      <MoeNpcDialogue
+        open={angelRodDialogue != null}
+        mode="lines"
+        alignTop
+        lines={MOE_WHITE_ANGEL_ROD_LINES}
+        lineIndex={angelRodDialogue?.lineIndex ?? 0}
+        onNext={() =>
+          setAngelRodDialogue((prev) =>
+            prev ? { lineIndex: prev.lineIndex + 1 } : prev
+          )
+        }
+        onComplete={beginWhiteAngelRodCast}
+        onClose={() => {
+          const last = MOE_WHITE_ANGEL_ROD_LINES.length - 1;
+          if ((angelRodDialogue?.lineIndex ?? 0) >= last) {
+            beginWhiteAngelRodCast();
+            return;
+          }
+          setAngelRodDialogue(null);
+        }}
+        completeLabel="閉じる"
+        petData={currentPetData}
+        npc={MOE_WHITE_ANGEL_ROD_NPC}
+      />
+
       <div className="absolute left-3 top-3 z-40 flex max-w-[min(90vw,22rem)] items-start gap-2">
         {is3d ? (
           <MoeField3DCompassHud
@@ -7989,6 +8801,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         ) : null}
         <div className="min-w-0 flex-1">
         {!showSettings ? (
+          <>
           <button
             type="button"
             onClick={() => setShowSettings(true)}
@@ -7998,9 +8811,21 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           >
             設定
           </button>
+          </>
         ) : null}
         </div>
       </div>
+
+      <MoeSkillMacroPanel
+        open={showSkillMacro}
+        onClose={() => setShowSkillMacro(false)}
+        macroIndex={skillMacroIndex}
+        onSelectMacro={setSkillMacroIndex}
+        macros={skillMacros}
+        catalog={skillCopyCatalog}
+        onPickWait={pickSkillMacroWait}
+        onRun={() => runSkillMacro(skillMacroIndex)}
+      />
 
       <MoeFieldSettingsPanel
         open={showSettings}
@@ -9022,7 +9847,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             <button
               type="button"
               onClick={handleAltarOpen}
-              className="rounded-xl border-2 border-sky-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-sky-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-900 active:scale-95"
+              className="rounded-xl border-2 border-sky-300/80 bg-sky-950/80 px-5 py-3.5 text-base font-bold leading-snug text-sky-50 shadow-[0_0_18px_rgba(56,189,248,0.35)] backdrop-blur-sm transition hover:bg-sky-900/80 active:scale-95"
             >
               🌀 アルターで転送する
             </button>
@@ -9032,7 +9857,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                 setTomorrowMemoOpen(true);
                 setAltarMenu(null);
               }}
-              className="rounded-xl border-2 border-violet-400/55 bg-zinc-950/92 px-5 py-2.5 text-sm font-bold leading-snug text-violet-100 shadow-lg backdrop-blur-sm transition hover:bg-violet-950/90 active:scale-95"
+              className="rounded-lg border border-violet-400/35 bg-zinc-950/80 px-3 py-1.5 text-[11px] font-semibold leading-snug text-violet-200/90 shadow-sm backdrop-blur-sm transition hover:bg-violet-950/80 active:scale-95"
             >
               📋 明日やることメモ
             </button>
@@ -9121,12 +9946,14 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerGroundYRef={playerGroundYRef}
           onEnemyClick={(id) => handleEnemySelect(id)}
           onTreasureClick={handleTreasureClick}
+          onMiningChestClick={handleMiningChestClick}
           onPetClick={() => handlePetSelect()}
           onPlayerClick={handlePlayerAllySelect}
           onPetDoubleClick={() => handlePetDoubleClick()}
           onRhodaClick={handleRhodaShrineClick}
           onCashShopClick={handleCashShopNpcClick}
           onPetHouseClick={handlePetHouseClick}
+          onSoulMasterRoomClick={() => setSoulMasterPromptOpen(true)}
           onCampfireClick={openAgeHubCampfireMenu}
           campfireRestActiveRef={campfireRestActiveRef}
           onAltarClick={handleAltarClickById}
@@ -9445,6 +10272,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           playerMoveInputRef={playerMoveInputRef}
           petRunAnimRef={petRunAnimRef}
           petPosRef={petPosRef}
+          petRef={petRef}
+          petLifeEpochRef={petLifeEpochRef}
+          petSoulReturnRef={petSoulReturnRef}
+          whiteAngelRodFxRef={angelRodFxRef}
+          miningRockRef={miningRockRef}
+          soulWarpRef={soulWarpRef}
           petSpawnEpochRef={petSpawnEpochRef}
           petCommandRef={petCommandRef}
           petHoldYawRef={petHoldYawRef}

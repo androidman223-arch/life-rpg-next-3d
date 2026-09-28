@@ -1,17 +1,28 @@
-/** 縦・横スキルパネル — プレイヤー技① / 技② / ペット の表示モード */
+/** 縦・横スキルパネル — 技1 / マクロ / セット1 / セット2 / ペット / 鳳凰 / 龍神 */
 
 export const MOE_SKILL_PANEL_MODE_STORAGE_KEY =
   "life-rpg-moe-skill-panel-mode";
 
-/** @typedef {'player1' | 'player2' | 'player3' | 'pet'} MoeSkillPanelMode */
+/** @typedef {'player1' | 'macro' | 'player2' | 'player3' | 'pet' | 'phoenix' | 'dragon'} MoeSkillPanelMode */
 
-const VALID = new Set(["player1", "player2", "player3", "pet"]);
-
-const ORDER = /** @type {MoeSkillPanelMode[]} */ ([
+const VALID = new Set([
   "player1",
+  "macro",
   "player2",
   "player3",
   "pet",
+  "phoenix",
+  "dragon",
+]);
+
+const ORDER = /** @type {MoeSkillPanelMode[]} */ ([
+  "player1",
+  "macro",
+  "player2",
+  "player3",
+  "pet",
+  "phoenix",
+  "dragon",
 ]);
 
 /**
@@ -57,19 +68,22 @@ export function moeSkillPanelModeStorageKey(panelStorageKey) {
 
 /**
  * @param {string} panelStorageKey
+ * @param {MoeSkillPanelMode} [fallbackMode] パネル未保存のときの開始ページ
  * @returns {MoeSkillPanelMode}
  */
-export function loadMoeSkillPanelModeForPanel(panelStorageKey) {
-  if (typeof window === "undefined") return "pet";
+export function loadMoeSkillPanelModeForPanel(panelStorageKey, fallbackMode) {
+  const fallback = VALID.has(fallbackMode) ? fallbackMode : "pet";
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(
       moeSkillPanelModeStorageKey(panelStorageKey)
     );
     if (VALID.has(raw)) return raw;
+    if (VALID.has(fallbackMode)) return fallbackMode;
     const legacy = window.localStorage.getItem(MOE_SKILL_PANEL_MODE_STORAGE_KEY);
     return VALID.has(legacy) ? legacy : "pet";
   } catch {
-    return "pet";
+    return fallback;
   }
 }
 

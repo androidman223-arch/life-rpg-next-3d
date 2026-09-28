@@ -13,6 +13,7 @@ import {
   moePetIsStuckDebugLv100RitualExp,
 } from "@/data/moePetExpTable";
 import { getMysteryDragonMaxHpBonus } from "@/data/moePhoenixDragon";
+import { clampLoadedMoePetHp, moePetIsDead } from "@/lib/moePetWorshipNature";
 
 const STORAGE_KEY = "life-rpg-moe-pet-progress";
 const DEBUG_SNAPSHOT_KEY = "life-rpg-moe-pet-debug-snapshot";
@@ -263,14 +264,12 @@ export function petFromDebugSnapshot(petId, snapshot, pos = {}) {
   let hp = snapshot.hp;
   let mp = snapshot.mp;
   if (precise) {
-    hp = roundPetStatInternal(
-      Math.min(hpMax, Math.max(0.01, Number.isFinite(hp) ? hp : hpMax))
-    );
+    hp = clampLoadedMoePetHp(hp, hpMax, true, roundPetStatInternal);
     mp = roundPetStatInternal(
       Math.min(mpMax, Math.max(0, Number.isFinite(mp) ? mp : mpMax))
     );
   } else {
-    hp = Math.min(hpMax, Math.max(1, Math.floor(hp) || hpMax));
+    hp = clampLoadedMoePetHp(hp, hpMax, false);
     mp = Math.min(mpMax, Math.max(0, Math.floor(mp) ?? mpMax));
   }
   return {
@@ -389,14 +388,12 @@ export function petFromSaveSlot(petId, slot) {
   let hp = Number(slot.hp);
   let mp = Number(slot.mp);
   if (precise) {
-    hp = roundPetStatInternal(
-      Math.min(hpMax, Math.max(0.01, Number.isFinite(hp) ? hp : hpMax))
-    );
+    hp = clampLoadedMoePetHp(hp, hpMax, true, roundPetStatInternal);
     mp = roundPetStatInternal(
       Math.min(mpMax, Math.max(0, Number.isFinite(mp) ? mp : mpMax))
     );
   } else {
-    hp = Math.min(hpMax, Math.max(1, Math.floor(hp) || hpMax));
+    hp = clampLoadedMoePetHp(hp, hpMax, false);
     mp = Math.min(mpMax, Math.max(0, Math.floor(mp) ?? mpMax));
   }
   return {
@@ -431,6 +428,7 @@ export function loadInitialMoePetFromStorage() {
 /** フィールド再入場（リロード）時：HP/MP を MAX まで回復 */
 export function fullHealMoePetFieldState(pet) {
   if (!pet) return pet;
+  if (moePetIsDead(pet)) return pet;
   const hpMax = pet.hpMax ?? 1;
   const mpMax = pet.mpMax ?? 0;
   const precise = petUsesPreciseWikiStats(pet.id);

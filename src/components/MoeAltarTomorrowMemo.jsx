@@ -73,7 +73,9 @@ export default function MoeAltarTomorrowMemo({
         type="button"
         onClick={togglePanel}
         aria-expanded={memo.panelOpen}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-violet-900/35 active:scale-[0.99]"
+        className={`flex w-full items-center justify-between gap-2 text-left transition hover:bg-violet-900/35 active:scale-[0.99] ${
+          compact ? "px-3 py-1.5" : "px-4 py-2.5"
+        }`}
       >
         <span className="min-w-0">
           <span className="block text-[10px] font-semibold uppercase tracking-wider text-violet-300/85">
@@ -81,7 +83,7 @@ export default function MoeAltarTomorrowMemo({
           </span>
           <span
             className={`block font-bold text-violet-50 ${
-              compact ? "text-sm" : "text-base"
+              compact ? "text-xs" : "text-base"
             }`}
           >
             📋 明日やることメモ

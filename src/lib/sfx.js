@@ -3,7 +3,7 @@
  *
  * 差し替え: public/sfx/<名前>.mp3 を置くと HTMLAudio で再生を試み、
  * 失敗時だけ合成音にフォールバックします。
- * petAttack, enemyDefeated, levelUp, enemyHit, petDefeated, heal, duelEngage, combatReady
+ * petAttack, enemyDefeated, levelUp, enemyHit, petDefeated, heal, duelEngage, combatReady, miningHit
  */
 
 const FILE_PREFIX = "/sfx/";
@@ -16,6 +16,7 @@ const FILE_KINDS = new Set([
   "heal",
   "duelEngage",
   "combatReady",
+  "miningHit",
 ]);
 
 /** 404 などで毎回試行しない */
@@ -80,7 +81,7 @@ function tryPlayFile(kind, onFail) {
 }
 
 /**
- * @param {"petAttack"|"enemyDefeated"|"levelUp"|"enemyHit"|"petDefeated"|"heal"|"duelEngage"|"combatReady"} kind
+ * @param {"petAttack"|"enemyDefeated"|"levelUp"|"enemyHit"|"petDefeated"|"heal"|"duelEngage"|"combatReady"|"miningHit"} kind
  */
 export function playSfx(kind) {
   if (typeof window === "undefined" || reducedMotion()) return;
@@ -206,6 +207,33 @@ function playSfxSynth(kind) {
       connectMaster(g, 0.22);
       o.start(t0);
       o.stop(t0 + 0.07);
+      break;
+    }
+    case "miningHit": {
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(980, t0);
+      o.frequency.exponentialRampToValueAtTime(240, t0 + 0.05);
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.07);
+      o.connect(g);
+      connectMaster(g, 0.2);
+      o.start(t0);
+      o.stop(t0 + 0.08);
+      const o2 = c.createOscillator();
+      const g2 = c.createGain();
+      o2.type = "triangle";
+      o2.frequency.setValueAtTime(1860, t0);
+      o2.frequency.exponentialRampToValueAtTime(520, t0 + 0.04);
+      g2.gain.setValueAtTime(0.001, t0);
+      g2.gain.exponentialRampToValueAtTime(0.1, t0 + 0.002);
+      g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.06);
+      o2.connect(g2);
+      connectMaster(g2, 0.16);
+      o2.start(t0);
+      o2.stop(t0 + 0.07);
       break;
     }
     case "combatReady": {

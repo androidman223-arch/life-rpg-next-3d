@@ -9,6 +9,7 @@ import {
   clearMoePetPoisonParalysis,
   petHasMoeAilment,
 } from "@/lib/moePhoenixPlayerSkill";
+import { moePetIsDead } from "@/lib/moePetWorshipNature";
 
 /** ライトヒーリング級（プレイヤー回復UIと同量） */
 export const ATRUM_HEAL_LOW = 30;
@@ -111,6 +112,10 @@ export function activateAtrumPetSkill(skill, ctx) {
   if (!skill) return { handled: false };
 
   const pet = ctx.petRef.current;
+
+  if (moePetIsDead(pet)) {
+    return { handled: true, toast: "ペットは倒れています" };
+  }
 
   if (skill.id === "atrum_mana_amp") {
     if (!canUseAtrumManaAmp(pet)) {

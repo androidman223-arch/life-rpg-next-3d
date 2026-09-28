@@ -102,6 +102,9 @@ const VARIANTS = {
  *   headerExtra?: React.ReactNode,
  *   reorderable?: boolean,
  *   onSwapSlots?: (from: number, to: number) => void,
+ *   dragPanelId?: string,
+ *   dragMode?: 'reorder' | 'copy' | 'off',
+ *   onCopySlot?: (from: number, toPanel: string, toIndex: number) => void,
  *   layoutInheritFrom?: string[],
  *   onClose?: () => void,
  *   collapsed?: boolean,
@@ -128,6 +131,9 @@ export default function MoeVerticalSkillPanel({
   headerExtra = null,
   reorderable = false,
   onSwapSlots,
+  dragPanelId = "",
+  dragMode = "off",
+  onCopySlot,
   layoutInheritFrom,
   onClose,
   collapsed = false,
@@ -149,8 +155,12 @@ export default function MoeVerticalSkillPanel({
   const { layout: panelLayout, onResizePointerDown } =
     useMoeVerticalSkillPanelLayout(storageKey, layoutInheritFrom);
 
-  const canReorder = reorderable && typeof onSwapSlots === "function";
-  const { bindSlot } = useMoeSkillSlotSwap(onSwapSlots ?? (() => {}));
+  const canReorder = dragMode === "reorder" && typeof onSwapSlots === "function";
+  const { bindSlot } = useMoeSkillSlotSwap(onSwapSlots ?? (() => {}), {
+    panelId: dragPanelId,
+    mode: dragMode === "copy" ? "copy" : "reorder",
+    onCopy: onCopySlot,
+  });
 
   const theme = VARIANTS[variant] ?? VARIANTS.amber;
 
@@ -180,7 +190,7 @@ export default function MoeVerticalSkillPanel({
       >
         {headerExtra ? (
           <div
-            className={`relative sticky top-0 z-10 min-h-5 shrink-0 cursor-grab touch-none border-b border-white/15 pl-5 active:cursor-grabbing ${theme.headerBar} ${theme.header}`}
+            className={`relative sticky top-0 z-10 h-9 shrink-0 cursor-grab touch-none overflow-hidden border-b border-white/15 pl-5 active:cursor-grabbing ${theme.headerBar} ${theme.header}`}
             onPointerDown={onDragPointerDown}
             title={moeFloatingDragTitle("ドラッグで移動 · 右下で幅・高さ変更")}
           >
@@ -188,6 +198,7 @@ export default function MoeVerticalSkillPanel({
               <MoeSkillPanelCloseButton
                 collapsed={collapsed}
                 onClose={onClose}
+                className="!top-0.5 !translate-y-0"
               />
             ) : null}
             {headerExtra}
@@ -259,9 +270,13 @@ export default function MoeVerticalSkillPanel({
               : slot.unusable
                 ? "border-zinc-600/70 bg-gradient-to-b from-zinc-800/90 to-zinc-950 text-zinc-300 opacity-80"
                 : theme.skillBtn;
-          const slotReorder =
-            canReorder && slot.reorderable !== false;
-          const pointerProps = bindSlot(i, { reorderable: slotReorder });
+          const slotReorder = canReorder && slot.reorderable !== false;
+          const slotCopyable =
+            dragMode === "copy" && Boolean(slot.slotKey) && !slot.previewOnly;
+          const pointerProps = bindSlot(i, {
+            reorderable: slotReorder,
+            copyable: slotCopyable,
+          });
           const tipText = slot.title ?? slot.label;
           const blocked =
             !alwaysClickable && (slot.disabled || onCooldown);
@@ -276,7 +291,7 @@ export default function MoeVerticalSkillPanel({
               <button
                 type="button"
                 {...(pointerProps.slotAttr ?? {})}
-                disabled={!slotReorder && blocked}
+                disabled={!slotReorder && !slotCopyable && blocked}
                 aria-label={tipText}
                 onClick={() => {
                   if (blocked) return;

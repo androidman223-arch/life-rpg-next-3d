@@ -38,6 +38,14 @@ function loadSavedPos() {
   return null;
 }
 
+function clampHpWindowPos(pos) {
+  if (typeof window === "undefined" || !pos) return pos;
+  return {
+    x: Math.max(4, Math.min(window.innerWidth - WINDOW_W - 4, pos.x)),
+    y: Math.max(4, Math.min(window.innerHeight - 36 - 4, pos.y)),
+  };
+}
+
 /**
  * MOE風ペットHP窓（上：青・名前 / 中央：区切り線 / 下：赤HPバー）
  * @param {{ emoji: string, name: string, levelLabel?: string, hp: number, hpMax: number, duelUi?: { phase: string, bar?: number, chargeFrozenUntil?: number } | null, allySelected?: boolean, onSelectAllyTarget?: () => void }} props
@@ -60,10 +68,12 @@ export default function MoePetHpWindow({
     canSaveRef.current = false;
     const saved = loadSavedPos();
     setPos(
-      saved ?? {
-        x: Math.max(8, WINDOW_W + 20),
-        y: Math.max(56, window.innerHeight * 0.12),
-      }
+      clampHpWindowPos(
+        saved ?? {
+          x: Math.max(8, WINDOW_W + 20),
+          y: Math.max(56, window.innerHeight * 0.12),
+        }
+      )
     );
     canSaveRef.current = true;
   }, []);

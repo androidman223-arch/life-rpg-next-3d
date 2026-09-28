@@ -117,6 +117,19 @@ import {
 import { updateMoe3dMacro3L4Fx } from "@/lib/moe3dMacro3L4Fx";
 import { updateElanPalaceMazeFx } from "@/lib/moe3dElanPalaceMaze";
 import { updateSulfurMineMazeFx } from "@/lib/moe3dSulfurMineMaze";
+import { buildMoe3dSoulMasterChapel } from "@/lib/moe3dSoulMasterChapel";
+import { createMoeSoulWarpTornado } from "@/lib/moe3dSoulWarpTornado";
+import { createMoeWhiteAngelSparkle } from "@/lib/moe3dWhiteAngelSparkle";
+import { createMoeMiningRock } from "@/lib/moe3dMiningRock";
+import { moeMiningRockNearAltar } from "@/lib/moeMining";
+import {
+  MOE_SOUL_GHOST_OPACITY,
+  MOE_SOUL_MASTER_ALTAR_ID,
+  moeSoulMasterRoomPos,
+  moeSoulPoyoScale,
+  moeSoulReturnOpacity,
+  moeSoulReturnProgress,
+} from "@/lib/moeSoulMaster";
 import {
   moe3dApplyMapTileScale,
   moe3dTileLocalOrigin,
@@ -141,6 +154,8 @@ import {
   moeCampfireRestBlendStep,
   moeCampfireRestSceneColors,
 } from "@/lib/moeCampfireRestCore";
+import { moeFieldFogDistances, MOE_FIELD_FOG_CLEAR } from "@/lib/moeFieldFog";
+import { moe3dMapSlotAtWorldPos } from "@/lib/moe3dMapSlotAtWorldPos";
 import {
   moe3dAgeHubCampfireWorldPos,
   moe3dAgeHubHousePosition,
@@ -842,12 +857,14 @@ export default function MoeField3DCanvas({
   battlePopups,
   onEnemyClick,
   onTreasureClick,
+  onMiningChestClick,
   onPetClick,
   onPlayerClick,
   onPetDoubleClick = () => {},
   onRhodaClick,
   onCashShopClick,
   onPetHouseClick,
+  onSoulMasterRoomClick,
   onCampfireClick,
   campfireRestActiveRef,
   onAltarClick,
@@ -876,6 +893,12 @@ export default function MoeField3DCanvas({
   playerMoveInputRef,
   petRunAnimRef,
   petPosRef,
+  petRef,
+  petLifeEpochRef,
+  petSoulReturnRef,
+  whiteAngelRodFxRef,
+  miningRockRef,
+  soulWarpRef,
   petSpawnEpochRef,
   petCommandRef,
   petHoldYawRef,
@@ -906,12 +929,14 @@ export default function MoeField3DCanvas({
   });
   const onEnemyClickRef = useRef(onEnemyClick);
   const onTreasureClickRef = useRef(onTreasureClick);
+  const onMiningChestClickRef = useRef(onMiningChestClick);
   const onPetClickRef = useRef(onPetClick);
   const onPlayerClickRef = useRef(onPlayerClick);
   const onPetDoubleClickRef = useRef(onPetDoubleClick);
   const onRhodaClickRef = useRef(onRhodaClick);
   const onCashShopClickRef = useRef(onCashShopClick);
   const onPetHouseClickRef = useRef(onPetHouseClick);
+  const onSoulMasterRoomClickRef = useRef(onSoulMasterRoomClick);
   const onCampfireClickRef = useRef(onCampfireClick);
   const campfireRestActiveRefStable = useRef(campfireRestActiveRef);
   const onAltarClickRef = useRef(onAltarClick);
@@ -929,6 +954,12 @@ export default function MoeField3DCanvas({
   const playerMoveInputRefStable = useRef(playerMoveInputRef);
   const petRunAnimRefStable = useRef(petRunAnimRef);
   const petPosRefStable = useRef(petPosRef);
+  const petRefStable = useRef(petRef);
+  const petLifeEpochRefStable = useRef(petLifeEpochRef);
+  const petSoulReturnRefStable = useRef(petSoulReturnRef);
+  const whiteAngelRodFxRefStable = useRef(whiteAngelRodFxRef);
+  const miningRockRefStable = useRef(miningRockRef);
+  const soulWarpRefStable = useRef(soulWarpRef);
   const petSpawnEpochRefStable = useRef(petSpawnEpochRef);
   const petCommandRefStable = useRef(petCommandRef);
   const petHoldYawRefStable = useRef(petHoldYawRef);
@@ -962,12 +993,14 @@ export default function MoeField3DCanvas({
   };
   onEnemyClickRef.current = onEnemyClick;
   onTreasureClickRef.current = onTreasureClick;
+  onMiningChestClickRef.current = onMiningChestClick;
   onPetClickRef.current = onPetClick;
   onPlayerClickRef.current = onPlayerClick;
   onPetDoubleClickRef.current = onPetDoubleClick;
   onRhodaClickRef.current = onRhodaClick;
   onCashShopClickRef.current = onCashShopClick;
   onPetHouseClickRef.current = onPetHouseClick;
+  onSoulMasterRoomClickRef.current = onSoulMasterRoomClick;
   onCampfireClickRef.current = onCampfireClick;
   campfireRestActiveRefStable.current = campfireRestActiveRef;
   onAltarClickRef.current = onAltarClick;
@@ -985,6 +1018,12 @@ export default function MoeField3DCanvas({
   playerMoveInputRefStable.current = playerMoveInputRef;
   petRunAnimRefStable.current = petRunAnimRef;
   petPosRefStable.current = petPosRef;
+  petRefStable.current = petRef;
+  petLifeEpochRefStable.current = petLifeEpochRef;
+  petSoulReturnRefStable.current = petSoulReturnRef;
+  whiteAngelRodFxRefStable.current = whiteAngelRodFxRef;
+  miningRockRefStable.current = miningRockRef;
+  soulWarpRefStable.current = soulWarpRef;
   petSpawnEpochRefStable.current = petSpawnEpochRef;
   petCommandRefStable.current = petCommandRef;
   petHoldYawRefStable.current = petHoldYawRef;
@@ -1040,7 +1079,11 @@ export default function MoeField3DCanvas({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87b8e8);
-    scene.fog = new THREE.Fog(0x87b8e8, 55, 190);
+    scene.fog = new THREE.Fog(
+      0x87b8e8,
+      MOE_FIELD_FOG_CLEAR.near,
+      MOE_FIELD_FOG_CLEAR.far
+    );
 
     const camera = new THREE.PerspectiveCamera(
       55,
@@ -1087,6 +1130,10 @@ export default function MoeField3DCanvas({
     let lastPetFootY = 0;
     let pendingPetFootSnap = false;
     let lastKakureminoVisual = false;
+    let petCorpseHold = false;
+    let petCorpseVisualDead = null;
+    let petCorpseVisualRoot = null;
+    const petCorpseMatOrigins = new WeakMap();
     /** 隠れ蓑前のマテリアル — 解除時に元の透明度へ戻す */
     const kakureminoMatOrigins = new WeakMap();
 
@@ -1098,6 +1145,12 @@ export default function MoeField3DCanvas({
     petMesh.castShadow = true;
     attachPetPickTarget(petMesh);
     scene.add(petMesh);
+    const soulWarpTornado = createMoeSoulWarpTornado(scene);
+    const whiteAngelSparkle = createMoeWhiteAngelSparkle(scene);
+    let miningRock = null;
+    const petSoulLight = new THREE.PointLight(0xfff4c8, 0, 8, 2);
+    scene.add(petSoulLight);
+    const petBaseScale = new THREE.Vector3(1, 1, 1);
 
     let petRoot = null;
     let petGroundLift = 0;
@@ -1114,6 +1167,7 @@ export default function MoeField3DCanvas({
       playerPosRefStable.current?.current?.y ??
       0;
     let lastPetSpawnEpoch = petSpawnEpochRefStable.current?.current ?? 0;
+    let lastPetLifeEpoch = petLifeEpochRefStable.current?.current ?? 0;
     let lastPetStrikeUntil = 0;
     let lastEnemyStrikeUntil = 0;
     const enemyAnimModes = new Map();
@@ -1215,7 +1269,7 @@ export default function MoeField3DCanvas({
       const mat = new THREE.SpriteMaterial({
         map: tex,
         transparent: true,
-        depthTest: false,
+        depthTest: false, fog: false,
       });
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(twoLine ? 2.85 : 2.35, twoLine ? 0.52 : 0.38, 1);
@@ -1378,7 +1432,7 @@ export default function MoeField3DCanvas({
           const mat = new THREE.SpriteMaterial({
             map: tex,
             transparent: true,
-            depthTest: false,
+            depthTest: false, fog: false,
           });
           sprite = new THREE.Sprite(mat);
           sprite.scale.set(3.2, 0.42, 1);
@@ -1449,7 +1503,7 @@ export default function MoeField3DCanvas({
         const mat = new THREE.SpriteMaterial({
           map: tex,
           transparent: true,
-          depthTest: false,
+          depthTest: false, fog: false,
         });
         targetHpSprite = new THREE.Sprite(mat);
         targetHpSprite.scale.set(3.2, 0.38, 1);
@@ -1543,7 +1597,7 @@ export default function MoeField3DCanvas({
       const mat = new THREE.SpriteMaterial({
         map: tex,
         transparent: true,
-        depthTest: false,
+        depthTest: false, fog: false,
       });
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(0.58, 0.58, 1);
@@ -1587,7 +1641,7 @@ export default function MoeField3DCanvas({
       const mat = new THREE.SpriteMaterial({
         map: tex,
         transparent: true,
-        depthTest: false,
+        depthTest: false, fog: false,
       });
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(0.52, 0.52, 1);
@@ -1810,7 +1864,7 @@ export default function MoeField3DCanvas({
         const mat = new THREE.SpriteMaterial({
           map: tex,
           transparent: true,
-          depthTest: false,
+          depthTest: false, fog: false,
         });
         petLabelSprite = new THREE.Sprite(mat);
         petLabelSprite.scale.set(3.5, 0.88, 1);
@@ -1886,6 +1940,8 @@ export default function MoeField3DCanvas({
     let campfireRestBlend = 0;
     /** @type {import("three").Object3D[]} */
     let altarPickMeshes = [];
+    /** @type {THREE.Object3D | null} */
+    let soulChapel = null;
 
     const canvas = renderer.domElement;
     canvas.style.touchAction = "none";
@@ -1938,6 +1994,13 @@ export default function MoeField3DCanvas({
           return;
         }
         onAltarClickRef.current?.(null);
+        if (
+          soulChapel &&
+          raycaster.intersectObject(soulChapel, true).length > 0
+        ) {
+          onSoulMasterRoomClickRef.current?.();
+          return;
+        }
         const spot = pickFieldSpotFromPointer();
         if (spot === "house") {
           onPetHouseClickRef.current?.();
@@ -1950,6 +2013,27 @@ export default function MoeField3DCanvas({
         if (spot === "cash") {
           onCashShopClickRef.current?.();
           return;
+        }
+        if (mapReady) {
+          const rect = canvas.getBoundingClientRect();
+          pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.setFromCamera(pointer, camera);
+          const chestHits = raycaster.intersectObjects(treasureGroup.children, true);
+          const chestPick = resolvePickFromHits(
+            chestHits,
+            pointer,
+            camera,
+            rect,
+            stateRef.current.treasures
+          );
+          if (chestPick?.type === "treasure") {
+            const tr = stateRef.current.treasures.find((t) => t.id === chestPick.id);
+            if (tr?.kind === "mining") {
+              onMiningChestClickRef.current?.(chestPick.id);
+              return;
+            }
+          }
         }
         onPetHouseClickRef.current?.("dismiss");
         isCamDragging = true;
@@ -1988,6 +2072,8 @@ export default function MoeField3DCanvas({
         return;
       }
       if (picked?.type === "treasure") {
+        const tr = stateRef.current.treasures.find((t) => t.id === picked.id);
+        if (tr?.kind === "mining") return;
         onTreasureClickRef.current?.(picked.id);
         return;
       }
@@ -2400,6 +2486,40 @@ export default function MoeField3DCanvas({
           );
         }
 
+        const soulAltar = altarNodes.find((a) => a.id === MOE_SOUL_MASTER_ALTAR_ID);
+        const soulRoom = soulAltar
+          ? moeSoulMasterRoomPos({ x: soulAltar.x, y: soulAltar.y })
+          : null;
+        if (soulRoom) {
+          const soulSnap = snapToNearestTerrain(
+            raycaster,
+            terrainGroup,
+            soulRoom.x,
+            soulRoom.y
+          );
+          const soulGy = groundY(
+            raycaster,
+            terrainGroup,
+            soulSnap.x,
+            soulSnap.z
+          );
+          const chapel = buildMoe3dSoulMasterChapel();
+          chapel.position.set(soulSnap.x, soulGy, soulSnap.z);
+          chapel.traverse((obj) => {
+            obj.userData.moeSoulChapel = true;
+          });
+          soulChapel = chapel;
+          scene.add(chapel);
+          attachShowcaseNameLabel(
+            chapel,
+            3.4,
+            "たましいのマスター",
+            "右クリック",
+            "dragon",
+            52
+          );
+        }
+
         let ageHubHousePos = null;
         const restCampsRoot = new THREE.Group();
         restCampsRoot.name = "age-rest-camps";
@@ -2657,6 +2777,38 @@ export default function MoeField3DCanvas({
         scene.add(cashShopGroup);
         cashShopPickGroup = cashShopGroup;
 
+        const altarPos = moe3dAltarWorldPos(
+          "altar_elvin_mountains",
+          tileWidth,
+          tileDepth,
+          { halfW: playBounds.halfW, halfD: playBounds.halfD }
+        );
+        const rockIntent = moeMiningRockNearAltar(altarPos);
+        if (rockIntent) {
+        const rockSnap = snapToNearestTerrain(
+          raycaster,
+          terrainGroup,
+          rockIntent.x,
+          rockIntent.y
+        );
+        const rockGy = groundY(
+          raycaster,
+          terrainGroup,
+          rockSnap.x,
+          rockSnap.z
+        );
+        miningRock = createMoeMiningRock();
+        miningRock.root.position.set(rockSnap.x, rockGy, rockSnap.z);
+        scene.add(miningRock.root);
+        const rockLive = miningRockRefStable.current?.current;
+        if (rockLive) {
+          rockLive.x = rockSnap.x;
+          rockLive.y = rockSnap.z;
+          rockLive.ready = true;
+          miningRock.paint(rockLive.hp, rockLive.hpMax);
+        }
+        }
+
         onMapReadyRef.current?.({
           ...playBounds,
           tileWidth,
@@ -2717,6 +2869,7 @@ export default function MoeField3DCanvas({
         petRoot,
         petModelHeightForId(nextPetId)
       ));
+      petBaseScale.copy(petRoot.scale);
       petFloatLift = petFloatLiftForId(nextPetId);
       petFrontExtent = moe3dMeasureModelFrontExtent(petRoot);
       enableShadows(petRoot);
@@ -3222,8 +3375,60 @@ export default function MoeField3DCanvas({
       }
     }
 
+    function applyPetCorpseMaterials(root, dead) {
+      if (!root) return;
+      root.traverse((obj) => {
+        if (!obj.isMesh || !obj.material) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const mat of mats) {
+          if (dead) {
+            if (!petCorpseMatOrigins.has(mat)) {
+              petCorpseMatOrigins.set(mat, {
+                transparent: mat.transparent,
+                opacity: mat.opacity,
+                depthWrite: mat.depthWrite,
+              });
+            }
+            mat.transparent = true;
+            mat.opacity = MOE_SOUL_GHOST_OPACITY;
+            mat.depthWrite = false;
+          } else if (petCorpseMatOrigins.has(mat)) {
+            const orig = petCorpseMatOrigins.get(mat);
+            mat.transparent = orig.transparent;
+            mat.opacity = orig.opacity;
+            mat.depthWrite = orig.depthWrite;
+            petCorpseMatOrigins.delete(mat);
+          }
+        }
+      });
+    }
+
+    function syncPetCorpseVisual(dead) {
+      const root = petRoot || petMesh;
+      if (dead === petCorpseVisualDead && root === petCorpseVisualRoot) return;
+      petCorpseVisualDead = dead;
+      petCorpseVisualRoot = root;
+      applyPetCorpseMaterials(petMesh, dead);
+      if (petRoot) applyPetCorpseMaterials(petRoot, dead);
+    }
+
     function syncPetAnimation(pt, dt) {
       if (!petAnimCtrl) return;
+      if (petCorpseHold) {
+        if (petAnimCtrl.getMode() !== "idle") petAnimCtrl.setMode("idle");
+        return;
+      }
+      const ridePl = playerPosRefStable.current?.current;
+      const petRidingCloud =
+        Boolean(kintounOnRefStable.current?.current) &&
+        ridePl &&
+        Math.hypot(pt.x - ridePl.x, pt.y - ridePl.y) < 3.8;
+      if (petRidingCloud) {
+        if (petAnimCtrl.getMode() !== "idle") petAnimCtrl.setMode("idle");
+        lastPetX = pt.x;
+        lastPetY = pt.y;
+        return;
+      }
       const duel = duelRefStable.current?.current;
       const strikeUntil = petStrikeUntilRefStable.current?.current ?? 0;
       const now = performance.now();
@@ -3341,7 +3546,8 @@ export default function MoeField3DCanvas({
     function syncDuelFacing(ens, pt, dt) {
       const duel = duelRefStable.current?.current;
       const petCmd = petCommandRefStable.current?.current ?? "follow";
-      const holdStill = petCmd === "wait" || petCmd === "sit";
+      const holdStill =
+        petCorpseHold || petCmd === "wait" || petCmd === "sit";
 
       if (holdStill) {
         const holdYaw = petHoldYawRefStable.current?.current;
@@ -3477,7 +3683,7 @@ export default function MoeField3DCanvas({
           const mat = new THREE.SpriteMaterial({
             map: tex,
             transparent: true,
-            depthTest: false,
+            depthTest: false, fog: false,
           });
           sprite = new THREE.Sprite(mat);
           sprite.userData.popId = pop.id;
@@ -3621,8 +3827,12 @@ export default function MoeField3DCanvas({
       } else if (campfireRestBlend <= 0.001 && restTarget <= 0) {
         scene.background.setHex(0x87b8e8);
         scene.fog.color.setHex(0x87b8e8);
-        scene.fog.near = 55;
-        scene.fog.far = 190;
+        const fog = moeFieldFogDistances(
+          moe3dMapSlotAtWorldPos(pl.x, pl.y, fieldTileW, fieldTileD),
+          Boolean(kintounOnRefStable.current?.current)
+        );
+        scene.fog.near = fog.near;
+        scene.fog.far = fog.far;
         hemi.intensity = 0.85;
         sun.intensity = 1.1;
       }
@@ -3647,6 +3857,21 @@ export default function MoeField3DCanvas({
       syncTargetMarker(ens, targetId);
       syncTargetEnemyFacingYaw(ens, targetId);
       syncEnemyDetectionOverlay(ens, targetId, statSearchOpen, pl);
+      const liveHp = petRefStable.current?.current?.hp ?? petLbl?.hp;
+      petCorpseHold = (Number(liveHp) || 0) <= 0;
+      const lifeEpoch = petLifeEpochRefStable.current?.current ?? 0;
+      if (lifeEpoch !== lastPetLifeEpoch) {
+        lastPetLifeEpoch = lifeEpoch;
+        petCorpseHold = false;
+        petCorpseVisualDead = null;
+        petPostCombatUntil = 0;
+        petPostCombatPos = null;
+        petCombatPosLock = null;
+        if (petMixer) petMixer.timeScale = 1;
+        if (petRoot) petRoot.scale.copy(petBaseScale);
+        petSoulLight.intensity = 0;
+      }
+      syncPetCorpseVisual(petCorpseHold);
       syncPetAnimation(pt, dt);
       syncEnemyAnimations();
       syncDuelFacing(ens, pt, dt);
@@ -3659,6 +3884,10 @@ export default function MoeField3DCanvas({
           ? battleMult
           : 1;
       for (const mixer of animationMixers) {
+        if (petCorpseHold && mixer === petMixer) {
+          mixer.timeScale = 0;
+          continue;
+        }
         mixer.timeScale = mixerTimeScale;
         mixer.update(dt);
       }
@@ -3690,6 +3919,14 @@ export default function MoeField3DCanvas({
         pl.x,
         pgY + playerYOffset + jumpY + kintounFlyY,
         pl.y
+      );
+      const warpFx = soulWarpRefStable.current?.current;
+      soulWarpTornado.update(
+        Boolean(warpFx && performance.now() < warpFx.until),
+        pl.x,
+        pgY,
+        pl.y,
+        dt
       );
       syncPlayerKakureminoVisual();
 
@@ -3758,10 +3995,12 @@ export default function MoeField3DCanvas({
       const kintounOnRide = Boolean(kintounOnRefStable.current?.current);
       const skateboardOnRide = Boolean(skateboardOnRefStable.current?.current);
       const petOnKintoun =
+        !petCorpseHold &&
         kintounOnRide &&
         Math.hypot(pt.x - pl.x, pt.y - pl.y) <
           3.8;
       const petOnSkateboard =
+        !petCorpseHold &&
         skateboardOnRide &&
         Math.hypot(pt.x - pl.x, pt.y - pl.y) < 2.8;
       let petGroundY = petOnKintoun
@@ -3769,7 +4008,9 @@ export default function MoeField3DCanvas({
         : petOnSkateboard
           ? pgY + petGroundLift + petFloatLift
           : petGY + petGroundLift + petFloatLift;
-      const inCombatCharge = duelNow?.phase === "simultaneous_charge";
+      if (petCorpseHold) petGroundY = petGY + petGroundLift;
+      const inCombatCharge =
+        !petCorpseHold && duelNow?.phase === "simultaneous_charge";
       const nowMs = performance.now();
       const petSettling =
         petPostCombatUntil > 0 && nowMs < petPostCombatUntil;
@@ -3815,6 +4056,66 @@ export default function MoeField3DCanvas({
         );
       } else {
         petMesh.position.set(pt.x, petGroundY + 0.55, pt.y);
+      }
+
+      const soulRet = petSoulReturnRefStable.current?.current;
+      const soulProgress = soulRet
+        ? moeSoulReturnProgress(soulRet.started, soulRet.until, performance.now())
+        : null;
+      if (soulProgress != null && petRoot) {
+        const opacity = moeSoulReturnOpacity(soulProgress);
+        const poyo = moeSoulPoyoScale(soulProgress);
+        applyPetCorpseMaterials(petRoot, true);
+        petRoot.traverse((obj) => {
+          if (!obj.isMesh || !obj.material) return;
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const mat of mats) {
+            mat.transparent = opacity < 0.98;
+            mat.opacity = opacity;
+            mat.depthWrite = opacity >= 0.98;
+          }
+        });
+        petRoot.scale.set(
+          petBaseScale.x * poyo.xz,
+          petBaseScale.y * poyo.y,
+          petBaseScale.z * poyo.xz
+        );
+        petSoulLight.position.set(
+          petRoot.position.x,
+          petRoot.position.y + 1.25,
+          petRoot.position.z
+        );
+        petSoulLight.intensity = 0.4 + soulProgress * 4.4;
+      } else if (petRoot) {
+        const rodFx = whiteAngelRodFxRefStable.current?.current;
+        const rodOn = Boolean(rodFx && performance.now() < rodFx.until);
+        if (rodOn) {
+          petSoulLight.position.set(
+            petRoot.position.x,
+            petRoot.position.y + 1.15,
+            petRoot.position.z
+          );
+          petSoulLight.intensity =
+            1.5 + Math.sin(performance.now() * 0.014) * 0.9;
+        } else {
+          petSoulLight.intensity = 0;
+        }
+        if (!petCorpseHold) petRoot.scale.copy(petBaseScale);
+      }
+
+      const rodFxNow = whiteAngelRodFxRefStable.current?.current;
+      const rodActive = Boolean(rodFxNow && performance.now() < rodFxNow.until);
+      const sparkleHost = petRoot?.position;
+      whiteAngelSparkle.update(
+        sparkleHost?.x ?? pt.x,
+        (sparkleHost?.y ?? petGroundY) + 0.35,
+        sparkleHost?.z ?? pt.y,
+        rodActive,
+        performance.now()
+      );
+      const rockLive = miningRockRefStable.current?.current;
+      if (miningRock && rockLive) {
+        miningRock.paint(rockLive.hp, rockLive.hpMax);
       }
 
       const showPhoenixTailFire =
@@ -3940,6 +4241,11 @@ export default function MoeField3DCanvas({
       petLoadGen += 1;
       disposePetModel();
       phoenixTailFire.dispose();
+      whiteAngelSparkle.dispose();
+      if (miningRock) {
+        scene.remove(miningRock.root);
+        miningRock.dispose();
+      }
       playerSummonFx.dispose();
       kintounCloudFx.dispose();
       skateboardFx.dispose();

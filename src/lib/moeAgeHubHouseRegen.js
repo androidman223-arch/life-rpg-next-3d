@@ -2,6 +2,7 @@ import {
   petUsesPreciseWikiStats,
   roundPetStatInternal,
 } from "@/data/moePets";
+import { moePetIsDead } from "@/lib/moePetWorshipNature";
 
 /** AGE拠点の家 — 室内のみの弱リジェネ（焚き火休息より控えめ） */
 export const MOE_AGE_HUB_HOUSE_PET_REGEN = {
@@ -17,7 +18,7 @@ export const MOE_AGE_HUB_HOUSE_PET_REGEN = {
  * @param {{ active: boolean }} opts
  */
 export function tickMoeAgeHubHousePetRegen(pet, acc, dt, opts) {
-  if (!opts.active || !pet) {
+  if (!opts.active || !pet || moePetIsDead(pet)) {
     return { pet, acc: 0, changed: false, hpGain: 0 };
   }
   if (pet.hp >= pet.hpMax && pet.mp >= pet.mpMax) {

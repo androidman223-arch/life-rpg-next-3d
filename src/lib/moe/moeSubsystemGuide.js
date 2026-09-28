@@ -110,16 +110,22 @@ export const MOE_SUBSYSTEMS = {
 
   skillPanels: {
     purpose:
-      "縦・横スキルパネル。player1（回復等） / player2（フェニックス） / player3（調査） / pet のモード切替。",
+      "←→は技1・マクロ・セット1・セット2・ペット・鳳凰・龍神。マクロは発動だけ。セットはコピー先。",
     layer: "ui",
     stateOwner: "各パネル (useMoeSkillPanelMode + useMoeDraggablePos)",
     files: [
       "src/lib/moeSkillPanelModeSettings.js",
+      "src/lib/moeSkillSetCopies.js",
+      "src/lib/moeSkillMacro.js",
+      "src/components/MoeSkillMacroPanel.jsx",
       "src/components/MoeMergedSkillIconBar.jsx",
       "src/components/MoeMergedVerticalSkillPanel.jsx",
       "src/components/MoeSkillPanelSwitcher.jsx",
       "src/lib/moePlayerSkillSlotUi.js",
       "src/data/moePlayerSkillSlotOrder.js",
+      "src/lib/moeMining.js",
+      "src/lib/moe3dMiningRock.js",
+      "src/components/MoeMiningPickupWindow.jsx",
       "src/data/moePlayerUtilitySkills.js",
     ],
     doNot: ["パネル内にスキル効果ロジックを書かない → lib + MoeFieldMap handler"],
@@ -148,7 +154,8 @@ export const MOE_SUBSYSTEMS = {
   },
 
   playerUtilitySkills: {
-    purpose: "プレイヤー技③ — 調査・支援系スキル枠（敵ステサーチなど）。",
+    purpose:
+      "技③データの残り（生活改鳳・自力整龍）。敵ステサーチは技①。",
     layer: "pure",
     stateOwner: "moePlayerUtilitySkills.js + MoeFieldMap handler",
     files: [
@@ -204,15 +211,20 @@ export const MOE_SUBSYSTEMS = {
 
   petCommands: {
     purpose:
-      "ペット命令（もどれ・待て・座れ・オート・攻撃）と SOS 脱出。戦闘キャンセル時の3Dロック解除。",
+      "ペット命令と SOS。死亡中は透明で停止。ホワイトエンジェルロッドは公式文のあと約5秒で蘇生しアルターへ帰還（経験値は減らない）。ソウルマスターは竜巻のあとワープ。部屋の右クリックはいでも生き返る。",
     layer: "orchestrator",
     stateOwner: "MoeFieldMap (petCommandRef / duelCombatSessionRef)",
     files: [
       "src/components/MoeFieldMap.jsx (handlePetComeBack / emergencyUnstuck3d)",
       "src/components/MoeField3DCanvas.jsx (duelCombatSessionRef で戦闘ビジュアル解除)",
+      "src/lib/moePetWorshipNature.js",
+      "src/lib/moeSoulMaster.js",
+      "src/lib/moe3dSoulMasterChapel.js",
+      "src/lib/moe3dSoulWarpTornado.js",
     ],
     doNot: [
       "戻れ時に petCombatPosLock を残さない",
+      "HP0 のペットを回復や再入場の全回復で起こさない",
       "SOS はペット即ワープ（moe3dPetStartNearPlayer · 戦闘解除）",
     ],
     related: ["fieldCanvas", "enemyTargeting"],

@@ -16,7 +16,9 @@
 | ファイル | 役割 |
 |----------|------|
 | `src/components/MoeFieldMap.jsx` | フィールド全体・ゲームループ・HUD・戦闘・スキル配線 |
+| `src/components/MoeFieldSettingsPanel.jsx` | フィールド設定パネルの外枠 |
 | `src/components/MoeField3DCanvas.jsx` | Three.js 描画・アニメ・クリック判定 |
+| `src/lib/moePlayerLookAhead.js` | 画面上のプレイヤー上下（カメラ注視点。ワールド座標ではない） |
 | `src/components/MoeField3D.jsx` | 3D フィールドのラッパ |
 
 ### 3D ワールドレイアウト（循環 import 注意）
@@ -48,7 +50,10 @@
 | `src/lib/moeTomorrowMemo.js` | アルター · 明日やることメモ（自由追加） |
 | `src/components/DragonTrainingPanel.jsx` | 龍の武練 UI（タイトル画面） |
 | `src/components/MoeAltarTomorrowMemo.jsx` | アルター内メモ UI |
-| `src/data/moePlayerSkillSlotOrder.js` | 技①のスロット並び（ライト・ヒール・テレポ…） |
+| `src/data/moePlayerSkillSlotOrder.js` | 技①の並び（敵ステサーチ・ホワイトエンジェルロッド・リジェネ・ソウルマスター・採掘） |
+| `src/lib/moeMining.js` | 採掘。エルビン山脈アルター東の岩。壊すと宝箱。右クリックで縦1×横6。GETで受け取る。×で閉じると宝箱は1分残る。なにもしないと1分で消える。鉱石は銅59・鉄30・銀10・金1。宝石は追加でたまに。売値10000g |
+| `src/lib/moe3dMiningRock.js` | 採掘の岩メッシュ（HP0で隠れる。マップ読み込み時に1回置く） |
+| `src/components/MoeMiningPickupWindow.jsx` | 採掘のミニアイテム窓（縦1×横6）。宝箱を右クリックで開く。GETで受け取る。×で閉じると宝箱は1分残る |
 | `src/data/moePlayerNinjaSkills.js` | 忍者スキル定義（忍び足・神速・隠れ蓑） |
 | `src/data/moePlayerUtilitySkills.js` | **技③** — 調査・召喚プレスキル（敵ステサーチ・生活改鳳・自力整龍） |
 | `src/data/moePlayerPreSkills.js` | プレイヤー召喚プレスキル定義（ダメージ・MP） |
@@ -58,7 +63,10 @@
 | `src/lib/moePlayerSummonEffect.js` | 3D 召喚 GLB 一時表示 |
 | `src/lib/moePlayerSummonPrefetch.js` | 召喚 GLB 先読み |
 | `src/lib/moePlayerSkillSlotUi.js` | スキル枠の表示・クリック定義 |
-| `src/lib/moeSkillPanelModeSettings.js` | 技①/②/③/ペット の切替 |
+| `src/lib/moeSkillPanelModeSettings.js` | 技1・マクロ・セット1・セット2・ペット・鳳凰・龍神の切替 |
+| `src/lib/moeSkillSetCopies.js` | セット1/2へドラッグコピー（元の並びは変えない） |
+| `src/lib/moeSkillMacro.js` | マクロ1〜10（技・待ち秒・技）。縦スキル技②が発動 |
+| `src/components/MoeSkillMacroPanel.jsx` | マクロ編集と実行 |
 | `src/lib/moeSkillPanelVisibilitySettings.js` | 縦横スキルパネル・アイコンバーの表示/非表示 |
 | `src/lib/moeSkillPanelCollapseSettings.js` | スキルパネル折りたたみ |
 | `src/lib/moePlayerSkillSuccessSettings.js` | スキル成功率100%デバッグ設定 |
@@ -86,7 +94,10 @@
 | `src/lib/moeEnemyDetection.js` | 索敵データ（視野・聴覚・タイプ）— 検知対象はプレイヤー |
 | `src/lib/moeEnemyFieldActive.js` | アクティブ / ノンアクティブ（先制・追跡の可否） |
 | `src/lib/moeEnemyFieldChase.js` | 索敵後の追跡・接触バトル（`aggro` ランタイム） |
+| `src/lib/moeEnemyRespawn.js` | 撃破後の待ち秒（Lv帯 · 10秒〜10分 · 保存 v2） |
+| `src/lib/moeEnemyRespawnPlace.js` | 待ち明けの再配置（撃破フレームでは呼ばない） |
 | `src/components/MoeEnemyStatSearchPanel.jsx` | 敵ステ表示ウィンドウ |
+| `src/components/MoeTargetWindow.jsx` | ターゲット窓（敵の名前とLv、プレイヤーとペットのHP） |
 | `src/components/MoeField3DCanvas.jsx` | ターゲットの水晶マーカー（頭上） |
 
 ---
@@ -156,7 +167,12 @@
 | `src/data/moePets.js` | ペットステ・成長 · `loyaltyMin` · `delaySec` |
 | `src/data/moePetCombatSkills.js` | 戦闘スキル |
 | `src/data/moePhoenixDragon.js` | フェニックス系 |
-| `src/lib/moePetSave.js` | ペットセーブ/ロード |
+| `src/lib/moePetSave.js` | ペットセーブ/ロード（HP0 は死亡のまま） |
+| `src/lib/moePetWorshipNature.js` | 倒れたペットだけ生き返る |
+| `src/lib/moeWhiteAngelRod.js` | ホワイトエンジェルロッドの公式文と5秒 |
+| `src/lib/moeSoulMaster.js` | ソウル部屋の位置・竜巻秒・生き返りの光 |
+| `src/lib/moe3dSoulMasterChapel.js` | ビスク中央アルター西の魂の部屋 |
+| `src/lib/moe3dSoulWarpTornado.js` | ソウルマスターへの竜巻 |
 | `src/lib/moeExternalSave.js` | 外部 JSON 保存 I/O（FS API · IndexedDB） |
 | `src/lib/moeExternalSaveLabels.js` | 外部保存の表示ラベル（デスクトップ等） |
 | `src/lib/moeAmbientBgmTracks.js` | BGM 曲カタログ（AmbientBgm 用） |
@@ -226,8 +242,14 @@
 - **3D 循環 import 修正** — `moe3dLayoutConstants.js` · フィールド読み込み TDZ 解消
 - **リボーンワンス** — プレイヤー生活改鳳 · 死亡3秒後1回復活 · `moePhoenixRebirthOnce.js`
 - **アイテムボックスリサイズ** — 縦横ドラッグ · アイコン32px固定 · `moeItemBoxLayout.js`
+- **画面上のプレイヤー位置** — `moePlayerLookAhead.js` · カメラの前方注視点 · 右クリックだけでは中央へ戻さない
+- **敵リポップ** — `moeEnemyRespawn.js` · Lv帯の待ち秒 · 撃破フレームで座標を戻さない
 - **敵アクティブ / ノンアクティブ** — `moeEnemyFieldActive.js` · 索敵は共通 · 追跡のみ分岐
-- **敵ステサーチ** — 技③ · `moeEnemyStatSearch.js` + `MoeEnemyStatSearchPanel.jsx`
+- **敵ステサーチ** — 技①先頭 · `moeEnemyStatSearch.js` + `MoeEnemyStatSearchPanel.jsx`
+- **ペット死亡** — HP0 は透明で停止 · ホワイトエンジェルロッドかソウルマスターの「はい」
+- **ソウルマスター** — 竜巻のあとビスクの部屋へ · 右クリックで生き返りの確認
+- **ホワイトエンジェルロッド** — 公式文のあと約5秒キラキラ。経験値は減らない。アルターへ帰還
+- **スキルセットとマクロ** — `moeSkillSetCopies.js` · `moeSkillMacro.js`
 - **SOS 脱出** — ペット命令の 🆘 · `MoeFieldMap.jsx` `emergencyUnstuck3d`
 - **戦闘「もどれ」修正** — `duelCombatSessionRef` で 3D ロック解除
 - **フィールド BGM** — 面ごと自動切替 · 戦闘終了 2s フェード · `moeFieldBgmMap.js`

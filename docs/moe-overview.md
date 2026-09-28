@@ -92,16 +92,16 @@ flowchart LR
   Detect --> Target["敵ターゲット\nクリック"]
   Target --> Duel["戦闘開始\n接触 or スキル"]
   Duel --> Reward["撃破\nEXP・ドロップ"]
-  Explore --> Skill["スキル使用\n技①②③・ペット"]
+  Explore --> Skill["スキル使用\n技①・セット・ペット・鳳凰・龍神"]
   Skill --> Grow["熟練度 UP"]
 ```
 
 | 操作 | 内容 |
 |------|------|
-| 移動 | 3D 地形 · コライダー（箱・柱・緑コライダー）· アルター転送 |
+| 移動 | 3D 地形 · コライダー（箱・柱・緑コライダー）· アルター転送 · 画面上下はカメラ注視点 |
 | 索敵 | 敵の視野扇形＋足音 · 忍び足/隠れ蓑で回避 |
 | 戦闘 | 接触 or 攻撃スキル → デュエル開始 |
-| ペット | 命令（もどれ・待て・攻撃）· SOS 脱出 |
+| ペット | 命令（もどれ・待て・攻撃）· SOS · 死亡は透明停止 · ホワイトエンジェルロッド / ソウルマスター |
 | UI | ドラッグ HUD · **クリックで手前**（パネルスタック） |
 
 ### 戦闘の流れ（デュエル）
@@ -111,7 +111,7 @@ flowchart LR
 | `approach` | プレイヤー/ペットが敵へ接近 · 交戦タイムバー表示 |
 | `simultaneous_charge` | MOE 風タイムバー充填 · 先に満タンの側が行動 |
 | 解決 | ダメージ・スキル効果 · バトルログに DQ10 風テキスト |
-| 終了 | 撃破 → ホーム EXP 加算 · `endActiveDuel` で 3D ロック解除 |
+| 終了 | 撃破 → ホーム EXP 加算 · `endActiveDuel` で 3D ロック解除 · 敵は帯別リポップ待ち |
 
 関連: `MoeDuelTimeBarWindow` · `moeBattleLog.js` · `duelCombatSessionRef`（「もどれ」修正）
 
@@ -134,10 +134,12 @@ flowchart LR
 
 | 枠 | 切替名 | 主な内容 | データ |
 |----|--------|---------|--------|
-| **技①** | `player1` | ライトヒール・テレポ・回復系 | `moePlayerSkillSlotOrder.js` |
-| **技②** | `player2` | 鳳凰/龍の修行スキル | `moePhoenix*` / `moeDragon*` |
-| **技③** | `player3` | 敵ステサーチ · 生活改鳳 · 自力整龍 | `moePlayerUtilitySkills.js` |
-| **ペット** | `pet` | 戦闘スキル・生活改鳳（ペット版）等 | `moePetCombatSkills.js` |
+| **技①** | `player1` | 敵ステサーチ · ホワイトエンジェルロッド · リジェネ · ソウルマスター · 採掘 | `moePlayerSkillSlotOrder.js` |
+| **マクロ** | `macro` | マクロ1〜10を発動。設定はマクロボタン | `moeSkillMacro.js` |
+| **セット1** | `player2` | 技①・ペット・鳳凰・龍神からのコピー | `moeSkillSetCopies.js` |
+| **セット2** | `player3` | セット1と同じ。中身は別保存 | `moeSkillSetCopies.js` |
+| **ペット** | `pet` | 戦闘スキル | `moePetCombatSkills.js` |
+| **鳳凰 / 龍神** | `phoenix` / `dragon` | 修行スキル Lv10〜90 | `moePhoenix*` / `moeDragon*` |
 
 **愛着100でペットスキル手動解禁**（未実装 · 設計は [`moe-pet-loyalty.md`](./moe-pet-loyalty.md)）。
 

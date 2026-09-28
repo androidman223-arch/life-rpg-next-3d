@@ -22,12 +22,12 @@ export const MOE_SKILL_PANEL_IDS = /** @type {MoeSkillPanelId[]} */ ([
 export const MOE_SKILL_PANEL_LABELS = {
   vertical1: "縦スキルUI 1",
   vertical2: "縦スキルUI 2",
-  verticalPhoenix: "縦鳳凰スキルUI",
-  verticalDragon: "縦龍神スキルUI",
+  verticalPhoenix: "縦スキルUI 3",
+  verticalDragon: "縦スキルUI 4",
   horizontal1: "横スキルUI 1",
   horizontal2: "横スキルUI 2",
-  horizontal3: "横スキルUI 3（鳳凰）",
-  horizontal4: "横スキルUI 4（龍神）",
+  horizontal3: "横スキルUI 3",
+  horizontal4: "横スキルUI 4",
 };
 
 /** @returns {Record<MoeSkillPanelId, boolean>} */

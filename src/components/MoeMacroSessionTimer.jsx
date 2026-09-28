@@ -9,12 +9,19 @@ import {
   stopMacroTimer,
 } from "@/lib/moeMacroSessionTimer";
 
+const IDLE_MACRO_TIMER_SNAP = {
+  running: false,
+  finished: false,
+  remainingSec: 0,
+  totalSec: 0,
+};
+
 /**
  * マクロ用カウントダウン（1秒ごと更新 · 0:00 で終了表示）
  */
 export default function MoeMacroSessionTimer({ onFinished }) {
   const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState(() => getMacroTimerSnapshot());
+  const [snap, setSnap] = useState(IDLE_MACRO_TIMER_SNAP);
   const [finishedFlash, setFinishedFlash] = useState(false);
 
   useEffect(() => {

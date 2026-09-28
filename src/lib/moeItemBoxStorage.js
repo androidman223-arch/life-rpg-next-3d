@@ -17,6 +17,7 @@ export const MOE_ITEM_BOX_SELECTED_EVENT = "moe-item-box-selected";
  *   recordStoneId?: string,
  *   recordX?: number,
  *   recordY?: number,
+ *   sellGold?: number,
  * }} MoeItemBoxItem
  */
 
@@ -48,6 +49,7 @@ export function loadMoeItemBoxSlots() {
       if (entry.recordStoneId != null) item.recordStoneId = entry.recordStoneId;
       if (entry.recordX != null) item.recordX = entry.recordX;
       if (entry.recordY != null) item.recordY = entry.recordY;
+      if (entry.sellGold != null) item.sellGold = entry.sellGold;
       return item;
     });
   } catch {
@@ -138,6 +140,7 @@ export function addMoeItemBoxItem(item) {
     ...(item.recordStoneId != null ? { recordStoneId: item.recordStoneId } : {}),
     ...(item.recordX != null ? { recordX: item.recordX } : {}),
     ...(item.recordY != null ? { recordY: item.recordY } : {}),
+    ...(item.sellGold != null ? { sellGold: item.sellGold } : {}),
   };
   saveMoeItemBoxSlots(slots);
   notifyMoeItemBoxSlotsChanged();

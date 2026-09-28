@@ -229,7 +229,7 @@ export default function MoeField3DTreasureOverlay({
 }) {
   const [, setFrame] = useState(0);
   const openTreasures = useMemo(
-    () => (treasures ?? []).filter((tr) => tr.state === "open"),
+    () => (treasures ?? []).filter((tr) => tr.state === "open" && tr.kind !== "mining"),
     [treasures]
   );
 

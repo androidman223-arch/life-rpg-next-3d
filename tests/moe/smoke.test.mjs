@@ -208,11 +208,15 @@ describe("ally target settings", () => {
 describe("skill panel mode", () => {
   const storage = new Map();
 
-  it("cycles player1 → player2 → player3 → pet → player1", () => {
-    assert.equal(cycleMoeSkillPanelMode("player1", "next"), "player2");
+  it("cycles player1 → macro → player2 → player3 → pet → phoenix → dragon → player1", () => {
+    assert.equal(cycleMoeSkillPanelMode("player1", "next"), "macro");
+    assert.equal(cycleMoeSkillPanelMode("macro", "next"), "player2");
     assert.equal(cycleMoeSkillPanelMode("player2", "next"), "player3");
     assert.equal(cycleMoeSkillPanelMode("player3", "next"), "pet");
-    assert.equal(cycleMoeSkillPanelMode("pet", "next"), "player1");
+    assert.equal(cycleMoeSkillPanelMode("pet", "next"), "phoenix");
+    assert.equal(cycleMoeSkillPanelMode("phoenix", "next"), "dragon");
+    assert.equal(cycleMoeSkillPanelMode("dragon", "next"), "player1");
+    assert.equal(cycleMoeSkillPanelMode("player1", "prev"), "dragon");
     globalThis.window = {
       localStorage: {
         getItem: (k) => storage.get(k) ?? null,
@@ -226,6 +230,102 @@ describe("skill panel mode", () => {
     assert.equal(loadMoeSkillPanelModeForPanel("panel-a"), "player1");
     assert.equal(loadMoeSkillPanelModeForPanel("panel-b"), "pet");
     delete globalThis.window;
+  });
+});
+
+describe("skill set copies", () => {
+  it("copies into a set without changing the source list and swaps only inside the set", async () => {
+    const {
+      emptyMoeSkillSetCopies,
+      copyMoeSkillIntoSet,
+      swapMoeSkillSetSlots,
+    } = await import("../../src/lib/moeSkillSetCopies.js");
+    const source = ["light", "heal"];
+    let sets = emptyMoeSkillSetCopies();
+    sets = copyMoeSkillIntoSet(sets, "set1", 0, {
+      source: "player1",
+      slotKey: "light",
+    });
+    sets = copyMoeSkillIntoSet(sets, "set1", 2, {
+      source: "phoenix",
+      slotKey: "phoenix_lv40",
+    });
+    assert.deepEqual(source, ["light", "heal"]);
+    assert.equal(sets.set1[0].slotKey, "light");
+    assert.equal(sets.set1[1], null);
+    assert.equal(sets.set1[2].source, "phoenix");
+    assert.equal(sets.set2[0], null);
+    sets = swapMoeSkillSetSlots(sets, "set1", 0, 2);
+    assert.equal(sets.set1[0].slotKey, "phoenix_lv40");
+    assert.equal(sets.set1[2].slotKey, "light");
+    const rejected = copyMoeSkillIntoSet(sets, "set1", 1, {
+      source: "nope",
+      slotKey: "x",
+    });
+    assert.equal(rejected.set1[1], null);
+    sets = copyMoeSkillIntoSet(sets, "set2", 4, {
+      source: "macro",
+      slotKey: "macro:9",
+    });
+    assert.equal(sets.set2[4].source, "macro");
+    assert.equal(sets.set2[4].slotKey, "macro:9");
+    const badMacro = copyMoeSkillIntoSet(sets, "set2", 5, {
+      source: "macro",
+      slotKey: "macro:10",
+    });
+    assert.equal(badMacro.set2[5], null);
+  });
+});
+
+describe("skill macro", () => {
+  it("stores a skill, a 1-60 second wait, and another skill on sets 1-10", async () => {
+    const {
+      emptyMoeSkillMacros,
+      moeSkillMacroWaitChoices,
+      setMoeSkillMacroSkill,
+      setMoeSkillMacroWait,
+      MOE_SKILL_MACRO_COUNT,
+    } = await import("../../src/lib/moeSkillMacro.js");
+    assert.equal(emptyMoeSkillMacros().length, MOE_SKILL_MACRO_COUNT);
+    assert.equal(moeSkillMacroWaitChoices().length, 60);
+    assert.equal(moeSkillMacroWaitChoices()[0], 1);
+    assert.equal(moeSkillMacroWaitChoices()[59], 60);
+    let macros = emptyMoeSkillMacros();
+    macros = setMoeSkillMacroSkill(macros, 0, 0, {
+      source: "player1",
+      slotKey: "enemy_stat_search",
+    });
+    macros = setMoeSkillMacroSkill(macros, 0, 1, {
+      source: "phoenix",
+      slotKey: "phoenix_lv20",
+    });
+    macros = setMoeSkillMacroWait(macros, 0, 12);
+    macros = setMoeSkillMacroSkill(macros, 0, 2, {
+      source: "dragon",
+      slotKey: "dragon_lv20",
+    });
+    assert.equal(macros[0].skillA.slotKey, "enemy_stat_search");
+    assert.equal(macros[0].waitSec, 12);
+    assert.equal(macros[0].skillB.slotKey, "dragon_lv20");
+    assert.equal(macros[1].skillA, null);
+    assert.equal(MOE_SKILL_MACRO_COUNT, 10);
+    macros = setMoeSkillMacroSkill(macros, 9, 0, {
+      source: "player1",
+      slotKey: "regen",
+    });
+    assert.equal(macros[9].skillA.slotKey, "regen");
+    assert.equal(
+      setMoeSkillMacroSkill(macros, 10, 0, {
+        source: "player1",
+        slotKey: "regen",
+      })[9].skillA.slotKey,
+      "regen"
+    );
+    const skipped = setMoeSkillMacroWait(macros, 0, 0);
+    assert.equal(skipped[0].waitSec, 12);
+    const { planMoeSkillMacroRun } = await import("../../src/lib/moeSkillMacro.js");
+    assert.equal(planMoeSkillMacroRun(macros[0]).waitSec, 12);
+    assert.equal(planMoeSkillMacroRun(macros[1]), null);
   });
 });
 
@@ -308,9 +408,14 @@ describe("vertical skill panel layout", () => {
     assert.equal(phoenix.length, 9);
     assert.equal(dragon.length, 9);
     assert.equal(phoenix[0].label, "鳳凰の呼吸");
+    assert.equal(phoenix[0].icon, "🧘");
+    assert.equal(phoenix[0].subLabel, "整える");
     assert.equal(phoenix[3].label, "フライングフェザー");
     assert.equal(dragon[0].label, "龍神の呼吸");
+    assert.equal(dragon[0].icon, "🐉");
+    assert.equal(dragon[0].subLabel, "歩行");
     assert.equal(dragon[3].label, "板乗り");
+    assert.equal(dragon[3].subLabel, "滑走");
 
     assert.equal(isTrainingSkillUnlocked({ level: 30 }, 35), true);
     assert.equal(isTrainingSkillUnlocked({ level: 40 }, 35), false);
@@ -366,7 +471,8 @@ describe("vertical skill panel layout", () => {
     const def = loadMoeSkillPanelVisibility();
     assert.equal(def.vertical1, true);
     assert.equal(def.horizontal3, true);
-    assert.ok(MOE_SKILL_PANEL_LABELS.horizontal4.includes("龍神"));
+    assert.equal(MOE_SKILL_PANEL_LABELS.horizontal4, "横スキルUI 4");
+    assert.equal(MOE_SKILL_PANEL_LABELS.verticalPhoenix, "縦スキルUI 3");
 
     const hidden = setMoeSkillPanelVisible(def, "vertical2", false);
     assert.equal(hidden.vertical2, false);
@@ -2789,6 +2895,7 @@ describe("dragon kintoun skill", () => {
       MOE_KINTOUN_DASH_EXTRA_MULT,
       MOE_KINTOUN_WALK_SPEED_MULT,
       moeKintounMoveSpeedMult,
+      MOE_KINTOUN_FLY_HEIGHT,
       tickKintounFlyOffset,
     } = await import("../../src/lib/moeDragonKintoun.js");
     assert.equal(moeKintounMoveSpeedMult(false, false), 1);
@@ -2797,8 +2904,9 @@ describe("dragon kintoun skill", () => {
       moeKintounMoveSpeedMult(true, true),
       MOE_KINTOUN_WALK_SPEED_MULT * MOE_KINTOUN_DASH_EXTRA_MULT
     );
+    assert.ok(MOE_KINTOUN_FLY_HEIGHT >= 24);
     assert.ok(tickKintounFlyOffset(0, true, 1) > 0);
-    assert.equal(tickKintounFlyOffset(14, false, 1), 0);
+    assert.equal(tickKintounFlyOffset(MOE_KINTOUN_FLY_HEIGHT, false, 1), 0);
   });
 
   it("grants stealth while kintoun is high enough", async () => {
@@ -2871,10 +2979,14 @@ describe("dragon kintoun skill", () => {
   });
 
   it("migrates shinsoku slot key to board ride", async () => {
-    const { migratePlayerSkillSlotKey } = await import(
-      "../../src/data/moePlayerSkillSlotOrder.js"
-    );
+    const { migratePlayerSkillSlotKey, defaultPlayerSkillSlotOrder } =
+      await import("../../src/data/moePlayerSkillSlotOrder.js");
     assert.equal(migratePlayerSkillSlotKey("ninja_shinsoku"), "dragon_skateboard");
+    assert.equal(defaultPlayerSkillSlotOrder()[0], "enemy_stat_search");
+    assert.equal(defaultPlayerSkillSlotOrder()[1], "worship_nature");
+    assert.equal(defaultPlayerSkillSlotOrder()[5], "soul_master");
+    assert.equal(defaultPlayerSkillSlotOrder().includes("light"), false);
+    assert.equal(defaultPlayerSkillSlotOrder().length, 10);
   });
 
   it("lists nine dragon skill get entries", async () => {
@@ -3080,8 +3192,9 @@ describe("player summon pre-skills", () => {
     assert.ok(MOE_PLAYER_UTILITY_SLOT_KEYS.includes("jiriki_kaihou"));
     assert.ok(MOE_PLAYER_UTILITY_SLOT_KEYS.includes("jiriki_seiryu"));
     const order = defaultPlayerUtilitySlotOrder();
-    assert.equal(order[1], "jiriki_kaihou");
-    assert.equal(order[2], "jiriki_seiryu");
+    assert.equal(order[0], "jiriki_kaihou");
+    assert.equal(order[1], "jiriki_seiryu");
+    assert.equal(order.includes("enemy_stat_search"), false);
   });
 
   it("marks pre-skills done with dev-check usable", () => {
@@ -4400,5 +4513,211 @@ describe("player look ahead", () => {
     assert.equal(nudgeMoePlayerLookAhead(7, "up"), 6.5);
     assert.equal(nudgeMoePlayerLookAhead(0, "up"), 0);
     assert.equal(nudgeMoePlayerLookAhead(14, "down"), 14);
+  });
+});
+
+describe("worship nature", () => {
+  it("revives only a dead pet and keeps saved hp at 0", async () => {
+    const {
+      moePetIsDead,
+      clampLoadedMoePetHp,
+      applyMoeWorshipNature,
+    } = await import("../../src/lib/moePetWorshipNature.js");
+    const {
+      ensureWorshipNatureSlot,
+    } = await import("../../src/data/moePlayerSkillSlotOrder.js");
+
+    assert.equal(moePetIsDead({ hp: 0 }), true);
+    assert.equal(moePetIsDead({ hp: 12 }), false);
+    assert.equal(clampLoadedMoePetHp(0, 80, false), 0);
+    assert.equal(clampLoadedMoePetHp(undefined, 80, false), 80);
+
+    const alive = applyMoeWorshipNature({ id: "sun_spirit", hp: 40, hpMax: 80 });
+    assert.equal(alive.ok, false);
+
+    const revived = applyMoeWorshipNature({ id: "sun_spirit", hp: 0, hpMax: 80 });
+    assert.equal(revived.ok, true);
+    assert.equal(revived.pet.hp, 80);
+
+    const slotted = ensureWorshipNatureSlot([
+      "enemy_stat_search",
+      "light",
+      "heal",
+      "heal-all",
+      "regen",
+      "banana_milk",
+      "holy_record",
+      "teleport",
+      "ninja_shinobiashi",
+      "dragon_skateboard",
+    ]);
+    assert.equal(slotted[1], "worship_nature");
+    assert.equal(slotted.length, 10);
+    assert.equal(slotted.includes("dragon_skateboard"), false);
+  });
+
+  it("names the rod and soul master, and keeps the official revive text", async () => {
+    const { MOE_PLAYER_SLOT_LABELS } = await import(
+      "../../src/data/moePlayerSkillSlotOrder.js"
+    );
+    const {
+      MOE_WHITE_ANGEL_ROD_CAST_MS,
+      MOE_WHITE_ANGEL_ROD_LINES,
+    } = await import("../../src/lib/moeWhiteAngelRod.js");
+
+    assert.equal(MOE_PLAYER_SLOT_LABELS.worship_nature, "ホワイトエンジェルロッド");
+    assert.equal(MOE_PLAYER_SLOT_LABELS.soul_master, "ソウルマスター");
+    assert.equal(MOE_WHITE_ANGEL_ROD_CAST_MS, 5000);
+    assert.equal(MOE_WHITE_ANGEL_ROD_LINES.length, 3);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[0].text, /天使の息吹/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[0].text, /0\.05レベル/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[0].text, /経験値は失わない/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[0].text, /アルターへ帰還/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[1].text, /ジャッカロープ ミルク/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[2].text, /ソウルマスター/);
+    assert.match(MOE_WHITE_ANGEL_ROD_LINES[2].text, /0\.1レベル/);
+  });
+
+  it("mines a rock in five swings and rolls the four ores", async () => {
+    const {
+      MOE_MINING_GEM_SELL_GOLD,
+      MOE_MINING_GEMS,
+      MOE_MINING_ORE_RATE_NOTE,
+      MOE_MINING_ORES,
+      MOE_MINING_PICKUP_VANISH_MS,
+      MOE_MINING_ROCK_HP,
+      MOE_MINING_SWINGS,
+      applyMoeMiningSwing,
+      createMoeMiningChest,
+      formatMoeMiningBreakNote,
+      moeMiningInReach,
+      moeMiningRockNearAltar,
+      rollMoeMiningGem,
+      rollMoeMiningOre,
+    } = await import("../../src/lib/moeMining.js");
+
+    assert.equal(
+      MOE_MINING_ORES.reduce((sum, ore) => sum + ore.weight, 0),
+      100
+    );
+    assert.equal(rollMoeMiningOre(() => 0).id, "copper_ore");
+    assert.equal(rollMoeMiningOre(() => 0.59).id, "iron_ore");
+    assert.equal(rollMoeMiningOre(() => 0.89).id, "silver_ore");
+    assert.equal(rollMoeMiningOre(() => 0.99).id, "gold_ore");
+    assert.match(MOE_MINING_ORE_RATE_NOTE, /銅59%/);
+    assert.match(MOE_MINING_ORE_RATE_NOTE, /金1%/);
+
+    assert.equal(rollMoeMiningGem(() => 0).id, "ruby");
+    assert.equal(rollMoeMiningGem(() => 0.06).id, "sapphire");
+    assert.equal(rollMoeMiningGem(() => 0.1).id, "diamond");
+    assert.equal(rollMoeMiningGem(() => 0.13).id, "gold_gem");
+    assert.equal(rollMoeMiningGem(() => 0.15), null);
+    assert.equal(
+      MOE_MINING_GEMS.every((gem) => gem.sellGold === MOE_MINING_GEM_SELL_GOLD),
+      true
+    );
+    assert.equal(MOE_MINING_GEM_SELL_GOLD, 10000);
+    assert.match(
+      formatMoeMiningBreakNote(MOE_MINING_ORES[0], MOE_MINING_GEMS[0]),
+      /銅59%/
+    );
+
+    let hp = MOE_MINING_ROCK_HP;
+    let swings = 0;
+    while (hp > 0 && swings < 40) {
+      hp = applyMoeMiningSwing(hp, () => 0).hp;
+      swings += 1;
+    }
+    assert.equal(hp, 0);
+    assert.ok(swings >= MOE_MINING_SWINGS);
+    assert.equal(moeMiningInReach(0, 0, 3, 4), true);
+    assert.equal(moeMiningInReach(0, 0, 20, 0), false);
+    const rock = moeMiningRockNearAltar({ x: 10, y: 20 });
+    assert.equal(rock.x, 19);
+    assert.equal(rock.y, 18);
+    assert.equal(moeMiningRockNearAltar(null), null);
+    assert.equal(MOE_MINING_PICKUP_VANISH_MS, 60000);
+    const chest = createMoeMiningChest(1, 3, 4, [{ id: "copper_ore" }], 1000);
+    assert.equal(chest.kind, "mining");
+    assert.equal(chest.state, "closed");
+    assert.equal(chest.items[0].id, "copper_ore");
+    assert.equal(chest.vanishAt, 61000);
+
+    const {
+      emptyMoeMiningPickup,
+      offerMoeMiningPickup,
+      takeMoeMiningPickup,
+    } = await import("../../src/lib/moeMining.js");
+    const offered = offerMoeMiningPickup(emptyMoeMiningPickup(), [
+      { id: "copper_ore", label: "銅鉱石" },
+      { id: "ruby", label: "ルビー" },
+    ]);
+    assert.equal(offered.ok, true);
+    assert.equal(offered.slots[0].id, "copper_ore");
+    assert.equal(offered.slots[1].id, "ruby");
+    assert.equal(offered.slots.filter(Boolean).length, 2);
+    const full = offerMoeMiningPickup(
+      Array.from({ length: 6 }, (_, i) => ({ id: `ore-${i}` })),
+      [{ id: "extra" }]
+    );
+    assert.equal(full.ok, false);
+    const taken = takeMoeMiningPickup(offered.slots, 0);
+    assert.equal(taken.ok, true);
+    assert.equal(taken.item.id, "copper_ore");
+    assert.equal(taken.slots[0], null);
+    assert.equal(taken.slots[1].id, "ruby");
+  });
+
+  it("drops duplicated skill-1 buttons and places the soul master west of the altar", async () => {
+    const { stripRetiredPlayerSkillSlots, packPlayerSkillSlots } =
+      await import("../../src/data/moePlayerSkillSlotOrder.js");
+    const { moeSoulMasterRoomPos, moeSoulMasterStandPos } = await import(
+      "../../src/lib/moeSoulMaster.js"
+    );
+    const packed = packPlayerSkillSlots(
+      stripRetiredPlayerSkillSlots([
+        "enemy_stat_search",
+        "worship_nature",
+        "light",
+        "heal",
+        "heal-all",
+        "regen",
+        "banana_milk",
+        "holy_record",
+        "teleport",
+        "ninja_shinobiashi",
+      ])
+    );
+    assert.equal(packed.includes("light"), false);
+    assert.equal(packed.includes("teleport"), false);
+    assert.equal(packed.includes("regen"), true);
+    const room = moeSoulMasterRoomPos({ x: 10, y: 20 });
+    const stand = moeSoulMasterStandPos({ x: 10, y: 20 });
+    assert.equal(room.x, -38);
+    assert.ok(stand.y > room.y);
+    const { moeSoulReturnProgress, moeSoulPoyoScale, moeSoulReturnOpacity } =
+      await import("../../src/lib/moeSoulMaster.js");
+    assert.equal(moeSoulReturnProgress(0, 2000, 1000), 0.5);
+    assert.equal(moeSoulReturnOpacity(1), 1);
+    const mid = moeSoulPoyoScale(1 / 12);
+    assert.ok(mid.y > 1);
+    assert.ok(Math.abs(moeSoulPoyoScale(1).y - 1) < 0.001);
+  });
+});
+
+describe("field fog", () => {
+  it("keeps mist in forests and clears it on the kintoun and elsewhere", async () => {
+    const { moeFieldFogDistances, moeFieldSlotIsForest } = await import(
+      "../../src/lib/moeFieldFog.js"
+    );
+    assert.equal(moeFieldSlotIsForest("albeez_forest"), true);
+    assert.equal(moeFieldSlotIsForest("elvin_valley"), true);
+    assert.equal(moeFieldSlotIsForest("bisk_town"), false);
+    const forest = moeFieldFogDistances("albeez_forest", false);
+    const riding = moeFieldFogDistances("albeez_forest", true);
+    const town = moeFieldFogDistances("sulfur_mine", false);
+    assert.ok(forest.near < riding.near);
+    assert.equal(riding.near, town.near);
+    assert.equal(riding.far, town.far);
   });
 });

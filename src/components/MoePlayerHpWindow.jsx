@@ -51,6 +51,14 @@ function loadSavedPos() {
   return null;
 }
 
+function clampHpWindowPos(pos) {
+  if (typeof window === "undefined" || !pos) return pos;
+  return {
+    x: Math.max(4, Math.min(window.innerWidth - WINDOW_W - 4, pos.x)),
+    y: Math.max(4, Math.min(window.innerHeight - 48 - 4, pos.y)),
+  };
+}
+
 /**
  * @param {{ pct: number, color: string, label: string, displayText: string }} props
  */
@@ -116,10 +124,12 @@ export default function MoePlayerHpWindow({
     canSaveRef.current = false;
     const saved = loadSavedPos();
     setPos(
-      saved ?? {
-        x: Math.max(8, 12),
-        y: Math.max(56, window.innerHeight * 0.12),
-      }
+      clampHpWindowPos(
+        saved ?? {
+          x: Math.max(8, 12),
+          y: Math.max(56, window.innerHeight * 0.12),
+        }
+      )
     );
     canSaveRef.current = true;
   }, []);

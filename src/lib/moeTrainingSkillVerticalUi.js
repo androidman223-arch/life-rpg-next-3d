@@ -70,6 +70,8 @@ function buildTrainingVerticalSlots(
     return {
       slotKey: `${track}_lv${entry.level}`,
       label: entry.name,
+      icon: entry.icon ?? "✦",
+      subLabel: entry.sub ?? "",
       disabled: false,
       unusable: !unlocked,
       trainingSkill: true,

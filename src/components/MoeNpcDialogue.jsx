@@ -122,7 +122,9 @@ export default function MoeNpcDialogue({
   const advanceHint =
     mode === "lines"
       ? isLastLine
-        ? "クリック / Enter で終了"
+        ? completeLabel === "終わる"
+          ? "クリック / Enter で終了"
+          : `クリック / Enter で${completeLabel}`
         : "クリック / Enter で次へ"
       : onComplete
         ? "クリック / Enter で次へ"
@@ -370,7 +372,7 @@ export default function MoeNpcDialogue({
       alignTop={alignTop}
     >
       <SpeakerHeader emoji={emoji} label={label} />
-      <p className="min-h-[3.5rem] text-sm leading-relaxed text-zinc-100">
+      <p className="min-h-[3.5rem] whitespace-pre-line text-sm leading-relaxed text-zinc-100">
         {line.text}
       </p>
       <div className="mt-3 flex items-center justify-between gap-2">

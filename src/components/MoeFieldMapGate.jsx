@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import {
   getCachedMoeFieldMapComponent,
   getMoeFieldPrefetchState,
@@ -10,7 +10,7 @@ import {
 import { MoePanelStackProvider } from "@/context/MoePanelStackContext";
 
 /**
- * 先読み済みなら「準備中」を出さず即 MoeFieldMap を表示
+ * 初回はサーバーと同じ「準備中」。先読み済みなら描画前に差し替える。
  * @param {{
  *   worldMode?: "2d" | "3d",
  *   onBack?: () => void,
@@ -24,10 +24,14 @@ export default function MoeFieldMapGate({
   onEnemyDefeat,
   loadingLabel = "MOEフィールドを準備中…",
 }) {
-  const [FieldMap, setFieldMap] = useState(() => getCachedMoeFieldMapComponent());
-  const [prefetchState, setPrefetchState] = useState(() =>
-    getMoeFieldPrefetchState()
-  );
+  const [FieldMap, setFieldMap] = useState(null);
+  const [prefetchState, setPrefetchState] = useState("idle");
+
+  useLayoutEffect(() => {
+    const cached = getCachedMoeFieldMapComponent();
+    if (cached) setFieldMap(() => cached);
+    setPrefetchState(getMoeFieldPrefetchState());
+  }, []);
 
   const syncFromCache = useCallback(() => {
     const cached = getCachedMoeFieldMapComponent();

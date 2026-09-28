@@ -18,6 +18,8 @@ import { MOE_SKILL_PANEL_VISIBILITY_STORAGE_KEY } from "@/lib/moeSkillPanelVisib
 import { MOE_SKILL_PANEL_COLLAPSE_STORAGE_KEY } from "@/lib/moeSkillPanelCollapseSettings";
 import { MOE_PLAYER_SKILL_SET_STORAGE_KEY } from "@/lib/moePlayerSkillSetSettings";
 import { MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY } from "@/data/moePlayerSkillSlotOrder";
+import { MOE_SKILL_SET_COPIES_STORAGE_KEY } from "@/lib/moeSkillSetCopies";
+import { MOE_SKILL_MACRO_STORAGE_KEY } from "@/lib/moeSkillMacro";
 import { MOE_PLAYER_SKILL_UNLOCK_STORAGE_KEY } from "@/data/moePlayerNinjaSkills";
 import { MOE_PLAYER_PRE_SKILL_PROGRESS_STORAGE_KEY } from "@/lib/moePlayerPreSkillProgress";
 import { MOE_PLAYER_SKILL2_PROGRESS_STORAGE_KEY } from "@/lib/moePlayerSkill2Progress";
@@ -127,6 +129,16 @@ export const MOE_STORAGE_REGISTRY = {
   playerSkillSlotOrder: {
     key: MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY,
     owner: "moePlayerSkillSlotOrder",
+  },
+  skillSetCopies: {
+    key: MOE_SKILL_SET_COPIES_STORAGE_KEY,
+    owner: "moeSkillSetCopies",
+    notes: "セット1/2へコピーしたスキル。元の並びは変えない",
+  },
+  skillMacro: {
+    key: MOE_SKILL_MACRO_STORAGE_KEY,
+    owner: "moeSkillMacro",
+    notes: "マクロ1〜10。技・待ち秒・技。発動はスキルページ「マクロ」",
   },
   playerSkillUnlocks: {
     key: MOE_PLAYER_SKILL_UNLOCK_STORAGE_KEY,

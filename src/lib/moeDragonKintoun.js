@@ -2,8 +2,8 @@
  * 龍神スキル — 筋斗雲（フィールド移動 · 飛行オフセット）
  */
 
-/** 山の上を飛ぶ高さ（ワールドY） */
-export const MOE_KINTOUN_FLY_HEIGHT = 14;
+/** 巡航高度。超ボス（アウズンブラ・表示約10）の上を通る */
+export const MOE_KINTOUN_FLY_HEIGHT = 24;
 
 export const MOE_KINTOUN_ASCENT_PER_SEC = 20;
 export const MOE_KINTOUN_DESCENT_PER_SEC = 24;

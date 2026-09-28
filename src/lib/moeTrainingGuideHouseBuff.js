@@ -65,10 +65,13 @@ export function moeApplyFlatPetHpBonus(pet, amount, opts = {}) {
   const add = Math.max(0, Math.floor(Number(amount) || 0));
   if (!add || !pet) return pet;
   const heal = opts.heal !== false;
+  const dead = (Number(pet.hp) || 0) <= 0;
   let hpMax = (Number(pet.hpMax) || 1) + add;
-  let hp = heal
-    ? Math.min(hpMax, (Number(pet.hp) || 0) + add)
-    : Math.min(hpMax, Number(pet.hp) || 0);
+  let hp = dead
+    ? 0
+    : heal
+      ? Math.min(hpMax, (Number(pet.hp) || 0) + add)
+      : Math.min(hpMax, Number(pet.hp) || 0);
   hp = Math.round(hp * 100) / 100;
   hpMax = Math.round(hpMax * 100) / 100;
   return { ...pet, hp, hpMax };

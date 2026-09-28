@@ -83,6 +83,63 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
 
   const label = MOE_PLAYER_SLOT_LABELS[key] ?? key;
 
+  if (key === "soul_master") {
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null),
+      title: "ソウルマスターの部屋へ移動する",
+      onClick: ctx.onSoulMaster,
+      reorderable: true,
+    };
+  }
+
+  if (key === "mining") {
+    const busy = Boolean(ctx.miningBusy);
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null),
+      disabled: busy,
+      title: busy
+        ? "採掘中"
+        : "岩の前でつるはしを5回振る。HPが0になると鉱石。宝石はたまに追加",
+      onClick: ctx.onMining,
+      reorderable: true,
+    };
+  }
+
+  if (key === "worship_nature") {
+    const dead = Boolean(ctx.petDead);
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null),
+      active: dead,
+      title: dead
+        ? "ホワイトエンジェルロッド — 天使の息吹。約5秒で蘇生し、アルターへ帰還する"
+        : "ホワイトエンジェルロッド — ペットが倒れたときだけ使える",
+      onClick: ctx.onWorshipNature,
+      reorderable: true,
+    };
+  }
+
+  if (key === "enemy_stat_search") {
+    const hasTarget = Boolean(ctx.targetEnemy);
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null),
+      active: Boolean(ctx.enemyStatSearchOpen),
+      disabled: !hasTarget,
+      title: hasTarget
+        ? "ターゲット敵のHP・MP・攻撃・スキルを調べる"
+        : "敵をクリックしてターゲットを選んでから使う",
+      onClick: ctx.onEnemyStatSearch,
+      reorderable: true,
+    };
+  }
+
   if (key === "light") {
     const cd = ctx.healCdSec.light ?? 0;
     return {

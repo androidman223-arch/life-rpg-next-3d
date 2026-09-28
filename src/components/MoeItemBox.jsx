@@ -218,8 +218,23 @@ export default function MoeItemBox({ onUse, onTrash, onToast }) {
       onToast?.("空のマスです");
       return;
     }
+    const sellGold = Math.floor(Number(selectedItem.sellGold));
+    if (sellGold > 0) {
+      setGold((prev) => {
+        const next = prev + sellGold;
+        saveGold(next);
+        return next;
+      });
+      updateSlots((prev) => {
+        const next = [...prev];
+        next[selectedIndex] = null;
+        return next;
+      });
+      onToast?.(`${selectedItem.label}を ${sellGold.toLocaleString()}g で売った`);
+      return;
+    }
     onUse?.(selectedIndex, selectedItem);
-  }, [onToast, onUse, selectedIndex, selectedItem]);
+  }, [onToast, onUse, selectedIndex, selectedItem, updateSlots]);
 
   const handleTrash = useCallback(() => {
     if (selectedIndex == null) {

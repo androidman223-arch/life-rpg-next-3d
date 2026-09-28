@@ -4,10 +4,9 @@
 
 export const MOE_PLAYER_UTILITY_SLOT_COUNT = 10;
 
-/** @typedef {'enemy_stat_search' | 'jiriki_kaihou' | 'jiriki_seiryu'} MoePlayerUtilitySkillKey */
+/** @typedef {'jiriki_kaihou' | 'jiriki_seiryu'} MoePlayerUtilitySkillKey */
 
 export const MOE_PLAYER_UTILITY_SLOT_KEYS = [
-  "enemy_stat_search",
   "jiriki_kaihou",
   "jiriki_seiryu",
 ];
@@ -29,7 +28,6 @@ export const MOE_PLAYER_UTILITY_SLOT_ICONS = {
 /** @returns {(MoePlayerUtilitySkillKey|null)[]} */
 export function defaultPlayerUtilitySlotOrder() {
   return [
-    "enemy_stat_search",
     "jiriki_kaihou",
     "jiriki_seiryu",
     null,

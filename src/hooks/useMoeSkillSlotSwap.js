@@ -3,24 +3,32 @@
 import { useCallback, useRef, useState } from "react";
 
 const SLOT_ATTR = "data-moe-skill-slot";
+const PANEL_ATTR = "data-moe-skill-panel";
+const COPY_TARGET_PANELS = new Set(["set1", "set2", "macro"]);
 /** 長押しで入れ替えモード開始（ms） */
 export const MOE_SKILL_SLOT_LONG_PRESS_MS = 480;
 /** 長押し成立前にこの距離以上動くとキャンセル（スクロール誤爆防止） */
 const LONG_PRESS_MOVE_CANCEL_PX = 12;
 
 /** @param {Element|null|undefined} el */
-function findSkillSlotIndex(el) {
+function findSkillSlot(el) {
   const node = el?.closest?.(`[${SLOT_ATTR}]`);
   if (!node) return null;
   const n = Number(node.getAttribute(SLOT_ATTR));
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return { index: n, panelId: node.getAttribute(PANEL_ATTR) || "" };
 }
 
 /**
- * スキル枠の長押し→ドラッグ入れ替え
+ * スキル枠の長押し→ドラッグ。
+ * reorder は同じパネル内の入れ替え。copy はセット1/2へコピー（元は動かさない）。
  * @param {(from: number, to: number) => void} onSwap
+ * @param {{ panelId?: string, mode?: 'reorder' | 'copy', onCopy?: (from: number, toPanel: string, toIndex: number) => void }} [options]
  */
-export function useMoeSkillSlotSwap(onSwap) {
+export function useMoeSkillSlotSwap(onSwap, options = {}) {
+  const panelId = options.panelId || "";
+  const mode = options.mode || "reorder";
+  const onCopy = options.onCopy;
   const suppressClickRef = useRef(false);
   const dragFromRef = useRef(null);
   const dragOverRef = useRef(null);
@@ -53,10 +61,13 @@ export function useMoeSkillSlotSwap(onSwap) {
   }, [clearLongPressTimer]);
 
   const bindSlot = useCallback(
-    (index, { reorderable = true } = {}) => {
-      if (!reorderable) {
+    (index, { reorderable = true, copyable = false } = {}) => {
+      const interactive =
+        (mode === "reorder" && reorderable) || (mode === "copy" && copyable);
+      const slotAttr = { [SLOT_ATTR]: index, [PANEL_ATTR]: panelId };
+      if (!interactive) {
         return {
-          slotAttr: { [SLOT_ATTR]: index },
+          slotAttr,
           onClickCapture: (e) => {
             if (suppressClickRef.current) {
               suppressClickRef.current = false;
@@ -84,8 +95,8 @@ export function useMoeSkillSlotSwap(onSwap) {
         className = "ring-1 ring-white/25";
       }
 
-      return {
-        slotAttr: { [SLOT_ATTR]: index },
+        return {
+          slotAttr,
         onPointerDown: (e) => {
           if (e.button !== 0) return;
           resetDrag();
@@ -125,11 +136,18 @@ export function useMoeSkillSlotSwap(onSwap) {
               return;
             }
 
-            const to = findSkillSlotIndex(
+            const hit = findSkillSlot(
               document.elementFromPoint(ev.clientX, ev.clientY)
             );
-            dragOverRef.current = to;
-            setDragOverIndex(to);
+            const accept =
+              hit &&
+              (mode === "copy"
+                ? COPY_TARGET_PANELS.has(hit.panelId)
+                : hit.panelId === panelId);
+            dragOverRef.current = accept ? hit : null;
+            setDragOverIndex(
+              accept && mode === "reorder" ? hit.index : null
+            );
           };
 
           const onUp = (ev) => {
@@ -139,10 +157,9 @@ export function useMoeSkillSlotSwap(onSwap) {
 
             const from = dragFromRef.current;
             const wasArmed = armedRef.current;
-            let to = findSkillSlotIndex(
-              document.elementFromPoint(ev.clientX, ev.clientY)
-            );
-            if (to == null) to = dragOverRef.current;
+            const hit =
+              findSkillSlot(document.elementFromPoint(ev.clientX, ev.clientY)) ||
+              dragOverRef.current;
 
             armedRef.current = false;
             dragFromRef.current = null;
@@ -151,10 +168,16 @@ export function useMoeSkillSlotSwap(onSwap) {
             setDragArmedIndex(null);
             setDragOverIndex(null);
 
-            if (wasArmed) {
+            if (wasArmed && from != null && hit) {
               suppressClickRef.current = true;
-              if (from != null && to != null && from !== to) {
-                onSwap(from, to);
+              if (mode === "copy" && COPY_TARGET_PANELS.has(hit.panelId)) {
+                onCopy?.(from, hit.panelId, hit.index);
+              } else if (
+                mode === "reorder" &&
+                hit.panelId === panelId &&
+                from !== hit.index
+              ) {
+                onSwap(from, hit.index);
               }
             }
           };
@@ -185,6 +208,9 @@ export function useMoeSkillSlotSwap(onSwap) {
     },
     [
       onSwap,
+      onCopy,
+      panelId,
+      mode,
       dragPendingIndex,
       dragArmedIndex,
       dragOverIndex,

@@ -4,7 +4,7 @@
 
 /** 鳳凰ボタン下のサブメッセージ（常時表示） */
 export const MOE_PHOENIX_BUTTON_SUB_HINT =
-  "（自力思考、めいそう、メモ整理、習慣整え、休む、断捨離、人生の目標、 ALL OK）";
+  "（静かに整える、自力思考、めいそう、メモ整理、習慣整え、休む、断捨離、人生の目標、 ALL OK）";
 
 /** 休みメモ用の補足（説明パネル内） */
 export const MOE_PHOENIX_REST_SUB_HINT =
