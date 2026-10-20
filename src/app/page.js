@@ -10,7 +10,6 @@ import {
   loadGameStatusBackup,
   resetGameStatusToDefault,
   restoreGameStatusFromBackup,
-  saveGameStatus,
 } from "@/lib/gameStatus";
 import TrainingExpPanel from "@/components/TrainingExpPanel";
 import DragonTrainingPanel from "@/components/DragonTrainingPanel";
@@ -20,8 +19,63 @@ import {
   prefetchMoeFieldMap,
   subscribeMoeFieldPrefetch,
 } from "@/lib/moeFieldPrefetch";
+import {
+  formatDragonExpDisplay,
+  getDragonPracticeExpDisplay,
+} from "@/lib/moeDragonTraining";
+import { loadPlayerExperience } from "@/lib/moePlayerExperience";
+import {
+  displayTrainingExp,
+  importPhoenixPointsFromKyukei,
+  loadBreakPopupPoints,
+} from "@/lib/moePhoenixPointsImport";
 
-const EXP_GAIN = 280;
+function MenuTrainingExpCard({
+  emoji,
+  name,
+  nameClass,
+  gameText,
+  externalText,
+  totalText,
+  frameClass,
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-2 shadow ${frameClass}`}>
+      <div className="flex items-center gap-2.5">
+        <span className="text-xl leading-none" aria-hidden>
+          {emoji}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-xl font-black leading-none tracking-[0.14em] ${nameClass}`}
+          >
+            {name}
+          </p>
+          <p className="mt-1 flex items-baseline justify-between gap-2 text-[11px] leading-none">
+            <span className="whitespace-nowrap">
+              <span className="font-bold text-white/70">P </span>
+              <span className="font-mono font-black tabular-nums text-white">
+                {gameText}
+              </span>
+            </span>
+            <span className="whitespace-nowrap">
+              <span className="font-bold text-white/70">外部P </span>
+              <span className="font-mono font-black tabular-nums text-white">
+                {externalText}
+              </span>
+            </span>
+            <span className="whitespace-nowrap">
+              <span className="font-bold text-white/70">合計 </span>
+              <span className="font-mono text-sm font-black tabular-nums text-white">
+                {totalText}
+              </span>
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
@@ -36,12 +90,46 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
 
   const [trainingOpen, setTrainingOpen] = useState(false);
-  const [dragonTrainingOpen, setDragonTrainingOpen] = useState(false);
+  /** @type {'phoenix' | 'dragon'} */
+  const [trainingTab, setTrainingTab] = useState("phoenix");
+  const [phoenixWisdomExp, setPhoenixWisdomExp] = useState(0);
+  const [dragonTrack, setDragonTrack] = useState({ level: 0, exp: 0 });
+  const [breakPoints, setBreakPoints] = useState({
+    phoenix: 0,
+    dragon: 0,
+    updated: null,
+  });
+  const [breakImportMessage, setBreakImportMessage] = useState("");
+  const [breakImportTick, setBreakImportTick] = useState(0);
+  const [breakImporting, setBreakImporting] = useState(false);
+
+  const refreshTrainingExp = useCallback(() => {
+    const saved = loadPlayerExperience();
+    setDragonTrack(saved.dragon);
+    setPhoenixWisdomExp(saved.phoenixWisdomExp ?? 0);
+    setBreakPoints(loadBreakPopupPoints());
+  }, []);
+
+  const shownTrainingExp = displayTrainingExp(
+    phoenixWisdomExp,
+    getDragonPracticeExpDisplay(dragonTrack),
+    breakPoints
+  );
+
+  const handleImportBreakPoints = useCallback(async () => {
+    setBreakImporting(true);
+    const result = await importPhoenixPointsFromKyukei();
+    setBreakImportMessage(result.message);
+    setBreakImportTick((n) => n + 1);
+    if (result.ok && result.points) setBreakPoints(result.points);
+    setBreakImporting(false);
+  }, []);
 
   useEffect(() => {
     setStatus(loadGameStatus());
+    refreshTrainingExp();
     setStorageReady(true);
-  }, []);
+  }, [refreshTrainingExp]);
 
   useEffect(() => subscribeMoeFieldPrefetch(setMoePrefetchState), []);
 
@@ -52,10 +140,25 @@ export default function Home() {
   }, [celebration]);
 
   useEffect(() => {
-    const sync = () => setStatus(loadGameStatus());
+    if (!breakImportMessage) return undefined;
+    const t = setTimeout(() => setBreakImportMessage(""), 10000);
+    return () => clearTimeout(t);
+  }, [breakImportMessage, breakImportTick]);
+
+  useEffect(() => {
+    const sync = () => {
+      setStatus(loadGameStatus());
+      refreshTrainingExp();
+    };
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
-  }, []);
+  }, [refreshTrainingExp]);
+
+  useEffect(() => {
+    if (!trainingOpen) return undefined;
+    const id = setInterval(refreshTrainingExp, 1000);
+    return () => clearInterval(id);
+  }, [trainingOpen, refreshTrainingExp]);
 
   const enterMoeField = useCallback(
     (mode) => {
@@ -65,31 +168,6 @@ export default function Home() {
     },
     [router]
   );
-
-  const expPercent = Math.min(
-    100,
-    Math.floor((status.exp / status.nextExp) * 100)
-  );
-
-  const handleAction = () => {
-    setStatus((prev) => {
-      const newLevel = prev.level + 1;
-      const newExp = prev.exp + EXP_GAIN;
-      const next = {
-        ...prev,
-        level: newLevel,
-        exp: newExp,
-        nextExp: prev.nextExp + EXP_GAIN + 60,
-      };
-      saveGameStatus(next);
-      queueMicrotask(() =>
-        setCelebration(
-          `🎉 レベルアップ！ Lv.${newLevel} になった！経験値もグングン増えているよ！おめでとう！`
-        )
-      );
-      return next;
-    });
-  };
 
   const handleBackupSave = () => {
     if (
@@ -188,104 +266,111 @@ export default function Home() {
                 {status.job}
               </span>
             </div>
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-pink-800/70 via-pink-900/50 to-rose-950/60 border-2 border-pink-500/40 shadow-lg shadow-pink-900/30">
-              <div className="flex items-start gap-3 mb-3">
-                <span className="text-3xl leading-none" aria-hidden>
-                  ✨
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-pink-300/90">
-                    経験値（保存済み・全フィールド共通）
-                  </p>
-                  <p className="mt-1 font-mono text-3xl md:text-4xl font-black text-white tabular-nums tracking-tight drop-shadow-md">
-                    {status.exp}
-                    <span className="text-pink-200/70 text-xl md:text-2xl font-bold">
-                      {" "}
-                      / {status.nextExp}
-                    </span>
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-pink-100">
-                    次の目安まであと{" "}
-                    <span className="font-mono text-amber-200">
-                      {Math.max(0, status.nextExp - status.exp)}
-                    </span>{" "}
-                    EXP
-                  </p>
-                </div>
-              </div>
-              <div className="w-full bg-pink-950/90 rounded-full h-5 relative overflow-hidden border border-pink-700/50">
-                <div
-                  className="bg-gradient-to-r from-pink-400 via-fuchsia-500 to-pink-600 h-5 rounded-full transition-all duration-700"
-                  style={{ width: `${expPercent}%` }}
-                />
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                  {expPercent}% まで溜まったよ
-                </span>
-              </div>
+            <div className="space-y-1.5">
+              <MenuTrainingExpCard
+                emoji="🪶"
+                name="鳳凰"
+                nameClass="moe-menu-phoenix-name"
+                gameText={formatDragonExpDisplay(phoenixWisdomExp)}
+                externalText={formatDragonExpDisplay(breakPoints.phoenix)}
+                totalText={formatDragonExpDisplay(shownTrainingExp.phoenix)}
+                frameClass="border-teal-300/70 bg-gradient-to-br from-teal-900/70 to-cyan-950/70 shadow-[0_0_18px_rgba(45,212,191,0.28)]"
+              />
+              <MenuTrainingExpCard
+                emoji="🐉"
+                name="龍神"
+                nameClass="moe-menu-dragon-name"
+                gameText={formatDragonExpDisplay(
+                  getDragonPracticeExpDisplay(dragonTrack)
+                )}
+                externalText={formatDragonExpDisplay(breakPoints.dragon)}
+                totalText={formatDragonExpDisplay(shownTrainingExp.dragon)}
+                frameClass="border-amber-300/70 bg-gradient-to-br from-amber-950/80 to-orange-950/70 shadow-[0_0_18px_rgba(245,158,11,0.28)]"
+              />
+              <button
+                type="button"
+                onClick={handleImportBreakPoints}
+                disabled={!storageReady || breakImporting}
+                className="w-full rounded-xl border border-teal-300/50 bg-teal-900/40 px-3 py-2 text-sm font-bold text-teal-50 shadow transition hover:bg-teal-800/50 disabled:opacity-50"
+              >
+                {breakImporting ? "読みこみ中…" : "フェニックスP外部取りこみ"}
+              </button>
+              {breakImportMessage ? (
+                <p
+                  role="status"
+                  className="rounded-lg border border-teal-300/40 bg-teal-950/70 px-2 py-1.5 text-[12px] font-semibold leading-snug text-teal-100"
+                >
+                  {breakImportMessage}
+                </p>
+              ) : null}
             </div>
           </div>
         )}
 
         <button
           type="button"
-          onClick={handleAction}
-          disabled={!storageReady}
-          className="mt-8 w-full py-4 px-6 rounded-2xl font-bold text-lg text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border border-violet-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
-        >
-          行動する（レベル +1 · 経験値 +{EXP_GAIN}）
-        </button>
-
-        <p className="mt-6 w-full text-center text-xs text-zinc-400 leading-relaxed">
-          通常フィールドは討伐ごと <span className="text-pink-300 font-bold">+1 EXP</span>
-          ／ MOEは敵によって{" "}
-          <span className="text-pink-300 font-bold">+（Lv×5 目安）</span>
-          。どちらも上の数値に加わります💗
-        </p>
-
-        <button
-          type="button"
-          onClick={() => {
-            setDragonTrainingOpen(false);
-            setTrainingOpen((v) => !v);
-          }}
+          onClick={() => setTrainingOpen((v) => !v)}
           disabled={!storageReady}
           aria-expanded={trainingOpen}
-          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-600 hover:to-cyan-700 border border-teal-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
+          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-teal-700 via-cyan-800 to-amber-800 hover:from-teal-600 hover:via-cyan-700 hover:to-amber-700 border border-teal-300/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
         >
-          {trainingOpen
-            ? "🪶 鳳凰の修行を閉じる"
-            : "🪶 鳳凰の修行①（知恵 · 整える · タイマー）"}
+          {trainingOpen ? "修行を閉じる" : "修行（鳳凰 · 龍神）"}
         </button>
 
-        <TrainingExpPanel
-          open={trainingOpen && storageReady}
-          onTrainerExpGranted={() => {
-            setStatus(loadGameStatus());
-            setCelebration("✨ 修行ボーナスで訓練士EXPが増えたよ！");
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={() => {
-            setTrainingOpen(false);
-            setDragonTrainingOpen((v) => !v);
-          }}
-          disabled={!storageReady}
-          aria-expanded={dragonTrainingOpen}
-          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-amber-700 to-orange-900 hover:from-amber-600 hover:to-orange-800 border border-amber-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
-        >
-          {dragonTrainingOpen
-            ? "🐉 龍の武練を閉じる"
-            : "🐉 龍神の修行②（実践 · 体験 · 行動ログ）"}
-        </button>
-
-        <DragonTrainingPanel
-          open={dragonTrainingOpen && storageReady}
-          onDragonExpGranted={(lines) => {
-            setCelebration(lines.join("\n"));
-          }}
-        />
+        {trainingOpen && storageReady ? (
+          <div className="mt-3 w-full">
+            <div
+              className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-900/80 p-1"
+              role="tablist"
+              aria-label="修行"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={trainingTab === "phoenix"}
+                onClick={() => setTrainingTab("phoenix")}
+                className={`rounded-lg py-2 text-sm font-bold transition ${
+                  trainingTab === "phoenix"
+                    ? "bg-teal-700 text-white shadow"
+                    : "text-teal-100/70 hover:text-white"
+                }`}
+              >
+                🪶 鳳凰
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={trainingTab === "dragon"}
+                onClick={() => setTrainingTab("dragon")}
+                className={`rounded-lg py-2 text-sm font-bold transition ${
+                  trainingTab === "dragon"
+                    ? "bg-amber-700 text-white shadow"
+                    : "text-amber-100/70 hover:text-white"
+                }`}
+              >
+                🐉 龍神
+              </button>
+            </div>
+            <div className={trainingTab === "phoenix" ? "" : "hidden"}>
+              <TrainingExpPanel
+                open
+                onTrainerExpGranted={() => {
+                  setStatus(loadGameStatus());
+                  setCelebration("✨ 修行ボーナスで訓練士EXPが増えたよ！");
+                }}
+              />
+            </div>
+            <div className={trainingTab === "dragon" ? "" : "hidden"}>
+              <DragonTrainingPanel
+                open
+                onDragonExpGranted={(lines) => {
+                  refreshTrainingExp();
+                  setCelebration(lines.join("\n"));
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <Link
           href="/field"

@@ -14,6 +14,11 @@ import {
 } from "@/data/moePetExpTable";
 import { getMysteryDragonMaxHpBonus } from "@/data/moePhoenixDragon";
 import { clampLoadedMoePetHp, moePetIsDead } from "@/lib/moePetWorshipNature";
+import {
+  addExternalTrainingExp,
+  loadPlayerExperience,
+  trainingExpSnapshotFrom,
+} from "./moePlayerExperience.js";
 
 const STORAGE_KEY = "life-rpg-moe-pet-progress";
 const DEBUG_SNAPSHOT_KEY = "life-rpg-moe-pet-debug-snapshot";
@@ -539,6 +544,7 @@ export function buildMoeExternalSavePayload(itemBoxSlots = null) {
   if (itemBoxSlots) {
     payload.itemBox = itemBoxSlots;
   }
+  payload.trainingExp = trainingExpSnapshotFrom(loadPlayerExperience());
   return payload;
 }
 
@@ -550,9 +556,14 @@ export function importMoeExternalSavePayload(payload) {
   if (payload.pets) {
     writeMoePetsSave(normalizeMoePetSaveFile(payload.pets));
   }
+  const trainingExpAdded =
+    payload.trainingExpAdd && typeof payload.trainingExpAdd === "object"
+      ? addExternalTrainingExp(payload.trainingExpAdd)
+      : null;
   return {
     pets: payload.pets ? normalizeMoePetSaveFile(payload.pets) : null,
     itemBox: Array.isArray(payload.itemBox) ? payload.itemBox : null,
+    trainingExpAdded,
   };
 }
 

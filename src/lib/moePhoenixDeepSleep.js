@@ -1,9 +1,9 @@
 /**
- * 深睡眠眠 — ペットMP中回復（HP回復ではない · プレイヤー回復スキルと役割分担）
+ * スリープディープ — ペットMP中回復（HP回復ではない · プレイヤー回復スキルと役割分担）
  */
 
 export const MOE_PHOENIX_DEEP_SLEEP_MP_RATIO = 0.45;
-/** 深睡眠眠 — 詠唱秒数（他フェニックス詠唱より長め） */
+/** スリープディープ — 詠唱秒数（他フェニックス詠唱より長め） */
 export const MOE_PHOENIX_DEEP_SLEEP_CHANT_SEC = 5;
 export const MOE_PHOENIX_DEEP_SLEEP_SKILL_ID = "phoenix_deep_sleep";
 

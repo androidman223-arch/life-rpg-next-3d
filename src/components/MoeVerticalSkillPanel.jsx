@@ -9,6 +9,7 @@ import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
 import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
 import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
 import { moeFloatingDragTitle } from "@/lib/moePanelStack";
+import { MOE_MINING_SKILL_BTN_CLASS } from "@/lib/moePlayerSkillSlotUi";
 
 /** MOE風 — 枠からはみ出した文字は途中で切る（…なし） */
 const MOE_SKILL_LABEL_CLIP =
@@ -263,7 +264,10 @@ export default function MoeVerticalSkillPanel({
             slot.slotKey === "jiriki_seiran" ||
             Boolean(slot.unusable) ||
             Boolean(slot.trainingSkill);
-          const btnClass = onCooldown
+          const btnClass =
+            slot.slotKey === "mining" && !onCooldown
+              ? MOE_MINING_SKILL_BTN_CLASS
+              : onCooldown
             ? theme.skillCooldown
             : slot.active
               ? theme.skillActive

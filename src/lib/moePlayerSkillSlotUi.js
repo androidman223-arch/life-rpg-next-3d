@@ -30,6 +30,10 @@ import {
   moePlayerBananaMilkStaminaRegenPerSec,
 } from "@/lib/moePlayerVitals";
 
+/** 採掘ボタンだけ緑。技①の他ボタンは青のまま */
+export const MOE_MINING_SKILL_BTN_CLASS =
+  "border-emerald-200/80 bg-gradient-to-b from-lime-400 via-emerald-500 to-green-800 text-emerald-950 hover:brightness-110";
+
 const NINJA_ICONS = {
   MoeShinobiashiIcon,
   MoeShinsokuIcon,

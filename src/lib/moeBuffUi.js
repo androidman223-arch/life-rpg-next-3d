@@ -141,7 +141,6 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
  *   petRegenTicksLeft?: number,
  *   petRegenRemainSec?: number | null,
  *   phoenixAnsleepRegenRef?: { current: { until: number, hpPerTick?: number, intervalSec?: number } | null },
- *   phoenixUltimateRegenRef?: { current: { until: number, hpPerTick?: number, intervalSec?: number } | null },
  *   phoenixHotSpringDefenseRef?: { current: { until: number, bonus?: number } | null },
  *   atrumMpRegenRef?: { current: { until: number } | null },
  *   atrumMagicBuffUntilRef?: { current: number },
@@ -176,12 +175,7 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
     {
       ref: ctx.phoenixAnsleepRegenRef,
       id: "phoenix_ansleep_regen",
-      label: "安眠導歩 — リジェネ",
-    },
-    {
-      ref: ctx.phoenixUltimateRegenRef,
-      id: "phoenix_ultimate_regen",
-      label: "睡眠絶崩 — リジェネ",
+      label: "龍神の呼吸 — リジェネ",
     },
   ];
   for (const { ref, id, label } of phoenixRegenSources) {
@@ -204,7 +198,7 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
     items.push({
       id: "phoenix_hot_spring_def",
       icon: "♨",
-      label: `温泉調気 — 守り+${hotSpring.bonus ?? 50}`,
+      label: `オンセン — 守り+${hotSpring.bonus ?? 50}`,
       remainSec: moeBuffRemainSec(hotSpring.until, nowMs),
       tone: "buff",
     });

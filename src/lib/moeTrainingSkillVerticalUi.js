@@ -26,6 +26,9 @@ export function formatTrainingSkillVerticalTitle(
   track,
   skillMode = MOE_TRAINING_SKILL_MODE_ALL
 ) {
+  if (entry.status === "empty") {
+    return `Lv.${entry.level} 空き枠\n${entry.hint || "まだ決めていない"}`;
+  }
   const unlocked = isTrainingSkillUsableAtLevel(skillMode, practiceLevel, entry);
   const trackLabel = track === "phoenix" ? "知恵" : "実践";
   const lines = [`Lv.${entry.level} ${entry.name}`];
@@ -60,21 +63,22 @@ function buildTrainingVerticalSlots(
   skillMode = MOE_TRAINING_SKILL_MODE_ALL
 ) {
   return catalog.map((entry) => {
+    const empty = entry.status === "empty";
     const unlocked = isTrainingSkillUsableAtLevel(
       skillMode,
       practiceLevel,
       entry
     );
     const activatable =
-      unlocked && hasTrainingSkillBridgeAction(track, entry.level);
+      !empty && unlocked && hasTrainingSkillBridgeAction(track, entry.level);
     return {
       slotKey: `${track}_lv${entry.level}`,
       label: entry.name,
       icon: entry.icon ?? "✦",
       subLabel: entry.sub ?? "",
-      disabled: false,
-      unusable: !unlocked,
-      trainingSkill: true,
+      disabled: empty,
+      unusable: empty ? false : !unlocked,
+      trainingSkill: !empty,
       active: activatable,
       title: formatTrainingSkillVerticalTitle(
         entry,
@@ -82,7 +86,10 @@ function buildTrainingVerticalSlots(
         track,
         skillMode
       ),
-      onClick: onActivate ? () => onActivate(track, entry.level) : undefined,
+      onClick:
+        empty || !onActivate
+          ? undefined
+          : () => onActivate(track, entry.level),
       reorderable: false,
     };
   });

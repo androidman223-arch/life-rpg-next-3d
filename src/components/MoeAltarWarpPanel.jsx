@@ -67,18 +67,25 @@ export default function MoeAltarWarpPanel({
                         onClick={() => dest.available && onSelect(dest.id)}
                         className={`flex w-full items-start gap-2 rounded-xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${
                           dest.available
-                            ? dest.group === "newmap"
+                            ? dest.badge
+                              ? "border-lime-200 bg-gradient-to-r from-lime-600/90 via-emerald-700/90 to-emerald-950 shadow-[0_0_18px_rgba(190,242,100,0.55)] hover:from-lime-500"
+                              : dest.group === "newmap"
                               ? "border-amber-300/70 bg-amber-950/50 shadow-amber-900/30 hover:bg-amber-900/55"
                               : "border-sky-400/55 bg-sky-950/40 hover:bg-sky-900/50"
                             : "cursor-not-allowed border-zinc-700/50 bg-zinc-900/40 opacity-55"
                         }`}
                       >
-                        <span className="text-lg leading-none" aria-hidden>
+                        <span className={`leading-none ${dest.badge ? "text-2xl" : "text-lg"}`} aria-hidden>
                           {dest.emoji ?? "📍"}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-zinc-100">
+                          <span className={`block font-bold text-zinc-100 ${dest.badge ? "text-base" : "text-sm"}`}>
                             {dest.nameJa}
+                            {dest.badge && (
+                              <span className="ml-2 inline-flex items-center gap-1 rounded-md border-2 border-yellow-200 bg-lime-300 px-2 py-0.5 text-sm font-black text-emerald-950 shadow-[0_0_10px_rgba(250,204,21,0.9)]">
+                                ⛏ {dest.badge} 💎
+                              </span>
+                            )}
                             {!dest.available && (
                               <span className="ml-1.5 text-[10px] font-normal text-zinc-500">
                                 未開放

@@ -257,7 +257,7 @@ export default function DragonTrainingPanel({ open, onDragonExpGranted }) {
         <div className="thinking-exp-bonus-panel thinking-dragon-bonus-panel">
           <div className="exp-bonus-title thinking-dragon-bonus-title">ボーナス表🎁</div>
           <div className="exp-bonus-header">実践EXP Lv → スキルゲット ↓</div>
-          <div className="exp-skill-get-title">● 龍神スキルゲット（実践 Lv10〜90）</div>
+          <div className="exp-skill-get-title">● 龍神スキルゲット（実践 Lv10〜150）</div>
           <div className="exp-skill-get-list">
             {MOE_DRAGON_SKILL_GET_CATALOG.map((entry) => {
               const unlocked = practiceLevel + 1e-6 >= entry.level;

@@ -1,5 +1,5 @@
 /**
- * 生活改鳳 — 炎5連(各7)＋炎3連(各3)＋リボーンワンス
+ * フェニックス — 炎5連(各7)＋炎3連(各3)＋リボーンワンス
  */
 
 import { grantMoeRebirthOnceCharge } from "./moePhoenixRebirthOnce.js";
@@ -51,12 +51,12 @@ export function resolvePhoenixHabitAscensionSequence(skill, defaults = {}) {
 /** @param {boolean} inDuel */
 export function validatePhoenixHabitAscension(inDuel) {
   if (!inDuel) {
-    return { ok: false, toast: "生活改鳳は戦闘中のみ使えます" };
+    return { ok: false, toast: "フェニックスは戦闘中のみ使えます" };
   }
   return { ok: true };
 }
 
-/** 生活改鳳使用時 — リボーンワンスを付与 */
+/** フェニックス使用時 — リボーンワンスを付与 */
 export function moePhoenixHabitAscensionRebirthGrant() {
   return grantMoeRebirthOnceCharge();
 }
@@ -84,7 +84,7 @@ export function canUseMoePhoenixHabitAscension(cooldownUntilMs, nowMs) {
   if (remain > 0) {
     return {
       ok: false,
-      toast: `生活改鳳 · 待機中（${remain}秒）`,
+      toast: `フェニックス · 待機中（${remain}秒）`,
     };
   }
   return { ok: true };

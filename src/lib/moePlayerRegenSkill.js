@@ -26,7 +26,7 @@ export const MOE_PLAYER_REGEN_TICK_COUNT = 15;
 
 /**
  * tick 間隔（秒）— Wiki 未記載。実測・シルバーゴーレム運用では約3秒間隔が一般的
- * （安眠導歩など別スキルとは別系統）
+ * （龍神の呼吸など別スキルとは別系統）
  */
 export const MOE_PLAYER_REGEN_TICK_INTERVAL_SEC = 3;
 

@@ -352,9 +352,8 @@ export const MOE_SUBSYSTEMS = {
       "src/lib/moePhoenixRebirthOnce.js",
     ],
     doNot: [
-      "ペット技②の phoenix_habit_ascension（生活改鳳）と混同しない",
-      "攻撃2倍は phoenix_scorching_sky 側 — プレスキル生活改鳳には付けない",
-      "リボーンワンスはプレイヤー生活改鳳のみ — ペット生活改鳳には付けない",
+      "ペット技②の phoenix_habit_ascension（フェニックス）と、プレイヤー技③の生活改鳳を混同しない",
+      "昔の鳳凰スキル（健康のフェニックス・安眠導歩・睡眠絶崩・攻撃2倍・浄化転生）は戻さない",
     ],
     related: ["fieldOrchestrator", "fieldPrefetch"],
   },

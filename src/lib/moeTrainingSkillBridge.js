@@ -6,7 +6,10 @@ import { getMoePlayerDragonSkill } from "@/data/moePlayerDragonSkills";
 import { MOE_PLAYER_NINJA_SKILLS } from "@/data/moePlayerNinjaSkills";
 import { getMoePlayerPreSkillById } from "@/data/moePlayerPreSkills";
 import { MOE_PLAYER_SKILL2_ONLY_SKILLS } from "@/data/moePlayerSkill2Skills";
-import { MOE_PHOENIX_DRAGON_SKILLS } from "@/data/moePhoenixDragon";
+import {
+  MOE_PHOENIX_DRAGON_SKILLS,
+  MOE_PHOENIX_HIDDEN_SKILLS,
+} from "@/data/moePhoenixDragon";
 import {
   getTrainingSkillBridgeAction,
   hasTrainingSkillBridgeAction,
@@ -28,7 +31,11 @@ export function resolveTrainingSkill2(skillId) {
       MOE_PLAYER_SKILL2_ONLY_SKILLS.find((s) => s.id === skillId) ?? null
     );
   }
-  return MOE_PHOENIX_DRAGON_SKILLS.find((s) => s.id === skillId) ?? null;
+  return (
+    MOE_PHOENIX_DRAGON_SKILLS.find((s) => s.id === skillId) ??
+    MOE_PHOENIX_HIDDEN_SKILLS.find((s) => s.id === skillId) ??
+    null
+  );
 }
 
 /** @param {string} skillId */

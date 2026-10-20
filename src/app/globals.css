@@ -239,3 +239,34 @@ body {
 .moe-pet-celebrate-bounce {
   animation: moe-pet-celebrate-bounce 0.42s ease-in-out infinite alternate;
 }
+
+@keyframes moe-menu-name-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.45);
+  }
+}
+
+.moe-menu-phoenix-name,
+.moe-menu-dragon-name {
+  animation: moe-menu-name-glow 2.2s ease-in-out infinite;
+}
+
+.moe-menu-phoenix-name {
+  color: #ecfeff;
+  text-shadow:
+    0 0 6px #5eead4,
+    0 0 16px #2dd4bf,
+    0 0 28px #0f766e;
+}
+
+.moe-menu-dragon-name {
+  color: #fffbeb;
+  text-shadow:
+    0 0 6px #fcd34d,
+    0 0 16px #f59e0b,
+    0 0 28px #c2410c;
+}

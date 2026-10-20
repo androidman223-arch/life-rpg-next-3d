@@ -22,7 +22,9 @@ export const MOE_DRAGON_EXP_PER_TICK = 0.1;
 export const MOE_DRAGON_BONUS_INTERVAL_SEC = 3600;
 
 /** 龍スキルゲット解放 Lv（累計修行EXP の目安） */
-export const MOE_DRAGON_SKILL_GET_LEVELS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+export const MOE_DRAGON_SKILL_GET_LEVELS = [
+  10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 130, 150,
+];
 
 /** @typedef {'hunt' | 'traverse' | 'challenge' | 'seiran'} MoeDragonActionLogKey */
 

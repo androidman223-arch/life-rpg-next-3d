@@ -1,8 +1,8 @@
 /**
- * 龍神スキルゲット一覧（修行② · 実践EXP Lv10〜90）
+ * 龍神スキルゲット一覧（修行② · 実践EXP Lv10〜150）
  */
 
-/** @typedef {{ level: number, name: string, hint: string, icon: string, sub: string, originalName?: string, status?: 'done'|'planned'|'stub' }} MoeDragonSkillGetEntry */
+/** @typedef {{ level: number, name: string, hint: string, icon: string, sub: string, originalName?: string, status?: 'done'|'planned'|'stub'|'empty' }} MoeDragonSkillGetEntry */
 
 export { MOE_DRAGON_SKILL_GET_LEVELS } from "../lib/moeDragonTraining.js";
 
@@ -13,7 +13,6 @@ export const MOE_DRAGON_SKILL_GET_CATALOG = [
     name: "龍神の呼吸",
     icon: "🐉",
     sub: "歩行",
-    originalName: "安眠導歩",
     hint: "実践する構え · 運動エクササイズ — 歩いて動いて体を慣らす · リジェネ5秒ごと回復",
     status: "planned",
   },
@@ -82,5 +81,29 @@ export const MOE_DRAGON_SKILL_GET_CATALOG = [
     sub: "大技",
     hint: "大技をここで正式習得",
     status: "planned",
+  },
+  {
+    level: 100,
+    name: "空き",
+    icon: "·",
+    sub: "",
+    hint: "まだ決めていない",
+    status: "empty",
+  },
+  {
+    level: 130,
+    name: "空き",
+    icon: "·",
+    sub: "",
+    hint: "まだ決めていない",
+    status: "empty",
+  },
+  {
+    level: 150,
+    name: "空き",
+    icon: "·",
+    sub: "",
+    hint: "まだ決めていない",
+    status: "empty",
   },
 ];

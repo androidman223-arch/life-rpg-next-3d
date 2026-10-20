@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * 深睡眠眠詠唱中 — ペット頭上に zzz + 残り秒（3D/2D 共通）
+ * スリープディープ詠唱中 — ペット頭上に zzz + 残り秒（3D/2D 共通）
  */
 export default function MoePetDeepSleepOverlay({
   active,
@@ -64,7 +64,7 @@ export default function MoePetDeepSleepOverlay({
       </span>
       <span
         className="mt-0.5 block text-center text-[13px] font-bold tabular-nums text-violet-200/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
-        aria-label={`深睡眠眠 残り${remainSec}秒`}
+        aria-label={`スリープディープ 残り${remainSec}秒`}
       >
         {remainSec}
       </span>

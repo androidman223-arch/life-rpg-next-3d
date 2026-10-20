@@ -1,5 +1,5 @@
 /**
- * 温泉調気 — 守り+50 · 温泉付近で眠る体（焚き火休息）
+ * オンセン — 守り+50 · 温泉付近で眠る体（焚き火休息）
  */
 
 export const MOE_PHOENIX_HOT_SPRING_DEFENSE_BONUS = 50;

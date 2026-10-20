@@ -170,13 +170,31 @@ function loadThinkingTimeState() {
   }
 }
 
+/** メニューの龍神実践EXPと同じ life-rpg-moe-player-experience へ知恵EXPを書く */
+function mirrorPhoenixWisdomExp(exp) {
+  const key = "life-rpg-moe-player-experience";
+  try {
+    const raw = localStorage.getItem(key);
+    const data = raw ? JSON.parse(raw) : { version: 1 };
+    if (!data || typeof data !== "object" || Array.isArray(data)) return;
+    const next = Math.round(Math.max(0, Number(exp) || 0) * 10) / 10;
+    if (Number(data.phoenixWisdomExp) === next) return;
+    data.phoenixWisdomExp = next;
+    if (data.version == null) data.version = 1;
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn("鳳凰知恵EXPの共有保存失敗:", e);
+  }
+}
+
 function saveThinkingTimeState() {
   try {
+    const phoenixExp = thinkingTimeState.phoenixExp || 0;
     localStorage.setItem(
       getStorageKey("state"),
       JSON.stringify({
         phoenixTotalSec: thinkingTimeState.phoenixTotalSec,
-        phoenixExp: thinkingTimeState.phoenixExp || 0,
+        phoenixExp,
         reflectionLog: thinkingTimeState.reflectionLog || [],
         expBonusClaimed: thinkingTimeState.expBonusClaimed || [],
         activityExpPopupEnabled: !!thinkingTimeState.activityExpPopupEnabled,
@@ -189,6 +207,7 @@ function saveThinkingTimeState() {
             : 0,
       })
     );
+    mirrorPhoenixWisdomExp(phoenixExp);
   } catch (e) {
     console.warn("思考タイム保存失敗:", e);
   }
@@ -1124,7 +1143,7 @@ function tickThinkingTimeUi() {
         <div class="exp-bonus-title">ボーナス表🎁</div>
         <div class="exp-bonus-header">EXPボーナス → お宝 ↓</div>
         <div id="thinking-exp-bonus-list" class="exp-bonus-list"></div>
-        <div class="exp-skill-get-title">● 鳳凰スキルゲット（知恵 Lv10〜90）</div>
+        <div class="exp-skill-get-title">● 鳳凰スキルゲット（知恵 Lv10〜150）</div>
         <div id="thinking-phoenix-skill-get-list" class="exp-skill-get-list"></div>
       </div>
       <div id="thinking-todo-memo-panel" class="thinking-todo-memo-panel" hidden>

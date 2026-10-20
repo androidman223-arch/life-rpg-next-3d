@@ -18,6 +18,7 @@ import { MOE_SKILL_ICON_SLOT_COUNT } from "@/components/MoeSkillIconBar";
 import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
 import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
 import { moeFloatingDragTitle } from "@/lib/moePanelStack";
+import { MOE_MINING_SKILL_BTN_CLASS } from "@/lib/moePlayerSkillSlotUi";
 
 const SLOT_PX = 32;
 const CAP_W = 5;
@@ -353,6 +354,8 @@ export default function MoeMergedSkillIconBar({
                             ? "cursor-default border-zinc-700/60 bg-gradient-to-b from-zinc-800/90 to-zinc-950 opacity-75"
                             : onCooldown
                               ? "cursor-not-allowed border-zinc-700/80 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-zinc-500 opacity-55"
+                              : slot.slotKey === "mining"
+                                ? MOE_MINING_SKILL_BTN_CLASS
                               : slot.active
                                 ? "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-zinc-950 text-cyan-50 ring-1 ring-cyan-200/40"
                                 : playerBtnIdle

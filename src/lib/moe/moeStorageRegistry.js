@@ -24,6 +24,7 @@ import { MOE_PLAYER_SKILL_UNLOCK_STORAGE_KEY } from "@/data/moePlayerNinjaSkills
 import { MOE_PLAYER_PRE_SKILL_PROGRESS_STORAGE_KEY } from "@/lib/moePlayerPreSkillProgress";
 import { MOE_PLAYER_SKILL2_PROGRESS_STORAGE_KEY } from "@/lib/moePlayerSkill2Progress";
 import { MOE_PLAYER_EXPERIENCE_STORAGE_KEY } from "@/lib/moePlayerExperience";
+import { MOE_BREAK_POPUP_POINTS_KEY } from "@/lib/moePhoenixPointsImport";
 import {
   MOE_DRAGON_TRAINING_STORAGE_KEY,
 } from "@/lib/moeDragonTraining";
@@ -152,7 +153,12 @@ export const MOE_STORAGE_REGISTRY = {
   playerExperience: {
     key: MOE_PLAYER_EXPERIENCE_STORAGE_KEY,
     owner: "moePlayerExperience",
-    notes: "プレイヤー熟練度まとめ（phoenix/dragon/heal/stealth/preSkills）",
+    notes: "鳳凰の知恵EXPと龍神の実践EXPはここ。熟練度（phoenix/dragon/heal/stealth/preSkills）も同じ",
+  },
+  breakPopupPoints: {
+    key: MOE_BREAK_POPUP_POINTS_KEY,
+    owner: "moePhoenixPointsImport",
+    notes: "休憩ポップアップ points_kei.json の合計。ゲーム内EXPとは別。読むたびにこの枠だけ入れかえる",
   },
   tomorrowMemo: {
     key: MOE_TOMORROW_MEMO_STORAGE_KEY,

@@ -323,7 +323,7 @@ function buildMoeAltarDefs() {
 /** @type {MoeAltarDef[]} */
 export const MOE_ALTARS = buildMoeAltarDefs();
 
-/** @typedef {{ id: string, altarIds: string[], group: string, mapSlotId: string, nameJa: string, subtitle?: string, travelMemo?: string, available: boolean, normallyRestricted?: boolean, emoji?: string }} MoeAltarDestination */
+/** @typedef {{ id: string, altarIds: string[], group: string, mapSlotId: string, nameJa: string, subtitle?: string, travelMemo?: string, available: boolean, normallyRestricted?: boolean, emoji?: string, badge?: string }} MoeAltarDestination */
 
 /** アルター転送一覧の最上段（新規マップ専用） */
 const WARP_DEST_NEW_MAP_SLOT_IDS = new Set([
@@ -378,16 +378,20 @@ function buildMoeAltarDestinations() {
     }
 
     const normallyRestricted = !WARP_NORMAL_FOOT_ACCESS.has(slot.id);
+    const mining = slot.id === "elvin_mountains";
     const baseName = slot.nameJa;
     out.push({
       id: `to_${slot.id}`,
       altarIds: ["*"],
       group: warpDestGroupForSlot(slot),
       mapSlotId: slot.id,
-      nameJa: normallyRestricted ? `${baseName}（本来通行不可）` : baseName,
+      nameJa: normallyRestricted && !mining
+        ? `${baseName}（本来通行不可）`
+        : baseName,
       subtitle: slot.note,
       travelMemo: WARP_DEST_TRAVEL_MEMO[slot.id],
-      emoji: WARP_DEST_EMOJI[slot.id] ?? "📍",
+      emoji: mining ? "💎" : (WARP_DEST_EMOJI[slot.id] ?? "📍"),
+      badge: mining ? "採掘可" : undefined,
       available: true,
       normallyRestricted,
     });

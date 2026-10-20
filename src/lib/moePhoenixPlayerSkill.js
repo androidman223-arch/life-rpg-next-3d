@@ -63,15 +63,6 @@ export function isMoePhoenixPlayerChantSkill(skill) {
 
 const PLAYER_SKILL_LINES = {
   jiriki_seiran: "10秒MP回復2倍→5分コンデンス（MP13）",
-  phoenix_trait: "転生の証 · フェニックス系スキルが使える",
-  phoenix_ansleep_walk: "ペットに詠唱 · 3.5秒ごとにHP20回復",
-  phoenix_hot_spring: "ペットに詠唱 · 守り+50 · 温泉付近で眠る体に戻す",
-  phoenix_deep_sleep: "ペットに詠唱5秒 · ペットMP中回復（HPはライト/ヒール/オール）",
-  phoenix_ultimate_sleep: "戦闘中のみペット攻撃1.5倍（決戦終了でリセット · MP22）",
-  phoenix_habit_ascension: "炎5×7＋炎3×3＋リボーンワンス（戦闘中 · MP40）",
-  phoenix_life_burst: "ペットHP+50",
-  phoenix_scorching_sky: "戦闘中ペット攻撃1.5倍 · 名前は後で考えます",
-  phoenix_purify_rebirth: "大爆炎 · 30ダメージ×5",
 };
 
 /**

@@ -1,13 +1,16 @@
 /**
  * プレイヤー経験値・スキル熟練度 — 単一保存ファイル
  *
- * 訓練士 Lv は gameStatus.js。ここはスキル熟練度のみ:
+ * 訓練士 Lv は gameStatus.js。鳳凰の知恵EXPと龍神の実践EXPもこのファイル:
+ * - phoenixWisdomExp … メニューの鳳凰・知恵EXP（龍神の実践EXPと同じファイル）
  * - phoenix … 技②フェニックス系（使用時 EXP · 修行ボーナス予定）
- * - dragon … 龍系（敵撃破ボーナス予定）
+ * - dragon … 龍神の実践EXP（メニュー表示もここ）
  * - heal … 回復魔法・リジェネ共通
  * - stealth … 忍び足・隠密
  * - preSkills … 技③プレスキル個別
  */
+
+import { phoenixWisdomExpFromSaved } from "./moeMenuTrainingExp.js";
 
 import { MOE_PLAYER_PRE_SKILLS } from "../data/moePlayerPreSkills.js";
 import {
@@ -34,6 +37,9 @@ const MOE_PHOENIX_EXP_PROC_BASE = MOE_PLAYER_PRE_SKILL_EXP_PROC_RATE;
 export const MOE_PLAYER_EXPERIENCE_STORAGE_KEY =
   "life-rpg-moe-player-experience";
 
+/** 知恵EXPの旧保存先。初回読み込みで phoenixWisdomExp へ移す */
+const PHOENIX_WISDOM_LEGACY_STORAGE_KEY = "life_rpg_next_3d_training_exp_v1";
+
 export const MOE_PLAYER_EXPERIENCE_VERSION = 1;
 
 /** 旧キー（移行元） */
@@ -46,6 +52,7 @@ export const MOE_PLAYER_EXPERIENCE_LEGACY_KEYS = {
  * @typedef {{ level: number, exp: number }} MoePlayerSkillProficiency
  * @typedef {{
  *   version: number,
+ *   phoenixWisdomExp: number,
  *   phoenix: MoePlayerSkillProficiency,
  *   dragon: MoePlayerSkillProficiency,
  *   heal: MoePlayerSkillProficiency,
@@ -81,6 +88,7 @@ function defaultPreSkillProficiencyMap() {
 export function defaultPlayerExperience() {
   return {
     version: MOE_PLAYER_EXPERIENCE_VERSION,
+    phoenixWisdomExp: 0,
     phoenix: defaultPlayerSkillProficiency(),
     dragon: defaultPlayerSkillProficiency(),
     heal: defaultPlayerSkillProficiency(),
@@ -93,6 +101,10 @@ export function defaultPlayerExperience() {
 export function normalizePlayerExperience(raw) {
   const base = defaultPlayerExperience();
   if (!raw || typeof raw !== "object") return base;
+  base.phoenixWisdomExp =
+    raw.phoenixWisdomExp == null
+      ? 0
+      : phoenixWisdomExpFromSaved({ phoenixExp: raw.phoenixWisdomExp });
   base.phoenix = normalizePlayerSkillProficiency(raw.phoenix);
   base.dragon = normalizePlayerSkillProficiency(raw.dragon);
   base.heal = normalizePlayerSkillProficiency(raw.heal);
@@ -169,13 +181,46 @@ function migrateLegacyPlayerExperience(current) {
   return next;
 }
 
+/**
+ * 旧トレーニングファイルにだけ知恵EXPがあるとき、同じ保存へ一度移す
+ * @param {MoePlayerExperience} data
+ * @param {boolean} hadWisdomField
+ */
+function migratePhoenixWisdomExp(data, hadWisdomField) {
+  if (hadWisdomField || typeof window === "undefined") return data;
+  try {
+    const raw = window.localStorage.getItem(PHOENIX_WISDOM_LEGACY_STORAGE_KEY);
+    if (!raw) return data;
+    const wisdom = phoenixWisdomExpFromSaved(JSON.parse(raw));
+    if (wisdom <= 0) return data;
+    const next = { ...data, phoenixWisdomExp: wisdom };
+    savePlayerExperience(next);
+    return next;
+  } catch {
+    return data;
+  }
+}
+
 /** @returns {MoePlayerExperience} */
 export function loadPlayerExperience() {
   if (typeof window === "undefined") return defaultPlayerExperience();
   try {
     const raw = window.localStorage.getItem(MOE_PLAYER_EXPERIENCE_STORAGE_KEY);
-    if (!raw) return migrateLegacyPlayerExperience(defaultPlayerExperience());
-    return migrateLegacyPlayerExperience(normalizePlayerExperience(JSON.parse(raw)));
+    if (!raw) {
+      return migratePhoenixWisdomExp(
+        migrateLegacyPlayerExperience(defaultPlayerExperience()),
+        false
+      );
+    }
+    const parsed = JSON.parse(raw);
+    const hadWisdomField =
+      parsed != null &&
+      typeof parsed === "object" &&
+      parsed.phoenixWisdomExp != null;
+    return migratePhoenixWisdomExp(
+      migrateLegacyPlayerExperience(normalizePlayerExperience(parsed)),
+      hadWisdomField
+    );
   } catch {
     return migrateLegacyPlayerExperience(defaultPlayerExperience());
   }
@@ -219,6 +264,88 @@ export function savePlayerExperienceTrack(track, progress) {
   data[track] = normalizePlayerSkillProficiency(progress);
   savePlayerExperience(data);
   return data;
+}
+
+/** メニューに出ている龍神の実践EXP（level + exp/100） */
+export function dragonPracticeExpDisplay(track) {
+  return (Number(track?.level) || 0) + (Number(track?.exp) || 0) / 100;
+}
+
+/**
+ * 「12,5」「12.5」を足し込み用の正の数にする。0以下は足さない
+ * @param {unknown} value
+ */
+export function parseExternalExpAmount(value) {
+  let n = 0;
+  if (typeof value === "number" && Number.isFinite(value)) n = value;
+  else if (typeof value === "string") {
+    n = Number(value.trim().replace(/,/g, "."));
+  }
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
+}
+
+/** @param {number} display */
+export function splitDragonPracticeExp(display) {
+  const v = Math.round(Math.max(0, Number(display) || 0) * 100) / 100;
+  const level = Math.floor(v * 10 + 1e-6) / 10;
+  const exp = Math.round((v - level) * 100 * 100) / 100;
+  return {
+    level: Math.round(level * 10) / 10,
+    exp: Math.min(99.99, Math.max(0, exp)),
+  };
+}
+
+/**
+ * 今の保存に、外から持ってきた数字を足す（置き換えない）
+ * @param {MoePlayerExperience} current
+ * @param {{ phoenixWisdomExp?: unknown, phoenix?: unknown, dragonPracticeExp?: unknown, dragon?: unknown }} gains
+ */
+export function addTrainingExpGains(current, gains) {
+  const row = gains && typeof gains === "object" ? gains : {};
+  const phoenixAdd =
+    Math.round(
+      parseExternalExpAmount(row.phoenixWisdomExp ?? row.phoenix) * 10
+    ) / 10;
+  const dragonAdd =
+    Math.round(
+      parseExternalExpAmount(row.dragonPracticeExp ?? row.dragon) * 100
+    ) / 100;
+  const baseWisdom =
+    Math.round(Math.max(0, Number(current?.phoenixWisdomExp) || 0) * 10) / 10;
+  const dragonDisplay = dragonPracticeExpDisplay(current?.dragon);
+  return {
+    phoenixWisdomExp: Math.round((baseWisdom + phoenixAdd) * 10) / 10,
+    dragon: splitDragonPracticeExp(dragonDisplay + dragonAdd),
+    added: {
+      phoenixWisdomExp: phoenixAdd,
+      dragonPracticeExp: dragonAdd,
+    },
+  };
+}
+
+/** @param {MoePlayerExperience} data */
+export function trainingExpSnapshotFrom(data) {
+  return {
+    phoenixWisdomExp:
+      Math.round(Math.max(0, Number(data?.phoenixWisdomExp) || 0) * 10) / 10,
+    dragonPracticeExp:
+      Math.round(dragonPracticeExpDisplay(data?.dragon) * 100) / 100,
+  };
+}
+
+/**
+ * @param {{ phoenixWisdomExp?: unknown, phoenix?: unknown, dragonPracticeExp?: unknown, dragon?: unknown }} gains
+ */
+export function addExternalTrainingExp(gains) {
+  const current = loadPlayerExperience();
+  const nextGains = addTrainingExpGains(current, gains);
+  savePlayerExperience({
+    ...current,
+    phoenixWisdomExp: nextGains.phoenixWisdomExp,
+    dragon: nextGains.dragon,
+  });
+  return nextGains;
 }
 
 /** @returns {Record<string, MoePlayerSkillProficiency>} */

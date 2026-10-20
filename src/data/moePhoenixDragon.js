@@ -1,6 +1,6 @@
 /**
  * ミステリー ドラゴン — 転生（フェニックスドラゴン / ドラゴンⅡ）
- * スキル枠1＝従来技 · 枠2＝健康のフェニックス系（転生後）
+ * スキル枠1＝従来技 · 枠2＝鳳凰（Lv90まで · カタカナ名）
  */
 
 import {
@@ -25,105 +25,72 @@ export const MOE_MYSTERY_DRAGON_REBORN_SUBTITLE = "フェニックスドラゴ�
 export const MOE_PET_COMBAT_SKILL_SLOT_MAX = 10;
 export const MOE_PET_COMBAT_SKILL_SLOT_LEARNED_MAX = 7;
 
-/** 転生後スキル枠2 — 健康のフェニックス */
-export const MOE_PHOENIX_DRAGON_SKILLS = [
-  {
-    id: "phoenix_trait",
-    level: 1,
-    name: "健康のフェニックス",
-    type: "passive",
-    skillSet: 2,
-    note: "転生の証 · フェニックス系スキルが使える",
-  },
+/** 昔の漢字スキルは出さない。鳳凰の技は Lv10〜90 のゲット一覧 */
+export const MOE_PHOENIX_DRAGON_SKILLS = [];
+
+/** ゲット一覧のボタンが呼ぶ中身。技一覧には出さない */
+export const MOE_PHOENIX_HIDDEN_SKILLS = [
   {
     id: "phoenix_ansleep_walk",
-    level: 20,
-    name: "安眠導歩",
+    level: 10,
+    name: "龍神の呼吸",
     type: "field_regen",
     skillSet: 2,
+    hiddenFromPhoenix: true,
     mpCost: 8,
     regenHpPerTick: 20,
     regenIntervalMs: 3500,
     regenDurationMs: 90000,
-    note: "ペットに詠唱 · 3.5秒ごとにHP20回復",
+    note: "歩いて動く · 3.5秒ごとにHP20回復",
   },
   {
     id: "phoenix_hot_spring",
-    level: 50,
-    name: "温泉調気",
+    level: 30,
+    name: "オンセン",
     type: "cure_status",
     skillSet: 2,
+    hiddenFromPhoenix: true,
     mpCost: 12,
     defenseBonus: 50,
     defenseBuffDurationMs: 90_000,
-    note: "ペットに詠唱 · 守り+50 · 温泉付近で眠る体に戻す",
+    note: "守り+50 · 温泉付近で眠る体に戻す",
   },
   {
     id: "phoenix_deep_sleep",
-    level: 80,
-    name: "深睡眠眠",
+    level: 60,
+    name: "スリープディープ",
     type: "pet_mp_restore",
     skillSet: 2,
+    hiddenFromPhoenix: true,
     mpCost: 12,
     mpRestoreRatio: 0.45,
-    note: "ペットに詠唱5秒 · ペットMP中回復（HPはライト/ヒール/オール）",
+    note: "ペットMP中回復",
   },
   {
-    id: "phoenix_ultimate_sleep",
-    level: 90,
-    name: "睡眠絶崩",
-    type: "buff",
+    id: "phoenix_life_burst",
+    level: 70,
+    name: "バイタリティ",
+    type: "heal",
     skillSet: 2,
-    mpCost: 22,
-    combatAttackMult: 1.5,
-    note: "戦闘中のみペット攻撃1.5倍（決戦終了でリセット）",
+    hiddenFromPhoenix: true,
+    mpCost: 42,
+    healFlat: 50,
+    note: "HP+50",
   },
   {
     id: "phoenix_habit_ascension",
-    level: 100,
-    name: "生活改鳳",
+    level: 90,
+    name: "フェニックス",
     type: "magic_fire",
     skillSet: 2,
+    hiddenFromPhoenix: true,
     mpCost: 40,
     combatPhase1Damage: 7,
     combatPhase1Hits: 5,
     combatPhase2Damage: 3,
     combatPhase2Hits: 3,
     combatStepMs: 350,
-    note: "炎5×7＋炎3×3＋リボーンワンス（戦闘中 · MP40）",
-  },
-  {
-    id: "phoenix_life_burst",
-    level: 120,
-    name: "生命爆神",
-    type: "heal",
-    skillSet: 2,
-    mpCost: 42,
-    healFlat: 50,
-    note: "ペットHP+50",
-  },
-  {
-    id: "phoenix_scorching_sky",
-    level: 130,
-    name: "攻撃2倍",
-    type: "buff",
-    skillSet: 2,
-    mpCost: 0,
-    combatAttackMult: 1.5,
-    skillSubInfo: "名前は後で考えます",
-    note: "戦闘中のみペット攻撃1.5倍（トグル）",
-  },
-  {
-    id: "phoenix_purify_rebirth",
-    level: 140,
-    name: "浄化転生",
-    type: "magic_fire",
-    skillSet: 2,
-    mpCost: 55,
-    combatFixedDamage: 30,
-    combatWaveHits: 5,
-    combatStepMs: 400,
-    note: "大爆炎 · 30ダメージ×5",
+    note: "リボーンワンス＋ダメージ",
   },
 ];
 

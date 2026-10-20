@@ -35,7 +35,6 @@ function renderPlayerSkill2Icon(skill) {
  *   skillChantKind?: string|null,
  *   skillChantSkillId?: string|null,
  *   skillChantRemainSec?: number|null,
- *   phoenixHabitAtk2x?: boolean,
  *   jirikiSeiranActive?: boolean,
  *   playerMp?: number,
  * }} [ctx]
@@ -61,24 +60,16 @@ export function buildPlayerPhoenixSkillSlotEntries(
       isThisChanting && ctx.skillChantRemainSec != null
         ? ctx.skillChantRemainSec
         : null;
-    const habitActive =
-      (skill.id === "phoenix_scorching_sky" ||
-        skill.id === "phoenix_ultimate_sleep") &&
-      Boolean(ctx.phoenixHabitAtk2x);
     const seiranActive =
       skill.id === "jiriki_seiran" && Boolean(ctx.jirikiSeiranActive);
     const mpCost = phoenixPlayerSkillMpCost(skill);
     const mpShort =
-      !locked &&
-      mpCost > 0 &&
-      playerMp < mpCost &&
-      !habitActive &&
-      !seiranActive;
+      !locked && mpCost > 0 && playerMp < mpCost && !seiranActive;
     return {
       slotKey: skill.id,
       label: skill.name ?? "—",
       icon: renderPlayerSkill2Icon(skill),
-      active: habitActive || seiranActive,
+      active: seiranActive,
       disabled: locked || (chanting && !isThisChanting),
       unusable: mpShort,
       cooldownSec: remainSec,

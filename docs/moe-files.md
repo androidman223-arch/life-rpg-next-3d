@@ -7,6 +7,7 @@
 開発中はコンソール `__MOE_DEV__.guide()` でもサブシステム一覧が見られます。
 
 **育成設計（鳳凰/龍 · 修行 · ボス）** → [`moe-player-progression.md`](./moe-player-progression.md)  
+**外部ポイント（休憩ポップアップとペットEXPの外部保存）** → [`moe-external-points.md`](./moe-external-points.md)  
 **ペット最上級メモ（ミステリーエッグ）** → [`moe-mystery-dragon-pet-memo.md`](./moe-mystery-dragon-pet-memo.md)
 
 ---
@@ -42,11 +43,13 @@
 
 | ファイル | 役割 |
 |----------|------|
-| `src/lib/moePlayerExperience.js` | プレイヤー熟練度まとめ保存（phoenix/dragon/heal/stealth/preSkills） |
+| `src/lib/moePlayerExperience.js` | 鳳凰の知恵EXPと龍神の実践EXP、熟練度を同じ `life-rpg-moe-player-experience` に保存 |
 | `src/lib/moePlayerSkillSuccessRate.js` | MOE風スキル成功率 |
 | `src/lib/moePlayerSkillUseFlow.js` | 使用時の成功率判定＋熟練付与 |
 | `src/lib/moePhoenixTrainingMemos.js` | 鳳凰修行① · 休み/説明/禁止事項の初期メモ |
 | `src/lib/moeDragonTraining.js` | 修行② 龍の武練 · タイマー · 行動ログ · 龍EXP |
+| `src/lib/moeMenuTrainingExp.js` | メニュー上部の知恵EXP・次のスキル枠 |
+| `src/lib/moePhoenixPointsImport.js` | 休憩ポップアップの鳳凰P・龍神P合計を別枠へ入れかえ。表示はゲーム分＋この合計 |
 | `src/lib/moeTomorrowMemo.js` | アルター · 明日やることメモ（自由追加） |
 | `src/components/DragonTrainingPanel.jsx` | 龍の武練 UI（タイトル画面） |
 | `src/components/MoeAltarTomorrowMemo.jsx` | アルター内メモ UI |

@@ -42,7 +42,7 @@ function shortTrainingLabel(name) {
 }
 
 /**
- * 横スキル — 鳳凰 / 龍神 修行スキルゲット表（9枠）
+ * 横スキル — 鳳凰 / 龍神 修行スキルゲット表（Lv10〜150）
  * @param {{
  *   kind: MoeTrainingSkillPanelKind,
  *   storageKey: string,

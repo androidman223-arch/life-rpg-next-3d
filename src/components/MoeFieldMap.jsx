@@ -364,10 +364,6 @@ import {
   validatePhoenixHabitAscension,
 } from "@/lib/moePhoenixHabitAscension";
 import {
-  MOE_PHOENIX_COMBAT_ATK_MULT,
-  moePhoenixCombatAtkMultFromSkill,
-} from "@/lib/moePhoenixCombatAtk";
-import {
   beginMoePhoenixHotSpringDefenseBuff,
   formatMoePetDefenseWithBonus,
   moeMitigatePetIncomingDamage,
@@ -1599,19 +1595,16 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const habitAscensionCooldownUntilRef = useRef(0);
   const ageHubHouseRegenAccRef = useRef(0);
   const playerNaturalRegenAccRef = useRef(0);
-  /** プレイヤー詠唱 — 安眠導歩 / 睡眠絶崩のペットリジェネ */
+  /** 龍神の呼吸 — ペットリジェネ */
   const phoenixAnsleepRegenRef = useRef(null);
-  const phoenixUltimateRegenRef = useRef(null);
-  /** 温泉調気 — 守り+50 */
+  /** オンセン — 守り+50 */
   const phoenixHotSpringDefenseRef = useRef(null);
   const startCampfireRestRef = useRef(null);
   /** アトルーム — 温故知新（魔力buff期限 ms） */
   const atrumMagicBuffUntilRef = useRef(0);
   /** アトルーム — マナ増幅法 MP回復 */
   const atrumMpRegenRef = useRef(null);
-  const [phoenixHabitAtk2x, setPhoenixHabitAtk2x] = useState(false);
-  const phoenixHabitAtk2xRef = useRef(false);
-  /** 生活改鳳 — リボーンワンス（1回 · 3秒後復活） */
+  /** リボーンワンス（1回 · 3秒後復活） */
   const rebirthOnceRef = useRef(null);
   const rebirthOnceReviveTimerRef = useRef(null);
   /** 3D: プレイヤー召喚スキル VFX（seq で再発火） */
@@ -1760,8 +1753,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     enemyStrikeVariantRef.current = { enemyId: null, variant: "weak" };
     duelRef.current = null;
     setDuel(null);
-    phoenixHabitAtk2xRef.current = false;
-    setPhoenixHabitAtk2x(false);
     flushPersistActivePet(petStateRef.current);
   }, [clearRebirthOnceReviveTimer]);
 
@@ -2297,9 +2288,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           const enemyDef = target.wiki?.defense ?? 0;
           const atkBase = stats?.attack ?? 1;
           const magBase = stats?.magic ?? 0;
-          const atkMult = phoenixHabitAtk2xRef.current
-            ? MOE_PHOENIX_COMBAT_ATK_MULT
-            : 1;
           const magicBuffMult = getAtrumMagicBuffMult(atrumMagicBuffUntilRef);
           let damage;
           if (fixedDamage != null) {
@@ -2311,11 +2299,11 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             );
           } else if (attackScale != null) {
             damage = computePetDamageAgainstEnemy(
-              atkBase * atkMult * attackScale,
+              atkBase * attackScale,
               enemyDef
             );
           } else {
-            damage = computePetDamageAgainstEnemy(atkBase * atkMult, enemyDef);
+            damage = computePetDamageAgainstEnemy(atkBase, enemyDef);
           }
           const newHpAfterHit = target.hp - damage;
           defeated = newHpAfterHit <= 0;
@@ -2763,11 +2751,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       reader.onload = () => {
         try {
           const parsed = JSON.parse(String(reader.result ?? ""));
-          const { pets, itemBox } = importMoeExternalSavePayload(parsed);
+          const { pets, itemBox, trainingExpAdded } =
+            importMoeExternalSavePayload(parsed);
           if (itemBox) {
             saveMoeItemBoxSlots(itemBox);
             notifyMoeItemBoxSlotsChanged();
           }
+          const added = trainingExpAdded?.added;
+          const expNote =
+            added &&
+            (added.phoenixWisdomExp > 0 || added.dragonPracticeExp > 0)
+              ? ` · 知恵+${added.phoenixWisdomExp} 実践+${added.dragonPracticeExp}`
+              : "";
           if (pets) {
             const activeId = pets.activeId ?? pet.id;
             const next = petFromSaveSlot(activeId, pets.byId[activeId]);
@@ -2779,10 +2774,10 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             });
             const petName = MOE_PET_DATA[activeId]?.name ?? "ペット";
             setToast(
-              `外部保存を読み込んだ（${petName} Lv.${next.levelDisplay}）`
+              `外部保存を読み込んだ（${petName} Lv.${next.levelDisplay}）${expNote}`
             );
           } else {
-            setToast("外部保存を読み込んだ（ペットデータなし）");
+            setToast(`外部保存を読み込んだ（ペットデータなし）${expNote}`);
           }
           setShowSettings(false);
         } catch {
@@ -3067,33 +3062,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         if (startPetDeepSleepChantRef.current(skill)) return;
       }
 
-      if (skill.id === "phoenix_ultimate_sleep") {
-        if (!duelRef.current) {
-          setToast("睡眠絶崩は戦闘中のみ使えます");
-          return;
-        }
-        const mpCost = skill.mpCost ?? 0;
-        if (mpCost > 0 && (petRef.current.mp ?? 0) < mpCost) {
-          setToast("MPが足りません");
-          return;
-        }
-        if (mpCost > 0) {
-          setPet((prev) => {
-            const next = { ...prev, mp: Math.max(0, prev.mp - mpCost) };
-            petRef.current = next;
-            petStateRef.current = next;
-            flushPersistActivePet(next);
-            return next;
-          });
-        }
-        phoenixHabitAtk2xRef.current = true;
-        setPhoenixHabitAtk2x(true);
-        setToast(
-          `${skill.name} — 攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`
-        );
-        return;
-      }
-
       if (skill.id === "phoenix_habit_ascension") {
         const habitCheck = validatePhoenixHabitAscension(Boolean(duelRef.current));
         if (!habitCheck.ok) {
@@ -3124,28 +3092,12 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             return next;
           });
         }
-        scheduleMoeDuelSkillHits(duelRef.current.enemyId, habitSeq, "生活改鳳");
+        scheduleMoeDuelSkillHits(duelRef.current.enemyId, habitSeq, "フェニックス");
         rebirthOnceRef.current = moePhoenixHabitAscensionRebirthGrant();
         habitAscensionCooldownUntilRef.current =
           beginMoePhoenixHabitAscensionCooldown(nowHabit);
-        setSkillToast("生活改鳳！");
-        setToast("生活改鳳 — 炎！\n🪽 リボーンワンス付与");
-        return;
-      }
-
-      if (skill.id === "phoenix_scorching_sky") {
-        if (!duelRef.current) {
-          setToast("攻撃1.5倍は戦闘中のみ使えます");
-          return;
-        }
-        const nextOn = !phoenixHabitAtk2xRef.current;
-        phoenixHabitAtk2xRef.current = nextOn;
-        setPhoenixHabitAtk2x(nextOn);
-        setToast(
-          nextOn
-            ? `攻撃${MOE_PHOENIX_COMBAT_ATK_MULT}倍【ON】`
-            : "攻撃1倍に戻した"
-        );
+        setSkillToast("フェニックス！");
+        setToast("フェニックス — 炎！\n🪽 リボーンワンス付与");
         return;
       }
 
@@ -3575,25 +3527,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         return;
       }
 
-      if (skill.id === "phoenix_ultimate_sleep") {
-        if (!duelRef.current) {
-          setToast("睡眠絶崩は戦闘中のみ使えます");
-          return;
-        }
-        if (!assertPhoenixSkillSuccess(skill)) return;
-        if (!spendPhoenixPlayerMp(skill)) {
-          setToast(MOE_PHOENIX_PLAYER_MP_SHORTAGE_TOAST);
-          return;
-        }
-        phoenixHabitAtk2xRef.current = true;
-        setPhoenixHabitAtk2x(true);
-        toastWithSkill2Exp(
-          `${skill.name} — 攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`,
-          `${skill.name}！`
-        );
-        return;
-      }
-
       if (isMoePhoenixPlayerChantSkill(skill)) {
         startPhoenixPlayerSkillChant(skill);
         return;
@@ -3642,38 +3575,15 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         scheduleMoeDuelSkillHits(
           duelRef.current.enemyId,
           resolvePhoenixHabitAscensionSequence(skill),
-          "生活改鳳"
+          "フェニックス"
         );
         rebirthOnceRef.current = moePhoenixHabitAscensionRebirthGrant();
         habitAscensionCooldownUntilRef.current =
           beginMoePhoenixHabitAscensionCooldown(nowHabit);
         toastWithSkill2Exp(
-          "生活改鳳 — 炎！\n🪽 リボーンワンス付与",
-          "生活改鳳！"
+          "フェニックス — 炎！\n🪽 リボーンワンス付与",
+          "フェニックス！"
         );
-        return;
-      }
-
-      if (skill.id === "phoenix_scorching_sky") {
-        if (!duelRef.current) {
-          setToast("攻撃1.5倍は戦闘中のみ使えます");
-          return;
-        }
-        const nextOn = !phoenixHabitAtk2xRef.current;
-        phoenixHabitAtk2xRef.current = nextOn;
-        setPhoenixHabitAtk2x(nextOn);
-        if (nextOn) {
-          if (!assertPhoenixSkillSuccess(skill)) {
-            phoenixHabitAtk2xRef.current = false;
-            setPhoenixHabitAtk2x(false);
-            return;
-          }
-          toastWithSkill2Exp(
-            `攻撃${moePhoenixCombatAtkMultFromSkill(skill)}倍【ON】`
-          );
-        } else {
-          setToast("攻撃1倍に戻した");
-        }
         return;
       }
 
@@ -4530,9 +4440,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
     const tickPhoenixPetRegen = (dt) => {
       const now = Date.now();
-      const gain =
-        tickPhoenixRegenSource(phoenixAnsleepRegenRef, dt, now) +
-        tickPhoenixRegenSource(phoenixUltimateRegenRef, dt, now);
+      const gain = tickPhoenixRegenSource(phoenixAnsleepRegenRef, dt, now);
       if (gain <= 0) return;
 
       setPet((prev) => {
@@ -6483,7 +6391,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
           skillChantKind: skillChant?.kind ?? null,
           skillChantSkillId: skillChant?.skillId ?? null,
           skillChantRemainSec,
-          phoenixHabitAtk2x,
           jirikiSeiranActive: isJirikiSeiranActive(playerJirikiSeiranRef),
           playerMp: playerVitals.mp,
         }
@@ -6493,55 +6400,36 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
       activatePlayerPhoenixSkill,
       skillChant,
       skillChantRemainSec,
-      phoenixHabitAtk2x,
       jirikiSeiranActive,
       playerVitals.mp,
     ]
   );
 
-  const mapPlayerVerticalSkillSlots = useCallback(
-    (orderedSlots, includeHabitPreview = false) => {
-      const rows = orderedSlots.map(
-        ({
-          slotKey,
-          label,
-          disabled,
-          unusable,
-          active,
-          cooldownSec,
-          title,
-          onClick,
-          reorderable,
-        }) => ({
-          slotKey,
-          label,
-          disabled,
-          unusable,
-          active,
-          cooldownSec,
-          title,
-          onClick,
-          reorderable,
-        })
-      );
-      if (includeHabitPreview) {
-        const purifyIdx = rows.findIndex(
-          (r) => r.slotKey === "phoenix_purify_rebirth"
-        );
-        if (purifyIdx >= 0) {
-          rows.splice(purifyIdx + 1, 0, {
-            label: "習慣改鳳",
-            disabled: true,
-            previewOnly: true,
-            title: "名称プレビュー（みるだけ）",
-            reorderable: false,
-          });
-        }
-      }
-      return rows;
-    },
-    []
-  );
+  const mapPlayerVerticalSkillSlots = useCallback((orderedSlots) => {
+    return orderedSlots.map(
+      ({
+        slotKey,
+        label,
+        disabled,
+        unusable,
+        active,
+        cooldownSec,
+        title,
+        onClick,
+        reorderable,
+      }) => ({
+        slotKey,
+        label,
+        disabled,
+        unusable,
+        active,
+        cooldownSec,
+        title,
+        onClick,
+        reorderable,
+      })
+    );
+  }, []);
 
   const playerVerticalSkillSlotsSet1 = useMemo(
     () => mapPlayerVerticalSkillSlots(playerOrderedSkillSlots),
@@ -6549,7 +6437,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   );
 
   const playerVerticalSkillSlotsSet2 = useMemo(
-    () => mapPlayerVerticalSkillSlots(playerPhoenixOrderedSlots, true),
+    () => mapPlayerVerticalSkillSlots(playerPhoenixOrderedSlots),
     [mapPlayerVerticalSkillSlots, playerPhoenixOrderedSlots]
   );
 
@@ -8085,7 +7973,6 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
                   )
                 : null,
             phoenixAnsleepRegenRef,
-            phoenixUltimateRegenRef,
             phoenixHotSpringDefenseRef,
             atrumMpRegenRef,
             atrumMagicBuffUntilRef,

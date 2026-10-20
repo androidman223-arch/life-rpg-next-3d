@@ -405,8 +405,15 @@ describe("vertical skill panel layout", () => {
       MOE_TRAINING_SKILL_MODE_LEARNED
     );
 
-    assert.equal(phoenix.length, 9);
-    assert.equal(dragon.length, 9);
+    assert.equal(phoenix.length, 12);
+    assert.equal(dragon.length, 12);
+    assert.equal(phoenix[9].label, "空き");
+    assert.equal(phoenix[9].disabled, true);
+    assert.match(phoenix[9].title, /Lv\.100/);
+    assert.equal(phoenix[11].label, "空き");
+    assert.match(phoenix[11].title, /Lv\.150/);
+    assert.equal(dragon[10].label, "空き");
+    assert.match(dragon[10].title, /Lv\.130/);
     assert.equal(phoenix[0].label, "鳳凰の呼吸");
     assert.equal(phoenix[0].icon, "🧘");
     assert.equal(phoenix[0].subLabel, "整える");
@@ -2609,7 +2616,7 @@ describe("player status ui", () => {
       playerBuffStrip: [],
       skill2Catalog: [
         { id: "jiriki_seiran", name: "自力整然", level: 10 },
-        { id: "phoenix_deep_sleep", name: "深睡眠眠", level: 80 },
+        { id: "phoenix_deep_sleep", name: "スリープディープ", level: 60 },
       ],
     });
     assert.equal(view.trainerLevel, 3);
@@ -2722,7 +2729,7 @@ describe("player skill2 progress", () => {
   });
 
   it("allows dev-check before required skill2 level", () => {
-    const skill = { id: "phoenix_ansleep_walk", level: 20, name: "安眠導歩" };
+    const skill = { id: "phoenix_ansleep_walk", level: 10, name: "龍神の呼吸" };
     assert.equal(canUsePlayerSkill2(skill, { level: 0, exp: 0 }).ok, true);
   });
 
@@ -2989,23 +2996,57 @@ describe("dragon kintoun skill", () => {
     assert.equal(defaultPlayerSkillSlotOrder().length, 10);
   });
 
-  it("lists nine dragon skill get entries", async () => {
+  it("lists dragon skill get entries through Lv150", async () => {
     const { MOE_DRAGON_SKILL_GET_CATALOG } = await import(
       "../../src/data/moeDragonSkillGetCatalog.js"
     );
-    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG.length, 9);
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG.length, 12);
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[0].name, "龍神の呼吸");
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[3].name, "板乗り");
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[7].name, "筋斗雲");
   });
 });
 
-describe("phoenix skill get catalog", () => {
-  it("lists nine phoenix skill get entries", async () => {
+describe("menu training exp", () => {
+  it("reads phoenix wisdom exp and the next skill slot", async () => {
+    const {
+      formatMenuNextSlotLine,
+      menuSkillSlotProgress,
+      phoenixWisdomExpFromSaved,
+    } = await import("../../src/lib/moeMenuTrainingExp.js");
     const { MOE_PHOENIX_SKILL_GET_CATALOG } = await import(
       "../../src/data/moePhoenixSkillGetCatalog.js"
     );
-    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG.length, 9);
+    assert.equal(phoenixWisdomExpFromSaved({ phoenixExp: 12.46 }), 12.5);
+    assert.equal(
+      phoenixWisdomExpFromSaved({ selfExp: 1.2, memoExp: 0.3 }),
+      1.5
+    );
+    assert.equal(phoenixWisdomExpFromSaved(null), 0);
+    const progress = menuSkillSlotProgress(
+      MOE_PHOENIX_SKILL_GET_CATALOG.map((entry) => entry.level),
+      12.3
+    );
+    assert.equal(progress.next, 20);
+    assert.equal(progress.prev, 10);
+    assert.ok(progress.pct > 20 && progress.pct < 30);
+    assert.equal(
+      formatMenuNextSlotLine(MOE_PHOENIX_SKILL_GET_CATALOG, 92),
+      "次の空き枠 Lv.100"
+    );
+    assert.equal(
+      formatMenuNextSlotLine(MOE_PHOENIX_SKILL_GET_CATALOG, 150),
+      "枠は Lv.150 まで"
+    );
+  });
+});
+
+describe("phoenix skill get catalog", () => {
+  it("lists phoenix skill get entries through Lv150", async () => {
+    const { MOE_PHOENIX_SKILL_GET_CATALOG } = await import(
+      "../../src/data/moePhoenixSkillGetCatalog.js"
+    );
+    assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG.length, 12);
     assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[0].name, "鳳凰の呼吸");
     assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[3].name, "フライングフェザー");
     assert.equal(MOE_PHOENIX_SKILL_GET_CATALOG[8].name, "フェニックス");
@@ -3065,6 +3106,42 @@ describe("dragon training", () => {
   });
 });
 
+describe("break popup points import", () => {
+  it("replaces the external total and adds it only on display", async () => {
+    const {
+      displayTrainingExp,
+      replaceBreakPopupPoints,
+    } = await import("../../src/lib/moePhoenixPointsImport.js");
+    const file = {
+      phoenix: 335.5,
+      phoenixMemo: 205.5,
+      phoenixChat: 130,
+      dragon: 0.3,
+      updated: "2026-10-20T22:42:42",
+    };
+    const first = replaceBreakPopupPoints(file);
+    const again = replaceBreakPopupPoints(file);
+    assert.equal(first.phoenix, 335.5);
+    assert.equal(first.dragon, 0.3);
+    assert.equal(again.phoenix, first.phoenix);
+    assert.equal(again.dragon, first.dragon);
+    const shown = displayTrainingExp(10, 1.2, first);
+    assert.equal(shown.phoenix, 345.5);
+    assert.equal(shown.dragon, 1.5);
+    const replaced = replaceBreakPopupPoints({ phoenix: 100, dragon: 0.1 });
+    assert.equal(replaced.phoenix, 100);
+    assert.equal(displayTrainingExp(10, 1.2, replaced).phoenix, 110);
+    const totalOnly = replaceBreakPopupPoints({
+      phoenix: 10,
+      phoenixMemo: 100,
+      phoenixChat: 50,
+      dragon: 1,
+    });
+    assert.equal(totalOnly.phoenix, 10);
+    assert.equal(totalOnly.dragon, 1);
+  });
+});
+
 describe("player experience storage", () => {
   it("normalizes proficiency tracks", async () => {
     const {
@@ -3074,13 +3151,34 @@ describe("player experience storage", () => {
     } = await import("../../src/lib/moePlayerExperience.js");
     const base = defaultPlayerExperience();
     assert.equal(base.phoenix.level, 0);
+    assert.equal(base.phoenixWisdomExp, 0);
     assert.ok(base.preSkills.jiriki_kaihou);
     const normalized = normalizePlayerExperience({
+      phoenixWisdomExp: 12.46,
       phoenix: { level: 12.3, exp: 45 },
+      dragon: { level: 3, exp: 10 },
       heal: { level: 5, exp: 20 },
     });
+    assert.equal(normalized.phoenixWisdomExp, 12.5);
     assert.equal(normalized.phoenix.level, 12.3);
+    assert.equal(normalized.dragon.level, 3);
     assert.equal(normalized.heal.exp, 20);
+    const { addTrainingExpGains } = await import(
+      "../../src/lib/moePlayerExperience.js"
+    );
+    const added = addTrainingExpGains(normalized, {
+      phoenixWisdomExp: "1,2",
+      dragonPracticeExp: 0.4,
+    });
+    assert.equal(added.phoenixWisdomExp, 13.7);
+    assert.equal(added.dragon.level, 3.5);
+    assert.equal(added.added.dragonPracticeExp, 0.4);
+    const skipped = addTrainingExpGains(added, {
+      phoenixWisdomExp: -5,
+      dragonPracticeExp: 0,
+    });
+    assert.equal(skipped.phoenixWisdomExp, 13.7);
+    assert.equal(skipped.added.phoenixWisdomExp, 0);
     const originalRandom = Math.random;
     Math.random = () => 0;
     const award = awardHealProficiencyOnUse({ level: 0, exp: 0 }, 40);

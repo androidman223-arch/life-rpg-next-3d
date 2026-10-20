@@ -34,7 +34,7 @@ const PANEL_META = {
 };
 
 /**
- * 修行スキルゲット表 — 縦スキル（Lv10〜90 · 9枠）
+ * 修行スキルゲット表 — 縦スキル（Lv10〜150 · 空きは100・130・150）
  * @param {{
  *   kind: MoeTrainingSkillPanelKind,
  *   storageKey: string,

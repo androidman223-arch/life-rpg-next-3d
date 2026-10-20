@@ -70,18 +70,6 @@ function magicMultiHits(n, ratioPerHit, stepMs) {
   return { hits };
 }
 
-function fixedDamageHits(n, damagePerHit, stepMs) {
-  /** @type {MoeDuelSkillHit[]} */
-  const hits = [];
-  for (let i = 0; i < n; i++) {
-    hits.push({
-      atMs: i * stepMs,
-      opts: { fixedDamage: damagePerHit, grantExp: i === n - 1 },
-    });
-  }
-  return { hits };
-}
-
 /**
  * @param {string} petId
  * @param {object | null | undefined} skill
@@ -212,24 +200,11 @@ export function resolveMoeDuelSkillSequence(petId, skill) {
     if (skill.id === "phoenix_deep_sleep") {
       return null;
     }
-    if (skill.id === "phoenix_ultimate_sleep") {
-      return null;
-    }
     if (skill.id === "phoenix_life_burst") {
       return null;
     }
     if (skill.id === "phoenix_habit_ascension") {
       return resolvePhoenixHabitAscensionSequence(skill);
-    }
-    if (skill.id === "phoenix_scorching_sky") {
-      return null;
-    }
-    if (skill.id === "phoenix_purify_rebirth") {
-      return fixedDamageHits(
-        skill.combatWaveHits ?? 5,
-        skill.combatFixedDamage ?? 30,
-        skill.combatStepMs ?? 400
-      );
     }
   }
 

@@ -4,6 +4,11 @@
 
 ---
 
+### 休憩ポップアップの外部P
+- `points_kei.json` の phoenix / dragon は合計。読むたびに足さず、別枠 `life-rpg-moe-break-popup-points-v1` をその合計で入れかえる
+- ゲーム内の知恵・実践（`life-rpg-moe-player-experience`）には足さない。表示だけ P＋外部P
+- ファイルは読むだけ。phoenixMemo と phoenixChat は内訳なので phoenix に足さない
+
 ### ペット死亡とソウル
 - 保存の `Math.max(1, hp)` は HP0 を最大に戻す。死亡は 0 のまま残し、再入場の全回復でも起こさない
 - 倒れ中は透明で停止。ヒールでは起きない。ホワイトエンジェルロッドは約5秒。部屋の右クリック「はい」はソウルマスター
