@@ -68,7 +68,7 @@
 | `src/lib/moePlayerSkillSlotUi.js` | スキル枠の表示・クリック定義 |
 | `src/lib/moeSkillPanelModeSettings.js` | 技1・マクロ・セット1・セット2・ペット・鳳凰・龍神の切替 |
 | `src/lib/moeSkillSetCopies.js` | セット1/2へドラッグコピー（元の並びは変えない） |
-| `src/lib/moeSkillMacro.js` | マクロ1〜10（技・待ち秒・技）。縦スキル技②が発動 |
+| `src/lib/moeSkillMacro.js` | マクロ1〜10（MoE 公式風: タイトル＋6行・技か /pause・1=0.1秒）。縦スキル技②が発動。参考 `docs/参考メモ_MoEマクロ.md` |
 | `src/components/MoeSkillMacroPanel.jsx` | マクロ編集と実行 |
 | `src/lib/moeSkillPanelVisibilitySettings.js` | 縦横スキルパネル・アイコンバーの表示/非表示 |
 | `src/lib/moeSkillPanelCollapseSettings.js` | スキルパネル折りたたみ |
@@ -263,3 +263,7 @@
 - **龍スケボー・筋斗雲** — 神速置換 · `moeDragonSkateboard.js` · `moeDragonKintoun.js`
 - **スキルパネル表示切替** — `moeSkillPanelVisibilitySettings.js` · ◆ 閉じる
 - **プレイヤー召喚スキル** — 技③ · 生活改鳳/自力整龍 · GLB VFX · `moePlayerPreSkillActivate.js`
+- **3D フィールドの見た目** — 地面テクスチャ・空と遠くの山・太陽のかげ · `moe3dFieldLook.js` · `moe/moe3dFieldLookTextures.js` · `moeFieldFog.js`（仕様書22章）
+- **地形のかべ（すりぬけ止め）** — three-mesh-bvh で光線を速く・がけで止まる · `moe3dTerrainBvh.js` · `moe3dMacro3Walk.js` の `moe3dResolveTerrainMove`（仕様書23章）
+- **マクロのコマンド説明** — マクロ登録の「📖 コマンド説明」· `src/data/moeMacroCommandGuide.js` · `MoeMacroCommandGuide.jsx`
+- **MOE 公式マクロのメモ** — 6行・/pause・コマンド一覧・いまとのちがい · `docs/参考メモ_MOE公式マクロ.md`

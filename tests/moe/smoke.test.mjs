@@ -90,7 +90,13 @@ import {
   moe3dPickLowestFloorTerrainY,
   moe3dPickWalkableTerrainY,
   MOE_PLAYER_TERRAIN_MAX_CLIMB,
+  moe3dResolveTerrainMove,
 } from "../../src/lib/moe3dMacro3Walk.js";
+import * as THREE_FOR_WALK from "three";
+import { moeClampPanelPosIntoView } from "../../src/lib/moePanelPosClamp.js";
+import { moeCompactTipPosition } from "../../src/lib/moeCompactTipPosition.js";
+import { MOE_MACRO_COMMAND_GUIDE, moeMacroGuideCommandCount } from "../../src/data/moeMacroCommandGuide.js";
+import { moe3dGeometryTriangleCount } from "../../src/lib/moe3dTerrainBvh.js";
 import {
   moe3dClampMoveAgainstBoxColliders,
   moe3dCircleHitsBox,
@@ -278,54 +284,64 @@ describe("skill set copies", () => {
 });
 
 describe("skill macro", () => {
-  it("stores a skill, a 1-60 second wait, and another skill on sets 1-10", async () => {
-    const {
-      emptyMoeSkillMacros,
-      moeSkillMacroWaitChoices,
-      setMoeSkillMacroSkill,
-      setMoeSkillMacroWait,
-      MOE_SKILL_MACRO_COUNT,
-    } = await import("../../src/lib/moeSkillMacro.js");
-    assert.equal(emptyMoeSkillMacros().length, MOE_SKILL_MACRO_COUNT);
-    assert.equal(moeSkillMacroWaitChoices().length, 60);
-    assert.equal(moeSkillMacroWaitChoices()[0], 1);
-    assert.equal(moeSkillMacroWaitChoices()[59], 60);
-    let macros = emptyMoeSkillMacros();
-    macros = setMoeSkillMacroSkill(macros, 0, 0, {
-      source: "dragon",
-      slotKey: "dragon_lv60",
-    });
-    macros = setMoeSkillMacroSkill(macros, 0, 1, {
-      source: "phoenix",
-      slotKey: "phoenix_lv20",
-    });
-    macros = setMoeSkillMacroWait(macros, 0, 12);
-    macros = setMoeSkillMacroSkill(macros, 0, 2, {
-      source: "dragon",
-      slotKey: "dragon_lv20",
-    });
-    assert.equal(macros[0].skillA.slotKey, "dragon_lv60");
-    assert.equal(macros[0].waitSec, 12);
-    assert.equal(macros[0].skillB.slotKey, "dragon_lv20");
-    assert.equal(macros[1].skillA, null);
-    assert.equal(MOE_SKILL_MACRO_COUNT, 10);
-    macros = setMoeSkillMacroSkill(macros, 9, 0, {
-      source: "player1",
-      slotKey: "regen",
-    });
-    assert.equal(macros[9].skillA.slotKey, "regen");
-    assert.equal(
-      setMoeSkillMacroSkill(macros, 10, 0, {
-        source: "player1",
-        slotKey: "regen",
-      })[9].skillA.slotKey,
-      "regen"
-    );
-    const skipped = setMoeSkillMacroWait(macros, 0, 0);
-    assert.equal(skipped[0].waitSec, 12);
-    const { planMoeSkillMacroRun } = await import("../../src/lib/moeSkillMacro.js");
-    assert.equal(planMoeSkillMacroRun(macros[0]).waitSec, 12);
-    assert.equal(planMoeSkillMacroRun(macros[1]), null);
+  it("MoE style: title + 6 lines of skills and /pause (1 = 0.1s)", async () => {
+    const m = await import("../../src/lib/moeSkillMacro.js");
+    assert.equal(m.MOE_SKILL_MACRO_COUNT, 10);
+    assert.equal(m.MOE_SKILL_MACRO_LINES, 6);
+    let macros = m.emptyMoeSkillMacros();
+    assert.equal(macros.length, 10);
+    assert.equal(macros[0].lines.length, 6);
+    // 回復 → 0.2秒 → ヒーリング → 0.5秒 → MP回復
+    macros = m.setMoeSkillMacroSkill(macros, 0, 0, { source: "player1", slotKey: "regen" });
+    macros = m.setMoeSkillMacroPause(macros, 0, 1, 2);
+    macros = m.setMoeSkillMacroSkill(macros, 0, 2, { source: "phoenix", slotKey: "phoenix_lv20" });
+    macros = m.setMoeSkillMacroPause(macros, 0, 3, 5);
+    macros = m.setMoeSkillMacroSkill(macros, 0, 4, { source: "dragon", slotKey: "dragon_lv20" });
+    macros = m.setMoeSkillMacroTitle(macros, 0, "  回復セット  ");
+    assert.equal(macros[0].title, "回復セット");
+    assert.equal(m.moeSkillMacroPauseLabel(2), "0.2秒");
+    assert.equal(m.moeSkillMacroFirstSkill(macros[0]).slotKey, "regen");
+    const plan = m.planMoeSkillMacroRun(macros[0]);
+    assert.deepEqual(plan.steps.map((s) => s.atMs), [0, 200, 700]);
+    assert.equal(plan.totalMs, 700);
+    assert.equal(m.planMoeSkillMacroRun(macros[1]), null);
+    // 範囲外・まちがった値は 入らない
+    assert.equal(m.setMoeSkillMacroPause(macros, 0, 1, 0)[0].lines[1].ticks, 2);
+    assert.equal(m.setMoeSkillMacroPause(macros, 0, 1, 601)[0].lines[1].ticks, 2);
+    assert.equal(m.setMoeSkillMacroSkill(macros, 0, 6, { source: "pet", slotKey: "x" })[0].lines.length, 6);
+    assert.equal(m.setMoeSkillMacroSkill(macros, 10, 0, { source: "pet", slotKey: "x" })[9].lines[0], null);
+    // 行を 空にする
+    macros = m.clearMoeSkillMacroLine(macros, 0, 3);
+    assert.equal(macros[0].lines[3], null);
+    assert.deepEqual(m.planMoeSkillMacroRun(macros[0]).steps.map((s) => s.atMs), [0, 200, 200]);
+    // 保存の形を 読みなおしても 同じ
+    const again = m.normalizeMoeSkillMacros(JSON.parse(JSON.stringify({ v: 2, sets: macros })));
+    assert.deepEqual(again, macros);
+    // 待ちの えらぶ数は 0.1秒〜60秒
+    const choices = m.moeSkillMacroPauseChoices();
+    assert.equal(choices[0], 1);
+    assert.equal(choices[choices.length - 1], 600);
+  });
+
+  it("moves an old skill-wait-skill macro into 6 lines", async () => {
+    const m = await import("../../src/lib/moeSkillMacro.js");
+    const old = {
+      v: 1,
+      sets: [
+        {
+          skillA: { source: "dragon", slotKey: "dragon_lv60" },
+          waitSec: 12,
+          skillB: { source: "dragon", slotKey: "dragon_lv20" },
+        },
+      ],
+    };
+    const macros = m.normalizeMoeSkillMacros(old);
+    assert.equal(macros[0].title, "");
+    assert.deepEqual(macros[0].lines[0], { kind: "skill", ref: { source: "dragon", slotKey: "dragon_lv60" } });
+    assert.deepEqual(macros[0].lines[1], { kind: "pause", ticks: 120 });
+    assert.equal(macros[0].lines[2].ref.slotKey, "dragon_lv20");
+    assert.equal(macros[0].lines[3], null);
+    assert.deepEqual(m.planMoeSkillMacroRun(macros[0]).steps.map((s) => s.atMs), [0, 12000]);
   });
 });
 
@@ -5223,6 +5239,196 @@ describe("full backup", () => {
     assert.equal(
       parseMoeFullBackupPayload({ format: "life-rpg-full-backup", version: 1, keys: {} }).ok,
       false
+    );
+  });
+});
+
+describe("field look textures", () => {
+  it("makes seamless gray textures centered at 0.5 and picks surfaces by color", async () => {
+    const T = await import("../../src/lib/moe/moe3dFieldLookTextures.js");
+    for (const make of [T.moeLookGrassPixels, T.moeLookStonePixels, T.moeLookDirtPixels, T.moeLookRockPixels]) {
+      const px = make(64);
+      assert.equal(px.length, 64 * 64);
+      let sum = 0;
+      for (const v of px) sum += v;
+      const mean = sum / px.length / 255;
+      assert.ok(Math.abs(mean - 0.5) < 0.05, `mean ${mean}`);
+      // 左右のはしが つながっている（大きな段差がない）
+      let edge = 0;
+      for (let y = 0; y < 64; y++) edge += Math.abs(px[y * 64] - px[y * 64 + 63]);
+      assert.ok(edge / 64 < 60, `edge ${edge / 64}`);
+    }
+    const a = T.moeLookStonePixels(32, 5);
+    const b = T.moeLookStonePixels(32, 5);
+    assert.deepEqual(a, b);
+    const m = T.moeLookMountainPixels(64, 16);
+    assert.equal(m.length, 64 * 16 * 4);
+    assert.equal(m[3], 255); // いちばん下の行は山（不透明）
+    assert.equal(m[(15 * 64) * 4 + 3], 0); // いちばん上の行は空（透明）
+    assert.equal(T.moeLookPickSurface(0.2, 0.5, 0.2), "grass");
+    assert.equal(T.moeLookPickSurface(0.5, 0.45, 0.4), "stone");
+    // 0xfdba74（砂）・0x8b4513（茶色）→ 土
+    assert.equal(T.moeLookPickSurface(0.982, 0.491, 0.178), "dirt");
+    assert.equal(T.moeLookPickSurface(0.258, 0.06, 0.006), "dirt");
+    assert.equal(T.moeLookPickSurface(0.2, 0.4, 0.8), "skip");
+    // 0x94a3b8（ビスクの石だたみ）はリニアで 0.296,0.366,0.479 → 石
+    assert.equal(T.moeLookPickSurface(0.296, 0.366, 0.479), "stone");
+  });
+});
+
+describe("terrain wall guard (three-mesh-bvh)", () => {
+  const T = THREE_FOR_WALK;
+  function makeTerrain() {
+    const g = new T.Group();
+    // 地面: 40x40 を こまかく（目次が作られる三角の数にする）
+    const groundGeo = new T.PlaneGeometry(40, 40, 16, 16);
+    groundGeo.rotateX(-Math.PI / 2);
+    g.add(new T.Mesh(groundGeo, new T.MeshBasicMaterial()));
+    // x=5 に 高さ6 の かべ（がけ）
+    const wall = new T.Mesh(
+      new T.BoxGeometry(2, 6, 40, 4, 8, 8),
+      new T.MeshBasicMaterial()
+    );
+    wall.position.set(6, 3, 0);
+    g.add(wall);
+    // x=-5 に 高さ1 の 段差（登れる）
+    const step = new T.Mesh(
+      new T.BoxGeometry(4, 1, 40, 4, 2, 8),
+      new T.MeshBasicMaterial()
+    );
+    step.position.set(-7, 0.5, 0);
+    g.add(step);
+    g.updateMatrixWorld(true);
+    return g;
+  }
+  const rc = new T.Raycaster();
+
+  it("builds a BVH for big terrain meshes", () => {
+    const g = makeTerrain();
+    moe3dResolveTerrainMove(rc, g, 0, 0, 0.1, 0, { currentFootY: 0 });
+    assert.ok(moe3dGeometryTriangleCount(g.children[0].geometry) >= 64);
+    assert.ok(g.children[0].geometry.boundsTree, "ground has boundsTree");
+  });
+
+  it("walks on flat ground", () => {
+    const g = makeTerrain();
+    const r = moe3dResolveTerrainMove(rc, g, 0, 0, 0.2, 0.1, { currentFootY: 0 });
+    assert.equal(r.blocked, false);
+    assert.equal(r.x, 0.2);
+  });
+
+  it("stops at a tall wall and slides along it", () => {
+    const g = makeTerrain();
+    const r = moe3dResolveTerrainMove(rc, g, 4.2, 0, 4.6, 0.2, { currentFootY: 0 });
+    assert.equal(r.blocked, true);
+    assert.equal(r.x, 4.2);
+    assert.equal(r.z, 0.2);
+  });
+
+  it("climbs a low step", () => {
+    const g = makeTerrain();
+    const r = moe3dResolveTerrainMove(rc, g, -4.9, 0, -5.1, 0, { currentFootY: 0 });
+    assert.equal(r.blocked, false);
+  });
+
+  it("floorOnly: walks under a low double-sided ceiling, stops at a hole", () => {
+    const g = new T.Group();
+    const mat = new T.MeshBasicMaterial({ side: T.DoubleSide });
+    // 床は x<10 だけ（その先は 穴）
+    const floorGeo = new T.PlaneGeometry(20, 20, 8, 8);
+    floorGeo.rotateX(-Math.PI / 2);
+    const floor = new T.Mesh(floorGeo, mat);
+    floor.position.set(0, 0, 0);
+    g.add(floor);
+    // 足もとから 1.2 の 天井（両面）。床ありモードでは 床に まちがえない
+    const ceilGeo = new T.PlaneGeometry(20, 20, 8, 8);
+    ceilGeo.rotateX(Math.PI / 2);
+    const ceil = new T.Mesh(ceilGeo, mat);
+    ceil.position.set(0, 1.2, 0);
+    g.add(ceil);
+    g.updateMatrixWorld(true);
+    const a = moe3dResolveTerrainMove(rc, g, 0, 0, 0.2, 0, {
+      currentFootY: 0,
+      floorOnly: true,
+    });
+    assert.equal(a.blocked, false);
+    const b = moe3dResolveTerrainMove(rc, g, 9.9, 0, 10.1, 0, {
+      currentFootY: 0,
+      floorOnly: true,
+    });
+    assert.equal(b.blocked, true);
+    assert.equal(b.x, 9.9);
+  });
+
+  it("does not trap a player standing over a gap", () => {
+    const g = makeTerrain();
+    const r = moe3dResolveTerrainMove(rc, g, 30, 0, 29.8, 0, { currentFootY: 0 });
+    assert.equal(r.blocked, false);
+  });
+});
+
+describe("macro command guide (MoE official)", () => {
+  it("has well-formed sections and commands", () => {
+    const ids = new Set();
+    for (const sec of MOE_MACRO_COMMAND_GUIDE) {
+      assert.ok(sec.id && sec.title && sec.icon, "section fields");
+      assert.ok(!ids.has(sec.id), `duplicate id ${sec.id}`);
+      ids.add(sec.id);
+      assert.ok((sec.notes?.length ?? 0) + (sec.commands?.length ?? 0) > 0, `empty ${sec.id}`);
+      for (const c of sec.commands ?? []) {
+        assert.ok(c.cmd && c.text, `command fields in ${sec.id}`);
+        assert.ok(c.game === "yes" || c.game === "no", `game flag ${c.cmd}`);
+      }
+    }
+  });
+
+  it("covers many official commands and marks only skill/pause as usable", () => {
+    assert.ok(moeMacroGuideCommandCount() >= 60);
+    const usable = new Set();
+    for (const sec of MOE_MACRO_COMMAND_GUIDE) {
+      for (const c of sec.commands ?? []) if (c.game === "yes") usable.add(c.cmd);
+    }
+    assert.deepEqual([...usable].sort(), ["/cmd", "/pause"]);
+  });
+});
+
+describe("compact skill tip position", () => {
+  const vw = 1600;
+  const vh = 1000;
+  it("side: right of a left-edge vertical button", () => {
+    const p = moeCompactTipPosition({ left: 0, right: 90, top: 300, bottom: 330, vw, vh }, "side");
+    assert.equal(p.left, 94);
+    assert.equal(p.transform, "translate(0, -50%)");
+  });
+  it("side: left of a right-edge vertical button", () => {
+    const p = moeCompactTipPosition({ left: 1510, right: 1600, top: 300, bottom: 330, vw, vh }, "side");
+    assert.equal(p.left, 1506);
+    assert.equal(p.transform, "translate(-100%, -50%)");
+  });
+  it("top: clamps inside the screen and flips below near the top", () => {
+    const a = moeCompactTipPosition({ left: 0, right: 20, top: 500, bottom: 520, vw, vh });
+    assert.ok(a.left >= 104);
+    const b = moeCompactTipPosition({ left: 700, right: 720, top: 10, bottom: 30, vw, vh });
+    assert.equal(b.transform, "translate(-50%, 0)");
+  });
+});
+
+describe("floating panel position clamp", () => {
+  it("brings an off-screen saved panel back into view", () => {
+    const p = moeClampPanelPosIntoView({ x: 2500, y: 1400 }, { w: 272, h: 400 }, 1280, 720);
+    assert.ok(p.x <= 1280 - 160 && p.x >= 4);
+    assert.ok(p.y <= 720 - 40 && p.y >= 4);
+    const q = moeClampPanelPosIntoView({ x: -300, y: -50 }, { w: 272, h: 400 }, 1280, 720);
+    assert.deepEqual(q, { x: 4, y: 4 });
+  });
+  it("whole: fits the full panel when opened", () => {
+    const p = moeClampPanelPosIntoView({ x: 1466, y: 964 }, { w: 272, h: 428 }, 1600, 1000, { whole: true });
+    assert.deepEqual(p, { x: 1600 - 272 - 4, y: 1000 - 428 - 4 });
+  });
+  it("keeps an on-screen panel where it is", () => {
+    assert.deepEqual(
+      moeClampPanelPosIntoView({ x: 300, y: 120 }, { w: 272, h: 400 }, 1280, 720),
+      { x: 300, y: 120 }
     );
   });
 });

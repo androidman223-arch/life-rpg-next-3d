@@ -234,9 +234,14 @@ import {
   loadMoeSkillMacros,
   saveMoeSkillMacros,
   setMoeSkillMacroSkill,
-  setMoeSkillMacroWait,
+  setMoeSkillMacroPause,
+  clearMoeSkillMacroLine,
+  setMoeSkillMacroTitle,
+  moeSkillMacroFirstSkill,
+  moeSkillMacroPauseLabel,
   planMoeSkillMacroRun,
   MOE_SKILL_MACRO_COUNT,
+  MOE_SKILL_MACRO_LINES,
 } from "@/lib/moeSkillMacro";
 import MoeSkillMacroPanel from "@/components/MoeSkillMacroPanel";
 import {
@@ -1303,7 +1308,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
   const [showSkillMacro, setShowSkillMacro] = useState(false);
   const [skillMacroIndex, setSkillMacroIndex] = useState(0);
   const skillMacroIndexRef = useRef(0);
-  const skillMacroRunTimerRef = useRef(null);
+  /** マクロ実行中のタイマーと「うけつけない」おわりの時刻（MoE の /pause 中） */
+  const skillMacroRunTimerRef = useRef({ timers: [], until: 0 });
   const runSkillMacroRef = useRef((_index) => {});
   skillMacroIndexRef.current = skillMacroIndex;
   const [skillSuccess100, setSkillSuccess100] = useState(false);
@@ -1412,8 +1418,8 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   useEffect(
     () => () => {
-      if (skillMacroRunTimerRef.current != null) {
-        window.clearTimeout(skillMacroRunTimerRef.current);
+      for (const t of skillMacroRunTimerRef.current?.timers ?? []) {
+        window.clearTimeout(t);
       }
       if (soulWarpTimerRef.current != null) {
         window.clearTimeout(soulWarpTimerRef.current);
@@ -4955,8 +4961,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
             playerCondenseMindRef.current || atrumMpRegenRef.current
           ),
           playerCondenseMindRef,
-          atrumMpRegenRef,
-        };
+          atrumMpRegenRef,        };
         updateMoeDevSnapshot(devSnap);
         reportMoeFieldInvariantIssues(
           collectMoeFieldInvariantIssues(devSnap)
@@ -7065,6 +7070,24 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     ]
   );
 
+  /** マクロの 名前（タイトル）と アイコン（いちばん上の技） */
+  const skillMacroDisplay = useCallback(
+    (index) => {
+      const set = skillMacros[index];
+      const first = moeSkillMacroFirstSkill(set);
+      const firstSlot = first
+        ? (skillCopyCatalog[first.source] || []).find(
+            (slot) => slot?.slotKey === first.slotKey
+          )
+        : null;
+      return {
+        label: set?.title || `マクロ${index + 1}`,
+        icon: firstSlot?.icon || `${index + 1}`,
+      };
+    },
+    [skillMacros, skillCopyCatalog]
+  );
+
   const resolveSkillSetRow = useCallback(
     (refs) =>
       refs.map((ref) => {
@@ -7080,12 +7103,13 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }
         if (ref.source === "macro") {
           const index = Number(String(ref.slotKey).slice("macro:".length));
+          const shown = skillMacroDisplay(index);
           return {
             slotKey: `macro:${index}`,
-            label: `マクロ${index + 1}`,
-            icon: `${index + 1}`,
+            label: shown.label,
+            icon: shown.icon,
             reorderable: true,
-            title: `マクロ${index + 1}を実行`,
+            title: `マクロ${index + 1}「${shown.label}」を実行`,
             onClick: () => runSkillMacroRef.current(index),
           };
         }
@@ -7104,7 +7128,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         }
         return { ...found, reorderable: true };
       }),
-    [skillCopyCatalog]
+    [skillCopyCatalog, skillMacroDisplay]
   );
 
   const skillSet1Slots = useMemo(
@@ -7118,7 +7142,7 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const copySkillIntoSet = useCallback((source, slotKey, toPanel, toIndex) => {
     if (toPanel === "macro") {
-      if (toIndex !== 0 && toIndex !== 2) return;
+      if (!(toIndex >= 0 && toIndex < MOE_SKILL_MACRO_LINES)) return;
       setSkillMacros((prev) => {
         const next = setMoeSkillMacroSkill(
           prev,
@@ -7142,43 +7166,83 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
     });
   }, []);
 
-  const pickSkillMacroWait = useCallback((sec) => {
+  const editSkillMacros = useCallback((edit) => {
     setSkillMacros((prev) => {
-      const next = setMoeSkillMacroWait(prev, skillMacroIndexRef.current, sec);
+      const next = edit(prev, skillMacroIndexRef.current);
       saveMoeSkillMacros(next);
       return next;
     });
   }, []);
 
+  const pickSkillMacroPause = useCallback(
+    (lineIndex, ticks) =>
+      editSkillMacros((prev, mi) =>
+        setMoeSkillMacroPause(prev, mi, lineIndex, ticks)
+      ),
+    [editSkillMacros]
+  );
+  const clearSkillMacroLine = useCallback(
+    (lineIndex) =>
+      editSkillMacros((prev, mi) => clearMoeSkillMacroLine(prev, mi, lineIndex)),
+    [editSkillMacros]
+  );
+  const renameSkillMacro = useCallback(
+    (title) =>
+      editSkillMacros((prev, mi) => setMoeSkillMacroTitle(prev, mi, title)),
+    [editSkillMacros]
+  );
+
+  /**
+   * MoE 公式のように 上から順に 実行する。
+   * 待ち（/pause）の あいだは、ほかのマクロを うけつけない。
+   */
   const runSkillMacro = useCallback(
     (index) => {
       const plan = planMoeSkillMacroRun(skillMacros[index]);
+      const name = skillMacros[index]?.title || `マクロ${index + 1}`;
       if (!plan) {
-        setToast("マクロに技2つと待ち時間を入れてください");
+        setToast(`${name}に技を入れてください`);
+        return;
+      }
+      const busy = skillMacroRunTimerRef.current;
+      const now = performance.now();
+      if (busy.until > now) {
+        const left = Math.ceil((busy.until - now) / 100) / 10;
+        setToast(`マクロの待ち中（あと${left}秒）`);
         return;
       }
       const findSlot = (ref) =>
         (skillCopyCatalog[ref.source] || []).find(
           (slot) => slot?.slotKey === ref.slotKey
         );
-      const first = findSlot(plan.skillA);
-      const second = findSlot(plan.skillB);
-      if (typeof first?.onClick !== "function" || typeof second?.onClick !== "function") {
-        setToast("マクロの技が見つかりません");
+      const slots = plan.steps.map((step) => findSlot(step.ref));
+      if (slots.some((slot) => typeof slot?.onClick !== "function")) {
+        setToast(`${name}の技が見つかりません`);
         return;
       }
-      if (skillMacroRunTimerRef.current != null) {
-        window.clearTimeout(skillMacroRunTimerRef.current);
-        skillMacroRunTimerRef.current = null;
+      for (const t of busy.timers) window.clearTimeout(t);
+      const lastAt = plan.steps[plan.steps.length - 1].atMs;
+      skillMacroRunTimerRef.current = {
+        timers: [],
+        until: now + Math.max(plan.totalMs, lastAt),
+      };
+      const parts = [];
+      for (const line of skillMacros[index].lines) {
+        if (line?.kind === "pause") parts.push(moeSkillMacroPauseLabel(line.ticks));
+        if (line?.kind === "skill") {
+          parts.push(findSlot(line.ref)?.label || "技");
+        }
       }
-      first.onClick();
-      setToast(
-        `マクロ${index + 1}：${first.label || "技"} → ${plan.waitSec}秒 → ${second.label || "技"}`
-      );
-      skillMacroRunTimerRef.current = window.setTimeout(() => {
-        skillMacroRunTimerRef.current = null;
-        second.onClick();
-      }, plan.waitSec * 1000);
+      setToast(`${name}：${parts.join(" → ")}`);
+      plan.steps.forEach((step, i) => {
+        if (step.atMs <= 0) {
+          slots[i].onClick();
+          return;
+        }
+        skillMacroRunTimerRef.current.timers.push(
+          window.setTimeout(() => slots[i].onClick(), step.atMs)
+        );
+      });
     },
     [skillMacros, skillCopyCatalog, setToast]
   );
@@ -7186,15 +7250,18 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
 
   const skillMacroRunSlots = useMemo(
     () =>
-      Array.from({ length: MOE_SKILL_MACRO_COUNT }, (_, i) => ({
-        label: `マクロ${i + 1}`,
-        icon: `${i + 1}`,
-        slotKey: `macro:${i}`,
-        title: `マクロ${i + 1}を実行。長押しでセットへコピー`,
-        onClick: () => runSkillMacro(i),
-        reorderable: false,
-      })),
-    [runSkillMacro]
+      Array.from({ length: MOE_SKILL_MACRO_COUNT }, (_, i) => {
+        const shown = skillMacroDisplay(i);
+        return {
+          label: shown.label,
+          icon: shown.icon,
+          slotKey: `macro:${i}`,
+          title: `マクロ${i + 1}「${shown.label}」を実行。長押しでセットへコピー`,
+          onClick: () => runSkillMacro(i),
+          reorderable: false,
+        };
+      }),
+    [runSkillMacro, skillMacroDisplay]
   );
 
   const swapSkillSet1 = useCallback((from, to) => {
@@ -9171,7 +9238,9 @@ export default function MoeFieldMap({ onBack, onEnemyDefeat, worldMode = "2d" })
         onSelectMacro={setSkillMacroIndex}
         macros={skillMacros}
         catalog={skillCopyCatalog}
-        onPickWait={pickSkillMacroWait}
+        onPickPause={pickSkillMacroPause}
+        onClearLine={clearSkillMacroLine}
+        onRename={renameSkillMacro}
         onRun={() => runSkillMacro(skillMacroIndex)}
       />
 

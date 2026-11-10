@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { moe3dEnsureMeshesBvh } from "./moe3dTerrainBvh.js";
 
 /**
  * 3D フィールド歩行 — 地形レイキャスト（高さスナップ用）
@@ -19,7 +20,12 @@ export const MOE_TERRAIN_WALK_SAMPLE_STEP = 0.35;
 
 const _rayOrigin = new THREE.Vector3();
 const _rayDir = new THREE.Vector3();
-const _horizontalProbeHeights = [0.4, 1.0, 2.0];
+// 横の光線の高さ（足もとから）。登れる段差（1.5）より上だけを見る。
+// 低い段差は 下向きの光線で「登れるか」を見るので、ここで止めない。
+const _horizontalProbeHeights = [
+  MOE_PLAYER_TERRAIN_MAX_CLIMB + 0.25,
+  MOE_PLAYER_TERRAIN_MAX_CLIMB + 1.1,
+];
 
 /**
  * @param {THREE.Object3D} terrainGroup
@@ -48,6 +54,8 @@ export function moe3dRebuildTerrainRaycastCache(terrainGroup) {
   terrainGroup.traverse((obj) => {
     if (obj.isMesh) meshes.push(obj);
   });
+  // 光線を速くする目次（BVH）。形ごとに1回だけ作られる
+  moe3dEnsureMeshesBvh(meshes);
   terrainGroup.userData.moeTerrainRaycastMeshes = meshes;
   return meshes;
 }
@@ -214,6 +222,48 @@ export function moe3dEvaluateStandPoint(
 }
 
 /**
+ * 建物の中（GLB の神殿など）向け — 上向きの床だけを見る。天井は見ない。
+ * 登れる高さに床がない（穴・高すぎる床）なら止める。
+ * @param {{ point: { y: number }, normal?: { y: number } }[]} hits
+ * @param {number | null} currentFootY
+ * @param {number} [maxClimb]
+ * @returns {{ blocked: boolean, walkY: number }}
+ */
+export function moe3dEvaluateFloorStandPoint(
+  hits,
+  currentFootY,
+  maxClimb = MOE_PLAYER_TERRAIN_MAX_CLIMB
+) {
+  const maxY = currentFootY == null ? Infinity : currentFootY + maxClimb;
+  let bestY = -Infinity;
+  for (const hit of hits ?? []) {
+    if (moe3dHitFaceUpY(hit) < 0.45) continue;
+    const y = hit.point.y;
+    if (y > maxY + 1e-3) continue;
+    if (y > bestY) bestY = y;
+  }
+  if (bestY === -Infinity) return { blocked: true, walkY: currentFootY ?? 0 };
+  return { blocked: false, walkY: bestY };
+}
+
+const _faceNormal = new THREE.Vector3();
+
+/**
+ * 当たった面の「ほんとうの上向き度」（世界座標）。
+ * three.js の hit.normal は 両面の材質だと 光線のほうへ ひっくり返るので、
+ * 天井の下側も「床」に見えてしまう。face.normal を 世界の向きにして見る。
+ * @param {{ normal?: { y: number }, face?: { normal: THREE.Vector3 }, object?: THREE.Object3D }} hit
+ */
+export function moe3dHitFaceUpY(hit) {
+  if (hit?.face?.normal && hit.object?.matrixWorld) {
+    return _faceNormal
+      .copy(hit.face.normal)
+      .transformDirection(hit.object.matrixWorld).y;
+  }
+  return hit?.normal?.y ?? 0;
+}
+
+/**
  * @param {THREE.Raycaster} raycaster
  * @param {THREE.Object3D} terrainGroup
  * @param {number} x
@@ -221,6 +271,9 @@ export function moe3dEvaluateStandPoint(
  */
 function terrainHits(raycaster, terrainGroup, x, z) {
   raycaster.set(new THREE.Vector3(x, 140, z), new THREE.Vector3(0, -1, 0));
+  // 横の光線が near/far を短くしたままだと 足もとが見つからないので もどす
+  raycaster.near = 0;
+  raycaster.far = Infinity;
   const hits = raycastTerrain(raycaster, terrainGroup);
   // 横壁用の不可視コライダーは垂直レイから除外（足元の頭上判定に柱全体が乗ると歩行不能になる）
   return hits.filter((hit) => !hit.object?.userData?.moeTerrainCollider);
@@ -254,24 +307,32 @@ export function moe3dHorizontalTerrainBlocks(
 
   const nx = dx / dist;
   const nz = dz / dist;
-  const far = dist + bodyRadius;
-  for (const h of _horizontalProbeHeights) {
-    _rayOrigin.set(
-      x0 - nx * bodyRadius,
-      footY + h,
-      z0 - nz * bodyRadius
-    );
-    _rayDir.set(nx, 0, nz);
-    raycaster.set(_rayOrigin, _rayDir);
-    raycaster.near = 0.02;
-    raycaster.far = far;
-    const hits = raycastTerrain(raycaster, terrainGroup);
-    for (const hit of hits) {
-      if (!moe3dIsTerrainWallHit(hit)) continue;
-      if (hit.distance <= far) return true;
+  // うしろから体の半径ぶん はじめて、前の体の半径ぶんまで
+  const far = dist + bodyRadius * 2;
+  const prevNear = raycaster.near;
+  const prevFar = raycaster.far;
+  try {
+    for (const h of _horizontalProbeHeights) {
+      _rayOrigin.set(
+        x0 - nx * bodyRadius,
+        footY + h,
+        z0 - nz * bodyRadius
+      );
+      _rayDir.set(nx, 0, nz);
+      raycaster.set(_rayOrigin, _rayDir);
+      raycaster.near = 0.02;
+      raycaster.far = far;
+      const hits = raycastTerrain(raycaster, terrainGroup);
+      for (const hit of hits) {
+        if (!moe3dIsTerrainWallHit(hit)) continue;
+        if (hit.distance <= far) return true;
+      }
     }
+    return false;
+  } finally {
+    raycaster.near = prevNear;
+    raycaster.far = prevFar;
   }
-  return false;
 }
 
 /**
@@ -319,8 +380,12 @@ function moe3dEvaluateStandAt(
   const {
     maxClimb = MOE_PLAYER_TERRAIN_MAX_CLIMB,
     overheadBlock = MOE_TERRAIN_OVERHEAD_BLOCK,
+    floorOnly = false,
   } = opts;
   const hits = terrainHits(raycaster, terrainGroup, x, z);
+  if (floorOnly) {
+    return moe3dEvaluateFloorStandPoint(hits, currentFootY, maxClimb);
+  }
   return moe3dEvaluateStandPoint(hits, currentFootY, maxClimb, overheadBlock);
 }
 
@@ -451,4 +516,49 @@ export function moe3dCanWalkTerrain(
   }
 
   return true;
+}
+
+/**
+ * プレイヤーの1コマの移動を、地形のかべ・高い段差で止める（かべに そって すべる）
+ * - 足もとに地面がない所（マップのすきま）からは止めない（出られなくならないように）
+ * - 1コマは みじかいので、坂の角度は見ない（段差の高さ maxClimb と かべだけ見る）
+ * @param {THREE.Raycaster} raycaster
+ * @param {THREE.Object3D} terrainGroup
+ * @param {number} x0
+ * @param {number} z0
+ * @param {number} x1
+ * @param {number} z1
+ * @param {{ currentFootY?: number | null, maxClimb?: number, bodyRadius?: number, floorOnly?: boolean }} [opts]
+ *   floorOnly: 建物の中（火山の神殿など）。上向きの床だけ見て、床がない所へは行かない
+ * @returns {{ x: number, z: number, blocked: boolean }}
+ */
+export function moe3dResolveTerrainMove(
+  raycaster,
+  terrainGroup,
+  x0,
+  z0,
+  x1,
+  z1,
+  opts = {}
+) {
+  const dist = Math.hypot(x1 - x0, z1 - z0);
+  if (dist < 0.002 || !terrainGroup) return { x: x1, z: z1, blocked: false };
+  if (!terrainHits(raycaster, terrainGroup, x0, z0).length) {
+    return { x: x1, z: z1, blocked: false };
+  }
+  const walkOpts = { ...opts, maxSlopeDeg: 90 };
+  const can = (ax, az) =>
+    moe3dCanWalkTerrain(raycaster, terrainGroup, x0, z0, ax, az, walkOpts);
+  if (can(x1, z1)) return { x: x1, z: z1, blocked: false };
+  // かべに そって すべる: 大きく動いた向きを先に ためす
+  const tryX = () => Math.abs(x1 - x0) > 0.001 && can(x1, z0);
+  const tryZ = () => Math.abs(z1 - z0) > 0.001 && can(x0, z1);
+  if (Math.abs(x1 - x0) >= Math.abs(z1 - z0)) {
+    if (tryX()) return { x: x1, z: z0, blocked: true };
+    if (tryZ()) return { x: x0, z: z1, blocked: true };
+  } else {
+    if (tryZ()) return { x: x0, z: z1, blocked: true };
+    if (tryX()) return { x: x1, z: z0, blocked: true };
+  }
+  return { x: x0, z: z0, blocked: true };
 }

@@ -297,6 +297,7 @@ export default function MoeVerticalSkillPanel({
             <MoeCompactSkillTip
               key={`slot-${i}-${slot.label}`}
               text={tipText}
+              placement="side"
               className="shrink-0 w-full"
             >
               <button

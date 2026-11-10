@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useEffect } from "react";
 import { useMoePanelStack } from "@/context/MoePanelStackContext";
 
 /**
@@ -18,6 +18,7 @@ const MoeFloatingPanelRoot = forwardRef(function MoeFloatingPanelRoot(
   {
     panelId,
     minZIndex = 0,
+    bringToFrontOnMount = false,
     className,
     style,
     children,
@@ -30,6 +31,13 @@ const MoeFloatingPanelRoot = forwardRef(function MoeFloatingPanelRoot(
   const { zIndex, onStackPointerDown } = useMoePanelStack(panelId, {
     minZIndex,
   });
+
+  // ひらいたとき いちばん手前へ（ほかのパネルの うしろに かくれない）
+  useEffect(() => {
+    if (bringToFrontOnMount) onStackPointerDown();
+    // ひらいた 1回だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div

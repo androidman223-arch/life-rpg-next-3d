@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { moeClampPanelPosIntoView } from "@/lib/moePanelPosClamp";
 
 function loadSavedPos(storageKey) {
   if (typeof window === "undefined") return null;
@@ -32,9 +33,36 @@ export function useMoeDraggablePos(storageKey, getDefaultPos) {
 
   useEffect(() => {
     canSaveRef.current = false;
-    setPos(loadSavedPos(storageKey) ?? getDefaultPosRef.current());
+    const start = loadSavedPos(storageKey) ?? getDefaultPosRef.current();
+    // 保存した位置が 画面の外なら 中に もどす（ひらいても 見えない を ふせぐ）
+    setPos(
+      moeClampPanelPosIntoView(
+        start,
+        sizeRef.current,
+        window.innerWidth,
+        window.innerHeight
+      )
+    );
     canSaveRef.current = true;
   }, [storageKey]);
+
+  // 画面の大きさが かわったら、はみ出したパネルを 中に もどす
+  useEffect(() => {
+    const onResize = () => {
+      setPos((p) => {
+        if (p == null) return p;
+        const next = moeClampPanelPosIntoView(
+          p,
+          sizeRef.current,
+          window.innerWidth,
+          window.innerHeight
+        );
+        return next.x === p.x && next.y === p.y ? p : next;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     if (!canSaveRef.current || pos == null) return;
@@ -87,5 +115,20 @@ export function useMoeDraggablePos(storageKey, getDefaultPos) {
     [clampPos, pos]
   );
 
-  return { pos, sizeRef, onDragPointerDown };
+  /** ひらいたときに よぶ — いまの大きさで パネル全体を 画面に入れる */
+  const ensureInView = useCallback(() => {
+    setPos((p) => {
+      if (p == null || typeof window === "undefined") return p;
+      const next = moeClampPanelPosIntoView(
+        p,
+        sizeRef.current,
+        window.innerWidth,
+        window.innerHeight,
+        { whole: true }
+      );
+      return next.x === p.x && next.y === p.y ? p : next;
+    });
+  }, []);
+
+  return { pos, sizeRef, onDragPointerDown, ensureInView };
 }

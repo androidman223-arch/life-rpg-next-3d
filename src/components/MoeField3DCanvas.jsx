@@ -165,7 +165,16 @@ import {
   moeCampfireRestBlendStep,
   moeCampfireRestSceneColors,
 } from "@/lib/moeCampfireRestCore";
-import { moeFieldFogDistances, MOE_FIELD_FOG_CLEAR } from "@/lib/moeFieldFog";
+import {
+  moeFieldFogDistances,
+  MOE_FIELD_FOG_CLEAR,
+  MOE_FIELD_SKY_HORIZON_HEX,
+} from "@/lib/moeFieldFog";
+import {
+  createMoeFieldLook,
+  MOE_FIELD_LOOK_HEMI_INTENSITY,
+  MOE_FIELD_LOOK_SUN_INTENSITY,
+} from "@/lib/moe3dFieldLook";
 import { moe3dMapSlotAtWorldPos } from "@/lib/moe3dMapSlotAtWorldPos";
 import {
   moe3dAgeHubCampfireWorldPos,
@@ -192,7 +201,9 @@ import {
 } from "@/data/moeMeerimEnemies";
 import { MOE_PET_TENTH_LEVEL_UP_LABEL } from "@/data/moePetExpTable";
 import {
+  MOE_PLAYER_TERRAIN_MAX_CLIMB,
   moe3dInvalidateTerrainRaycastCache,
+  moe3dResolveTerrainMove,
   moe3dWalkableGroundY,
 } from "@/lib/moe3dMacro3Walk";
 import {
@@ -201,12 +212,14 @@ import {
   MOE_ELVIN_VALLEY_GLB_URL,
   attachMoe3dElvinValleyGlb,
   moe3dElvinKeikokuTerrainGroundY,
+  moe3dIsOnElvinKeikokuField,
 } from "@/lib/moe3dElvinValleyGlb";
 import {
   MOE_SULFUR_KAZAN_GLB_URL,
   MOE_SULFUR_KAZAN_MAP_SLOT_ID,
   moe3dSulfurKazanTerrainGroundY,
   attachMoe3dSulfurKazanTemple,
+  moe3dIsOnSulfurKazanField,
 } from "@/lib/moe3dSulfurKazanTemple";
 import { MOE_PLAYER_LOOK_AHEAD_DEFAULT } from "@/lib/moePlayerLookAhead";
 
@@ -1110,9 +1123,9 @@ export default function MoeField3DCanvas({
     let animId = 0;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87b8e8);
+    scene.background = new THREE.Color(MOE_FIELD_SKY_HORIZON_HEX);
     scene.fog = new THREE.Fog(
-      0x87b8e8,
+      MOE_FIELD_SKY_HORIZON_HEX,
       MOE_FIELD_FOG_CLEAR.near,
       MOE_FIELD_FOG_CLEAR.far
     );
@@ -1136,7 +1149,8 @@ export default function MoeField3DCanvas({
     sun.position.set(12, 24, 8);
     sun.castShadow = true;
     scene.add(sun);
-
+    /** 見た目: 地面テクスチャ・空と山・太陽のかげ（lib/moe3dFieldLook.js） */
+    const fieldLook = createMoeFieldLook({ scene, renderer, sun, hemi });
     const terrainGroup = new THREE.Group();
     scene.add(terrainGroup);
 
@@ -1948,6 +1962,10 @@ export default function MoeField3DCanvas({
     }
 
     const raycaster = new THREE.Raycaster();
+    /** 地形のかべで止める用（ほかの光線と near/far を まぜない） */
+    const terrainGuardRaycaster = new THREE.Raycaster();
+    /** @type {{ x: number, z: number } | null} */
+    let terrainGuardPrev = null;
     const pointer = new THREE.Vector2();
     const clock = new THREE.Clock();
 
@@ -3847,7 +3865,48 @@ export default function MoeField3DCanvas({
         petFocused: petFocus,
         petLabel: petLbl,
       } = stateRef.current;
-      const pl = playerPosRefStable.current?.current ?? { x: 0, y: 0 };
+      let pl = playerPosRefStable.current?.current ?? { x: 0, y: 0 };
+      // 地形のかべ・高い段差で止める（光線は three-mesh-bvh で速くしてある）
+      // 金斗雲・ワープ・エルビン渓谷（GLB）では止めない
+      // 火山の神殿（GLB の建物）は 床だけ見る（floorOnly）
+      if (mapReady && terrainGuardPrev) {
+        const moved = Math.hypot(
+          pl.x - terrainGuardPrev.x,
+          pl.y - terrainGuardPrev.z
+        );
+        const onKazan = moe3dIsOnSulfurKazanField(
+          pl.x,
+          pl.y,
+          fieldTileW,
+          fieldTileD
+        );
+        const guardOff =
+          Boolean(kintounOnRefStable.current?.current) ||
+          moved > 18 ||
+          moe3dIsOnElvinKeikokuField(pl.x, pl.y, fieldTileW, fieldTileD);
+        if (!guardOff && moved > 0.002) {
+          const jumpNow = playerJumpRefStable.current?.current?.offset ?? 0;
+          const fixed = moe3dResolveTerrainMove(
+            terrainGuardRaycaster,
+            terrainGroup,
+            terrainGuardPrev.x,
+            terrainGuardPrev.z,
+            pl.x,
+            pl.y,
+            {
+              currentFootY: lastPlayerFootY,
+              maxClimb: MOE_PLAYER_TERRAIN_MAX_CLIMB + Math.max(0, jumpNow),
+              floorOnly: onKazan,
+            }
+          );
+          if (fixed.x !== pl.x || fixed.z !== pl.y) {
+            pl = { x: fixed.x, y: fixed.z };
+            const posRef = playerPosRefStable.current;
+            if (posRef) posRef.current = pl;
+          }
+        }
+      }
+      terrainGuardPrev = { x: pl.x, z: pl.y };
       const pt = petPosRefStable.current?.current ?? pl;
       const combatSession =
         duelCombatSessionRefStable.current?.current ?? 0;
@@ -3876,19 +3935,21 @@ export default function MoeField3DCanvas({
         scene.fog.color.setHex(colors.fog);
         scene.fog.near = colors.fogNear;
         scene.fog.far = colors.fogFar;
-        hemi.intensity = colors.hemiIntensity;
-        sun.intensity = colors.sunIntensity;
+        hemi.intensity =
+          colors.hemiIntensity * (MOE_FIELD_LOOK_HEMI_INTENSITY / 0.85);
+        sun.intensity =
+          colors.sunIntensity * (MOE_FIELD_LOOK_SUN_INTENSITY / 1.1);
       } else if (campfireRestBlend <= 0.001 && restTarget <= 0) {
-        scene.background.setHex(0x87b8e8);
-        scene.fog.color.setHex(0x87b8e8);
+        scene.background.setHex(MOE_FIELD_SKY_HORIZON_HEX);
+        scene.fog.color.setHex(MOE_FIELD_SKY_HORIZON_HEX);
         const fog = moeFieldFogDistances(
           moe3dMapSlotAtWorldPos(pl.x, pl.y, fieldTileW, fieldTileD),
           Boolean(kintounOnRefStable.current?.current)
         );
         scene.fog.near = fog.near;
         scene.fog.far = fog.far;
-        hemi.intensity = 0.85;
-        sun.intensity = 1.1;
+        hemi.intensity = MOE_FIELD_LOOK_HEMI_INTENSITY;
+        sun.intensity = MOE_FIELD_LOOK_SUN_INTENSITY;
       }
       for (const fx of campfireRestFxList) {
         fx.update(dt, campfireRestBlend);
@@ -4348,6 +4409,9 @@ export default function MoeField3DCanvas({
       camera.position.lerp(desiredCam, camLerp);
       camera.lookAt(look);
 
+      fieldLook.scanTerrainEvery(terrainGroup, performance.now());
+      fieldLook.update(camera, focus, campfireRestBlend);
+
       const yawOut = cameraYawRefStable.current;
       if (yawOut) yawOut.current = camYaw;
 
@@ -4380,6 +4444,7 @@ export default function MoeField3DCanvas({
       playerSummonFx.dispose();
       kintounCloudFx.dispose();
       skateboardFx.dispose();
+      fieldLook.dispose();
       for (const fx of campfireRestFxList) {
         fx.dispose();
       }

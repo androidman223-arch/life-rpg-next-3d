@@ -1,3 +1,5 @@
+import { MOE_FIELD_SKY_HORIZON_HEX } from "./moeFieldFog.js";
+
 /** 育成表の家 — 焚き火キャンプ休息 */
 
 export const MOE_CAMPFIRE_REST = {
@@ -18,9 +20,9 @@ export function moeCampfireRestBlendStep(current, target, dt, speed = 2.4) {
 /** @param {number} blend 0..1 */
 export function moeCampfireRestSceneColors(blend) {
   const b = Math.max(0, Math.min(1, blend));
-  const dayBg = 0x87b8e8;
+  const dayBg = MOE_FIELD_SKY_HORIZON_HEX;
   const nightBg = 0x080c18;
-  const dayFog = 0x87b8e8;
+  const dayFog = MOE_FIELD_SKY_HORIZON_HEX;
   const nightFog = 0x050810;
   const lerp = (a, c, t) => Math.round(a + (c - a) * t);
   const r = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
