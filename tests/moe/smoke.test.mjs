@@ -292,8 +292,8 @@ describe("skill macro", () => {
     assert.equal(moeSkillMacroWaitChoices()[59], 60);
     let macros = emptyMoeSkillMacros();
     macros = setMoeSkillMacroSkill(macros, 0, 0, {
-      source: "player1",
-      slotKey: "enemy_stat_search",
+      source: "dragon",
+      slotKey: "dragon_lv60",
     });
     macros = setMoeSkillMacroSkill(macros, 0, 1, {
       source: "phoenix",
@@ -304,7 +304,7 @@ describe("skill macro", () => {
       source: "dragon",
       slotKey: "dragon_lv20",
     });
-    assert.equal(macros[0].skillA.slotKey, "enemy_stat_search");
+    assert.equal(macros[0].skillA.slotKey, "dragon_lv60");
     assert.equal(macros[0].waitSec, 12);
     assert.equal(macros[0].skillB.slotKey, "dragon_lv20");
     assert.equal(macros[1].skillA, null);
@@ -412,7 +412,11 @@ describe("vertical skill panel layout", () => {
     assert.match(phoenix[9].title, /Lv\.100/);
     assert.equal(phoenix[11].label, "空き");
     assert.match(phoenix[11].title, /Lv\.150/);
-    assert.equal(dragon[10].label, "空き");
+    assert.equal(phoenix[10].label, "フェニックスオーラ");
+    assert.match(phoenix[10].title, /Lv\.130/);
+    assert.equal(dragon[9].label, "カウンタークロウ");
+    assert.match(dragon[9].title, /Lv\.100/);
+    assert.equal(dragon[10].label, "ドラゴンロード");
     assert.match(dragon[10].title, /Lv\.130/);
     assert.equal(phoenix[0].label, "鳳凰の呼吸");
     assert.equal(phoenix[0].icon, "🧘");
@@ -584,7 +588,320 @@ describe("vertical skill panel layout", () => {
       "dragon_kintoun"
     );
     assert.equal(hasTrainingSkillBridgeAction("dragon", 30), false);
+    assert.equal(hasTrainingSkillBridgeAction("dragon", 60), true);
+    assert.equal(
+      getTrainingSkillBridgeAction("dragon", 60)?.kind,
+      "enemyStatSearch"
+    );
     assert.equal(hasTrainingSkillBridgeAction("phoenix", 90), true);
+    assert.equal(
+      getTrainingSkillBridgeAction("phoenix", 130)?.kind,
+      "phoenixAura"
+    );
+    assert.equal(
+      getTrainingSkillBridgeAction("dragon", 130)?.kind,
+      "dragonLord"
+    );
+    assert.equal(
+      getTrainingSkillBridgeAction("dragon", 100)?.kind,
+      "dragonCounterClaw"
+    );
+  });
+
+  it("runs phoenix aura and dragon lord buff timers", async () => {
+    const {
+      beginMoePhoenixAura,
+      isMoePhoenixAuraActive,
+      MOE_PHOENIX_AURA_DURATION_MS,
+    } = await import("../../src/lib/moePhoenixAura.js");
+    const {
+      beginMoeDragonLordBuff,
+      moeDragonLordPetAttackMult,
+      MOE_DRAGON_LORD_PET_ATTACK_MULT,
+      MOE_DRAGON_LORD_DURATION_MS,
+    } = await import("../../src/lib/moeDragonLordBuff.js");
+    const { buildMoePlayerBuffStrip, buildMoePetBuffStrip } = await import(
+      "../../src/lib/moeBuffUi.js"
+    );
+
+    assert.equal(MOE_PHOENIX_AURA_DURATION_MS, 5000);
+    assert.equal(MOE_DRAGON_LORD_DURATION_MS, 30_000);
+    assert.equal(MOE_DRAGON_LORD_PET_ATTACK_MULT, 2);
+
+    const t0 = 1_000_000;
+    const auraUntil = beginMoePhoenixAura(t0);
+    assert.equal(isMoePhoenixAuraActive(auraUntil, t0 + 4000), true);
+    assert.equal(isMoePhoenixAuraActive(auraUntil, t0 + 5000), false);
+
+    const lordUntil = beginMoeDragonLordBuff(t0);
+    assert.equal(moeDragonLordPetAttackMult(lordUntil, t0 + 29_000), 2);
+    assert.equal(moeDragonLordPetAttackMult(lordUntil, t0 + 30_000), 1);
+
+    const petBuffs = buildMoePetBuffStrip(
+      { phoenixAuraUntilMs: auraUntil, dragonLordUntilMs: lordUntil },
+      t0 + 1000
+    );
+    assert.equal(petBuffs[0]?.id, "phoenix_aura");
+    assert.equal(petBuffs[1]?.id, "dragon_lord");
+
+    const {
+      activateMoeDragonCounterClaw,
+      moeDragonCounterClawCooldownRemainSec,
+      moeDragonCounterClawDamageSplit,
+      moeEnemyHpAfterCounterReflect,
+      MOE_DRAGON_COUNTER_CLAW_COOLDOWN_MS,
+      MOE_DRAGON_COUNTER_CLAW_DURATION_MS,
+    } = await import("../../src/lib/moeDragonCounterClaw.js");
+    assert.equal(MOE_DRAGON_COUNTER_CLAW_DURATION_MS, 5000);
+    assert.equal(MOE_DRAGON_COUNTER_CLAW_COOLDOWN_MS, 10000);
+    const clawT0 = 1_000_000;
+    const claw = activateMoeDragonCounterClaw(clawT0);
+    assert.equal(claw.effectUntilMs, clawT0 + 5000);
+    assert.equal(claw.cooldownUntilMs, clawT0 + 10000);
+    assert.equal(
+      moeDragonCounterClawCooldownRemainSec(
+        claw.cooldownUntilMs,
+        clawT0 + 6000,
+        claw.effectUntilMs
+      ),
+      4
+    );
+    assert.deepEqual(moeDragonCounterClawDamageSplit(30, 100), {
+      taken: 15,
+      reflect: 15,
+    });
+    assert.deepEqual(moeEnemyHpAfterCounterReflect(100, 30), {
+      hp: 70,
+      damage: 30,
+      defeated: false,
+    });
+    assert.deepEqual(moeEnemyHpAfterCounterReflect(25, 30), {
+      hp: 0,
+      damage: 30,
+      defeated: true,
+    });
+
+    const {
+      activateMoeHyakkaRanran,
+      activateMoeRevengeGuard,
+      activateMoeSwordDance,
+      formatMoePlayerReflectSkillActivateToast,
+      moeResolvePetIncomingReflect,
+      moeRevengeGuardReflectAmount,
+      MOE_REVENGE_GUARD_REFLECT_CAP,
+      MOE_SWORD_DANCE_DURATION_MS,
+    } = await import("../../src/lib/moePlayerReflectSkills.js");
+    assert.match(
+      formatMoePlayerReflectSkillActivateToast("sword_dance", "ソードダンス"),
+      /約3秒反射 · 被弾20% · 反射80%/
+    );
+    assert.match(
+      formatMoePlayerReflectSkillActivateToast("revenge_guard", "リベンジガード"),
+      /約2秒盾構え · 被弾0% · 反射100%/
+    );
+    assert.match(
+      formatMoePlayerReflectSkillActivateToast("hyakka_ranran", "百花繚乱"),
+      /被弾5% · 反射95%/
+    );
+    assert.equal(MOE_SWORD_DANCE_DURATION_MS, 3000);
+    const hyakka = activateMoeHyakkaRanran(t0);
+    assert.equal(hyakka.effectUntilMs, t0 + 8000);
+    const sd = activateMoeSwordDance(t0);
+    assert.equal(sd.effectUntilMs, t0 + 3000);
+    const rg = activateMoeRevengeGuard(t0);
+    assert.equal(rg.armed, true);
+    assert.equal(moeRevengeGuardReflectAmount(500, true), MOE_REVENGE_GUARD_REFLECT_CAP);
+    const hyakkaHit = moeResolvePetIncomingReflect(
+      100,
+      120,
+      { hyakkaUntilMs: hyakka.effectUntilMs },
+      t0 + 100
+    );
+    assert.equal(hyakkaHit.taken, 5);
+    assert.equal(hyakkaHit.reflect, 95);
+    const magicNull = moeResolvePetIncomingReflect(
+      80,
+      80,
+      { hyakkaUntilMs: hyakka.effectUntilMs, attackKind: "magic" },
+      t0 + 100
+    );
+    assert.equal(magicNull.fullGuard, true);
+    const revengeHit = moeResolvePetIncomingReflect(
+      150,
+      150,
+      {
+        revengeGuardUntilMs: rg.effectUntilMs,
+        revengeGuardArmed: true,
+      },
+      t0 + 100
+    );
+    assert.equal(revengeHit.taken, 0);
+    assert.equal(revengeHit.reflect, 150);
+    assert.equal(revengeHit.consumeRevengeGuard, true);
+    const revengeCapped = moeResolvePetIncomingReflect(
+      350,
+      350,
+      {
+        revengeGuardUntilMs: rg.effectUntilMs,
+        revengeGuardArmed: true,
+      },
+      t0 + 100
+    );
+    assert.equal(revengeCapped.reflect, MOE_REVENGE_GUARD_REFLECT_CAP);
+    const {
+      activateMoeRevengeSwing,
+      MOE_REVENGE_SWING_DURATION_MS,
+      MOE_REVENGE_SWING_REFLECT_DAMAGE,
+    } = await import("../../src/lib/moePlayerReflectSkills.js");
+    const rs = activateMoeRevengeSwing(t0);
+    assert.equal(rs.effectUntilMs, t0 + MOE_REVENGE_SWING_DURATION_MS);
+    const swingHit = moeResolvePetIncomingReflect(
+      80,
+      100,
+      { revengeSwingUntilMs: rs.effectUntilMs },
+      t0 + 50
+    );
+    assert.equal(swingHit.taken, 0);
+    assert.equal(swingHit.reflect, MOE_REVENGE_SWING_REFLECT_DAMAGE);
+    assert.match(
+      formatMoePlayerReflectSkillActivateToast("revenge_swing", "リベンジスイング"),
+      /約1秒 · 被弾0% · 反射150固定/
+    );
+
+    const { moePlayerSkillSlotTimingUi } = await import(
+      "../../src/lib/moeReflectSkillUi.js"
+    );
+    assert.deepEqual(
+      moePlayerSkillSlotTimingUi({ active: true, cooldownSec: 8 }),
+      { onCooldown: false, effectRemainSec: 8 }
+    );
+    assert.deepEqual(
+      moePlayerSkillSlotTimingUi({ active: false, cooldownSec: 12 }),
+      { onCooldown: true, effectRemainSec: null }
+    );
+
+    const buffUi = await import("../../src/lib/moeBuffUi.js");
+    const now = 50_000;
+    const slots = buffUi.buildMoePlayerBuffStrip(
+      {
+        bananaMilkActive: true,
+        shinobiashiOn: true,
+        kintounOn: true,
+        skateboardOn: true,
+        hyakkaUntilMs: now + 8000,
+      },
+      now
+    );
+    assert.equal(slots[0]?.id, "hyakka_ranran");
+    assert.equal(slots[0]?.tone, "reflect");
+    assert.equal(slots[0]?.remainSec, 8);
+
+    const { moeEnemyFieldStrikeKind, moeResolveEnemyFieldStrike } = await import(
+      "../../src/lib/moeEnemyFieldStrike.js"
+    );
+    assert.equal(moeEnemyFieldStrikeKind("orc_magician"), "magic");
+    assert.equal(moeEnemyFieldStrikeKind("rescue_bear"), "physical");
+    const magStrike = moeResolveEnemyFieldStrike(
+      { key: "orc_magician", wiki: { magic: 36 } },
+      { useStrong: false }
+    );
+    assert.equal(magStrike.attackKind, "magic");
+    assert.equal(magStrike.damageRaw, 32);
+
+    const { resolveMoeEnemyDetection } = await import(
+      "../../src/lib/moeEnemyDetection.js"
+    );
+    const { MOE_ORC_MAGICIAN_SEARCH_RANGE_MULT } = await import(
+      "../../src/lib/moeEnemyDetection.js"
+    );
+    const det = resolveMoeEnemyDetection({ key: "orc_magician" });
+    assert.equal(det.visionRange, Math.round(12 * MOE_ORC_MAGICIAN_SEARCH_RANGE_MULT * 10) / 10);
+    assert.equal(det.hearingRange, Math.round(6 * MOE_ORC_MAGICIAN_SEARCH_RANGE_MULT * 10) / 10);
+
+    const {
+      MOE_ORC_MAG_FIREBALL_COOLDOWN_MS,
+      tickMoeFieldFireballs,
+      spawnMoeOrcMagicianFireball,
+      spawnMoeReflectReturnFireball,
+      moeReflectReturnFireballDamage,
+    } = await import("../../src/lib/moeOrcMagicianFireball.js");
+    assert.equal(MOE_ORC_MAG_FIREBALL_COOLDOWN_MS, 5000);
+    const ball = spawnMoeOrcMagicianFireball(
+      { id: 1, key: "orc_magician", name: "オーク マジシャン", x: 0, y: 0 },
+      { x: 10, y: 0 },
+      1000
+    );
+    assert.equal(ball.targetKind, "enemyToPet");
+    const moved = tickMoeFieldFireballs([ball], 0.5, {
+      petPos: { x: 50, y: 0 },
+      enemyPos: () => null,
+    });
+    assert.equal(moved.petHits.length, 0);
+    assert.equal(moved.balls.length, 1);
+    const ret = spawnMoeReflectReturnFireball(
+      { x: 5, y: 0 },
+      { id: 1, key: "orc_magician", name: "オーク マジシャン", x: 20, y: 0 },
+      32,
+      2000
+    );
+    assert.equal(ret.targetKind, "petToEnemy");
+    const retTick = tickMoeFieldFireballs([ret], 2.5, {
+      petPos: { x: 0, y: 0 },
+      enemyPos: () => ({ x: 20, y: 0 }),
+    });
+    assert.equal(retTick.enemyHits.length, 1);
+    const plan = moeReflectReturnFireballDamage(
+      {
+        reflect: 24,
+        fullGuard: false,
+        logLabel: "ソードダンス — 魔法反射",
+      },
+      32
+    );
+    assert.equal(plan.spawn, true);
+    assert.equal(plan.damage, 24);
+
+    const {
+      moeEnemyReflectFireballHitFlashStrength,
+      triggerMoeEnemyReflectFireballHitFlash,
+      MOE_ENEMY_REFLECT_FIREBALL_HIT_FLASH_MS,
+    } = await import("../../src/lib/moe3dEnemyReflectFireballHitFlash.js");
+    const flashStore = {};
+    triggerMoeEnemyReflectFireballHitFlash(flashStore, 9, 5000);
+    assert.equal(
+      flashStore[9],
+      5000 + MOE_ENEMY_REFLECT_FIREBALL_HIT_FLASH_MS
+    );
+    assert.ok(
+      moeEnemyReflectFireballHitFlashStrength(flashStore[9], 5100) > 0
+    );
+    assert.equal(moeEnemyReflectFireballHitFlashStrength(flashStore[9], 6000), 0);
+
+    const {
+      moePetReflectCounterActive,
+      moePetReflectCounterPulse,
+    } = await import("../../src/lib/moePetReflectCounterVisual.js");
+    const reflectT0 = 10_000;
+    assert.equal(
+      moePetReflectCounterActive(
+        {
+          hyakkaUntilMs: reflectT0 + 8000,
+          swordDanceUntilMs: 0,
+          revengeGuardUntilMs: 0,
+        },
+        reflectT0 + 100
+      ),
+      true
+    );
+    assert.equal(
+      moePetReflectCounterActive(
+        { hyakkaUntilMs: 0, swordDanceUntilMs: 0, revengeGuardUntilMs: 0 },
+        reflectT0
+      ),
+      false
+    );
+    const pulse = moePetReflectCounterPulse(0);
+    assert.ok(pulse >= 0 && pulse <= 1);
   });
 
   it("places meerim bison bosses on elvin maps", async () => {
@@ -1552,6 +1869,8 @@ describe("macro1 bisk official check", () => {
     const spawnTx = 0.5;
     const spawnTz = 0.54;
     const specs = [
+      { tx: 0.78, tz: 0.54 },
+      { tx: 0.22, tz: 0.54 },
       { tx: 0.34, tz: 0.66 },
       { tx: 0.66, tz: 0.62 },
     ];
@@ -2989,9 +3308,9 @@ describe("dragon kintoun skill", () => {
     const { migratePlayerSkillSlotKey, defaultPlayerSkillSlotOrder } =
       await import("../../src/data/moePlayerSkillSlotOrder.js");
     assert.equal(migratePlayerSkillSlotKey("ninja_shinsoku"), "dragon_skateboard");
-    assert.equal(defaultPlayerSkillSlotOrder()[0], "enemy_stat_search");
-    assert.equal(defaultPlayerSkillSlotOrder()[1], "worship_nature");
-    assert.equal(defaultPlayerSkillSlotOrder()[5], "soul_master");
+    assert.equal(defaultPlayerSkillSlotOrder()[0], "worship_nature");
+    assert.equal(migratePlayerSkillSlotKey("enemy_stat_search"), null);
+    assert.equal(defaultPlayerSkillSlotOrder()[4], "soul_master");
     assert.equal(defaultPlayerSkillSlotOrder().includes("light"), false);
     assert.equal(defaultPlayerSkillSlotOrder().length, 10);
   });
@@ -3003,6 +3322,7 @@ describe("dragon kintoun skill", () => {
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG.length, 12);
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[0].name, "龍神の呼吸");
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[3].name, "板乗り");
+    assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[5].name, "龍光眼");
     assert.equal(MOE_DRAGON_SKILL_GET_CATALOG[7].name, "筋斗雲");
   });
 });
@@ -3699,7 +4019,7 @@ describe("AGE continent maps", () => {
     assert.match(canvasSrc, /moe3dSolesValleyCampfireWorldPos/);
     assert.match(canvasSrc, /age-rest-camps/);
     assert.match(fieldSrc, /moe3dIsNearAgeRestCampfire/);
-    assert.match(fieldSrc, /formatMoeExternalSaveFieldHint/);
+    assert.match(fieldSrc, /メニューの「全部保存」/);
     assert.match(labelsSrc, /soles_valley: "ソレス渓谷"/);
     assert.match(labelsSrc, /yug_coast: "ユグ海岸"/);
   });
@@ -4638,18 +4958,18 @@ describe("worship nature", () => {
     assert.equal(revived.pet.hp, 80);
 
     const slotted = ensureWorshipNatureSlot([
-      "enemy_stat_search",
-      "light",
-      "heal",
-      "heal-all",
       "regen",
       "banana_milk",
       "holy_record",
+      "soul_master",
+      "mining",
+      "light",
+      "heal",
+      "heal-all",
       "teleport",
-      "ninja_shinobiashi",
       "dragon_skateboard",
     ]);
-    assert.equal(slotted[1], "worship_nature");
+    assert.equal(slotted[0], "worship_nature");
     assert.equal(slotted.length, 10);
     assert.equal(slotted.includes("dragon_skateboard"), false);
   });
@@ -4774,7 +5094,6 @@ describe("worship nature", () => {
     );
     const packed = packPlayerSkillSlots(
       stripRetiredPlayerSkillSlots([
-        "enemy_stat_search",
         "worship_nature",
         "light",
         "heal",
@@ -4817,5 +5136,93 @@ describe("field fog", () => {
     assert.ok(forest.near < riding.near);
     assert.equal(riding.near, town.near);
     assert.equal(riding.far, town.far);
+  });
+});
+
+describe("phoenix skill unlock", () => {
+  it("adds game wisdom and imported phoenix points", async () => {
+    const { phoenixSkillUnlockLevel } = await import(
+      "../../src/lib/moePlayerExperience.js"
+    );
+    assert.equal(phoenixSkillUnlockLevel(10.2, 4.5), 14.7);
+    assert.equal(phoenixSkillUnlockLevel(0, 0), 0);
+    assert.equal(phoenixSkillUnlockLevel(-3, 8), 8);
+  });
+});
+
+describe("phoenix wisdom stays", () => {
+  it("keeps the larger of the menu exp and the training timer", async () => {
+    const { largerPhoenixWisdomExp } = await import(
+      "../../src/lib/moePlayerExperience.js"
+    );
+    assert.equal(largerPhoenixWisdomExp(0, { phoenixExp: 12.4 }), 12.4);
+    assert.equal(largerPhoenixWisdomExp(20, { phoenixExp: 3 }), 20);
+    assert.equal(largerPhoenixWisdomExp(1.2, null), 1.2);
+  });
+});
+
+describe("love pet exp buff", () => {
+  it("stacks love, dx, and all for ten minutes, then clears", async () => {
+    const {
+      clearMoeLovePetBuffs,
+      grantMoeLovePetBuff,
+      moeLovePetExpMultiplier,
+      resetMoeLovePetBuffs,
+      scaleMoePetHitExp,
+    } = await import("../../src/lib/moeLovePetBuff.js");
+    resetMoeLovePetBuffs();
+    const now = 1_000_000;
+    grantMoeLovePetBuff("love_pet", "eagle", now);
+    grantMoeLovePetBuff("love_pet_dx", "eagle", now);
+    grantMoeLovePetBuff("love_pet_all", "eagle", now);
+    assert.equal(
+      Math.round(moeLovePetExpMultiplier("eagle", now + 1000) * 10) / 10,
+      3.3
+    );
+    assert.equal(scaleMoePetHitExp("eagle", 10, now + 1000), 33);
+    assert.equal(
+      moeLovePetExpMultiplier("eagle", now + 10 * 60 * 1000),
+      1
+    );
+    grantMoeLovePetBuff("love_pet", "eagle", now);
+    clearMoeLovePetBuffs();
+    assert.equal(moeLovePetExpMultiplier("eagle", now + 1000), 1);
+  });
+});
+
+describe("full backup", () => {
+  it("exports every localStorage key and restores them by overwrite", async () => {
+    const {
+      buildMoeFullBackupPayload,
+      parseMoeFullBackupPayload,
+      applyMoeFullBackupKeys,
+    } = await import("../../src/lib/moe/moeFullBackup.js");
+    const makeStorage = (init) => {
+      const map = new Map(Object.entries(init));
+      return {
+        get length() {
+          return map.size;
+        },
+        key: (i) => [...map.keys()][i] ?? null,
+        getItem: (k) => (map.has(k) ? map.get(k) : null),
+        setItem: (k, v) => map.set(k, String(v)),
+        map,
+      };
+    };
+    const src = makeStorage({ "life-rpg-pets": "[1]", trainer: '{"lv":5}' });
+    const payload = buildMoeFullBackupPayload(src);
+    assert.equal(payload.keyCount, 2);
+    const parsed = parseMoeFullBackupPayload(JSON.parse(JSON.stringify(payload)));
+    assert.equal(parsed.ok, true);
+    const dst = makeStorage({ trainer: '{"lv":1}', other: "keep" });
+    const res = applyMoeFullBackupKeys(dst, parsed.keys);
+    assert.equal(res.written, 2);
+    assert.equal(dst.map.get("trainer"), '{"lv":5}');
+    assert.equal(dst.map.get("other"), "keep");
+    assert.equal(parseMoeFullBackupPayload({ pets: [] }).ok, false);
+    assert.equal(
+      parseMoeFullBackupPayload({ format: "life-rpg-full-backup", version: 1, keys: {} }).ok,
+      false
+    );
   });
 });

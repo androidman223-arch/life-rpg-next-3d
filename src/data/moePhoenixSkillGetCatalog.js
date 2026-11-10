@@ -96,11 +96,11 @@ export const MOE_PHOENIX_SKILL_GET_CATALOG = [
   },
   {
     level: 130,
-    name: "空き",
-    icon: "·",
-    sub: "",
-    hint: "まだ決めていない",
-    status: "empty",
+    name: "フェニックスオーラ",
+    icon: "🔥",
+    sub: "完全ガード",
+    hint: "5秒間 — 物理・魔法の被ダメを無効（ペット）",
+    status: "done",
   },
   {
     level: 150,

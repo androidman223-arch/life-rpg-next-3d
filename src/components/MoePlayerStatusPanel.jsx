@@ -93,19 +93,9 @@ export default function MoePlayerStatusPanel({
             {view.job} · 訓練士 Lv.{view.trainerLevel}
           </p>
 
-          <div className="space-y-0.5 border-b border-white/10 pb-1">
-            <p className="text-[8px] font-bold text-pink-100/90">訓練士 EXP</p>
-            <ExpBar
-              label="EXP"
-              current={view.trainerExp}
-              max={view.trainerNextExp}
-              pct={view.trainerExpPct}
-              tone="pink"
-            />
-            <p className="text-[7px] leading-snug text-white/45">
-              敵撃破で加算
-            </p>
-          </div>
+          <p className="border-b border-white/10 pb-1 text-[8px] font-bold leading-snug text-amber-100">
+            あとで考える。Lvアップの仕組みは、まだありません。
+          </p>
 
           <div className="space-y-0.5 border-b border-white/10 pb-1">
             <p className="text-[8px] font-bold text-sky-100/90">バイタル</p>

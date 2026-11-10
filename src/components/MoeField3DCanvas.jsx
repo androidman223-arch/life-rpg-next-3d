@@ -115,6 +115,17 @@ import {
   triggerGeoAbyssLavaRipple,
 } from "@/lib/moe3dGeoAbyssLavaFx";
 import { updateMoe3dMacro3L4Fx } from "@/lib/moe3dMacro3L4Fx";
+import { syncMoe3dFieldFireballs } from "@/lib/moe3dFieldFireballs";
+import {
+  applyMoe3dPetReflectCounterVisual,
+  moePetReflectCounterActive,
+  moePetReflectCounterLightIntensity,
+  moePetReflectCounterPulse,
+} from "@/lib/moePetReflectCounterVisual";
+import {
+  moeEnemyReflectFireballHitFlashStrength,
+  tickMoe3dEnemyReflectFireballHitFlash,
+} from "@/lib/moe3dEnemyReflectFireballHitFlash";
 import { updateElanPalaceMazeFx } from "@/lib/moe3dElanPalaceMaze";
 import { updateSulfurMineMazeFx } from "@/lib/moe3dSulfurMineMaze";
 import { buildMoe3dSoulMasterChapel } from "@/lib/moe3dSoulMasterChapel";
@@ -916,6 +927,12 @@ export default function MoeField3DCanvas({
   hiddenShowcaseIds = { monsters: [], dragons: [] },
   playerSummonFxRef,
   playerLookAheadRef,
+  fieldFireballsRef,
+  enemyReflectFireballHitFlashUntilRef,
+  hyakkaUntilRef,
+  swordDanceUntilRef,
+  revengeGuardUntilRef,
+  revengeSwingUntilRef,
 }) {
   const mountRef = useRef(null);
   const stateRef = useRef({
@@ -974,6 +991,14 @@ export default function MoeField3DCanvas({
   const playerGroundYRefStable = useRef(playerGroundYRef);
   const enemyStrikeVariantRefStable = useRef(enemyStrikeVariantRef);
   const moe3dCombatExtentsRefStable = useRef(moe3dCombatExtentsRef);
+  const fieldFireballsRefStable = useRef(fieldFireballsRef);
+  const enemyReflectFireballHitFlashUntilRefStable = useRef(
+    enemyReflectFireballHitFlashUntilRef
+  );
+  const hyakkaUntilRefStable = useRef(hyakkaUntilRef);
+  const swordDanceUntilRefStable = useRef(swordDanceUntilRef);
+  const revengeGuardUntilRefStable = useRef(revengeGuardUntilRef);
+  const revengeSwingUntilRefStable = useRef(revengeSwingUntilRef);
   const targetEnemyFacingYawRefStable = useRef(targetEnemyFacingYawRef);
   const enemyChaseRuntimeRefStable = useRef(enemyChaseRuntimeRef);
   const enemyFieldSyncRefStable = useRef(enemyFieldSyncRef);
@@ -1038,6 +1063,13 @@ export default function MoeField3DCanvas({
   playerGroundYRefStable.current = playerGroundYRef;
   enemyStrikeVariantRefStable.current = enemyStrikeVariantRef;
   moe3dCombatExtentsRefStable.current = moe3dCombatExtentsRef;
+  fieldFireballsRefStable.current = fieldFireballsRef;
+  enemyReflectFireballHitFlashUntilRefStable.current =
+    enemyReflectFireballHitFlashUntilRef;
+  hyakkaUntilRefStable.current = hyakkaUntilRef;
+  swordDanceUntilRefStable.current = swordDanceUntilRef;
+  revengeGuardUntilRefStable.current = revengeGuardUntilRef;
+  revengeSwingUntilRefStable.current = revengeSwingUntilRef;
   targetEnemyFacingYawRefStable.current = targetEnemyFacingYawRef;
   enemyChaseRuntimeRefStable.current = enemyChaseRuntimeRef;
   enemyFieldSyncRefStable.current = enemyFieldSyncRef;
@@ -1134,6 +1166,7 @@ export default function MoeField3DCanvas({
     let petCorpseVisualDead = null;
     let petCorpseVisualRoot = null;
     const petCorpseMatOrigins = new WeakMap();
+    const petReflectMatOrigins = new Map();
     /** 隠れ蓑前のマテリアル — 解除時に元の透明度へ戻す */
     const kakureminoMatOrigins = new WeakMap();
 
@@ -1150,6 +1183,8 @@ export default function MoeField3DCanvas({
     let miningRock = null;
     const petSoulLight = new THREE.PointLight(0xfff4c8, 0, 8, 2);
     scene.add(petSoulLight);
+    const petReflectLight = new THREE.PointLight(0xffcc33, 0, 10, 2);
+    scene.add(petReflectLight);
     const petBaseScale = new THREE.Vector3(1, 1, 1);
 
     let petRoot = null;
@@ -1215,6 +1250,7 @@ export default function MoeField3DCanvas({
     camera.lookAt(0, 0, 0);
 
     const enemyMeshes = new Map(); // id -> { root, mixer, placeholder }
+    const enemyReflectFireballFlashMatOrigins = new Map();
     const enemyGroup = new THREE.Group();
     scene.add(enemyGroup);
 
@@ -3322,13 +3358,30 @@ export default function MoeField3DCanvas({
           entry.lastDisplayScale = sc;
         }
         entry.frontExtent = moe3dMeasureModelFrontExtent(entry.root);
+        const flashUntilMap =
+          enemyReflectFireballHitFlashUntilRefStable.current?.current ?? {};
+        const hitFlashUntil = flashUntilMap[en.id] ?? 0;
+        const hitFlashVisible =
+          moeEnemyReflectFireballHitFlashStrength(hitFlashUntil, nowMs) > 0.03;
+        let flashMatOrigins = enemyReflectFireballFlashMatOrigins.get(en.id);
+        if (!flashMatOrigins) {
+          flashMatOrigins = new Map();
+          enemyReflectFireballFlashMatOrigins.set(en.id, flashMatOrigins);
+        }
+        tickMoe3dEnemyReflectFireballHitFlash(
+          entry.root,
+          hitFlashUntil,
+          nowMs,
+          flashMatOrigins
+        );
+        const enemyVisible = en.hp > 0 || hitFlashVisible;
         entry.root.traverse((obj) => {
           if (obj.userData?.pickProxy) {
             // visible=false だと Three.js レイキャストが当たらずターゲット不可になる
-            obj.visible = en.hp > 0;
+            obj.visible = enemyVisible;
           }
         });
-        entry.root.visible = en.hp > 0;
+        entry.root.visible = enemyVisible;
         entry.pickAnchor = { x: px, groundY: baseY, z: pz };
         const fieldSyncRef = enemyFieldSyncRefStable.current;
         if (fieldSyncRef?.current && en.hp > 0) {
@@ -3356,6 +3409,7 @@ export default function MoeField3DCanvas({
       }
       for (const [id, entry] of enemyMeshes) {
         if (!seen.has(id)) {
+          enemyReflectFireballFlashMatOrigins.delete(id);
           removeEnemyEntry(id, entry);
           enemyMeshes.delete(id);
           const fieldSyncRef = enemyFieldSyncRefStable.current;
@@ -3847,6 +3901,11 @@ export default function MoeField3DCanvas({
       updateElanPalaceMazeFx(dt);
       updateSulfurMineMazeFx(dt);
 
+      const fieldBalls = fieldFireballsRefStable.current?.current ?? [];
+      syncMoe3dFieldFireballs(scene, fieldBalls, (x, z) =>
+        heightAt(x, z)
+      );
+
       syncEnemyMeshes(ens);
       syncTreasureMeshes(trs ?? []);
       syncEnemyNameLabels(ens, targetId);
@@ -4087,20 +4146,92 @@ export default function MoeField3DCanvas({
         );
         petSoulLight.intensity = 0.4 + soulProgress * 4.4;
       } else if (petRoot) {
-        const rodFx = whiteAngelRodFxRefStable.current?.current;
-        const rodOn = Boolean(rodFx && performance.now() < rodFx.until);
-        if (rodOn) {
-          petSoulLight.position.set(
+        const reflectNow = performance.now();
+        const reflectActive =
+          !petCorpseHold &&
+          moePetReflectCounterActive(
+            {
+              hyakkaUntilMs: hyakkaUntilRefStable.current?.current ?? 0,
+              swordDanceUntilMs: swordDanceUntilRefStable.current?.current ?? 0,
+              revengeGuardUntilMs:
+                revengeGuardUntilRefStable.current?.current ?? 0,
+              revengeSwingUntilMs:
+                revengeSwingUntilRefStable.current?.current ?? 0,
+            },
+            reflectNow
+          );
+        const reflectPulse = moePetReflectCounterPulse(reflectNow);
+        applyMoe3dPetReflectCounterVisual(
+          petRoot,
+          reflectActive,
+          reflectPulse,
+          petReflectMatOrigins
+        );
+        if (reflectActive) {
+          petReflectLight.position.set(
             petRoot.position.x,
-            petRoot.position.y + 1.15,
+            petRoot.position.y + 0.85,
             petRoot.position.z
           );
-          petSoulLight.intensity =
-            1.5 + Math.sin(performance.now() * 0.014) * 0.9;
-        } else {
+          petReflectLight.intensity =
+            moePetReflectCounterLightIntensity(reflectPulse);
           petSoulLight.intensity = 0;
+        } else {
+          petReflectLight.intensity = 0;
+          applyMoe3dPetReflectCounterVisual(
+            petRoot,
+            false,
+            0,
+            petReflectMatOrigins
+          );
+          const rodFx = whiteAngelRodFxRefStable.current?.current;
+          const rodOn = Boolean(rodFx && reflectNow < rodFx.until);
+          if (rodOn) {
+            petSoulLight.position.set(
+              petRoot.position.x,
+              petRoot.position.y + 1.15,
+              petRoot.position.z
+            );
+            petSoulLight.intensity =
+              1.5 + Math.sin(reflectNow * 0.014) * 0.9;
+          } else {
+            petSoulLight.intensity = 0;
+          }
         }
         if (!petCorpseHold) petRoot.scale.copy(petBaseScale);
+      } else if (petMesh) {
+        const reflectNow = performance.now();
+        const reflectActive =
+          !petCorpseHold &&
+          moePetReflectCounterActive(
+            {
+              hyakkaUntilMs: hyakkaUntilRefStable.current?.current ?? 0,
+              swordDanceUntilMs: swordDanceUntilRefStable.current?.current ?? 0,
+              revengeGuardUntilMs:
+                revengeGuardUntilRefStable.current?.current ?? 0,
+              revengeSwingUntilMs:
+                revengeSwingUntilRefStable.current?.current ?? 0,
+            },
+            reflectNow
+          );
+        const reflectPulse = moePetReflectCounterPulse(reflectNow);
+        applyMoe3dPetReflectCounterVisual(
+          petMesh,
+          reflectActive,
+          reflectPulse,
+          petReflectMatOrigins
+        );
+        if (reflectActive) {
+          petReflectLight.position.set(
+            petMesh.position.x,
+            petMesh.position.y + 0.35,
+            petMesh.position.z
+          );
+          petReflectLight.intensity =
+            moePetReflectCounterLightIntensity(reflectPulse);
+        } else {
+          petReflectLight.intensity = 0;
+        }
       }
 
       const rodFxNow = whiteAngelRodFxRefStable.current?.current;

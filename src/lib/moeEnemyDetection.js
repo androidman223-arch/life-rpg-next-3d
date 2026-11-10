@@ -84,7 +84,16 @@ const MOE_ENEMY_DETECTION_BY_FAMILY = {
     visionRange: 11,
     searchType: "visual",
   },
+  orc_magician: {
+    hearing: "normal",
+    visionDeg: 100,
+    visionRange: 12,
+    searchType: "both",
+  },
 };
+
+/** オーク マジシャン — 通常より広め（×2 は広すぎ・×1.35 は狭すぎ） */
+export const MOE_ORC_MAGICIAN_SEARCH_RANGE_MULT = 1.7;
 
 /**
  * @param {string} [key]
@@ -214,13 +223,22 @@ export function resolveMoeEnemyDetection(enemy) {
     inferred.hearingRange ??
     hearingProfile.hearingRange;
 
-  return {
+  const base = {
     visionDeg: Math.round(visionDeg),
     visionRange: Math.round(visionRange * 10) / 10,
     hearing,
     hearingRange: Math.round(hearingRange * 10) / 10,
     searchType,
   };
+  if (enemy?.key === "orc_magician" || familyId === "orc_magician") {
+    const mult = MOE_ORC_MAGICIAN_SEARCH_RANGE_MULT;
+    return {
+      ...base,
+      visionRange: Math.round(base.visionRange * mult * 10) / 10,
+      hearingRange: Math.round(base.hearingRange * mult * 10) / 10,
+    };
+  }
+  return base;
 }
 
 /**

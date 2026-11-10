@@ -1,5 +1,5 @@
 /**
- * プレイヤー技③ — 調査・支援系（敵ステサーチなど）
+ * プレイヤー技③ — 召喚プレスキル（生活改鳳・自力整龍）
  */
 
 export const MOE_PLAYER_UTILITY_SLOT_COUNT = 10;
@@ -13,14 +13,12 @@ export const MOE_PLAYER_UTILITY_SLOT_KEYS = [
 
 /** @type {Record<MoePlayerUtilitySkillKey, string>} */
 export const MOE_PLAYER_UTILITY_SLOT_LABELS = {
-  enemy_stat_search: "敵ステサーチ",
   jiriki_kaihou: "生活改鳳",
   jiriki_seiryu: "自力整龍",
 };
 
 /** @type {Record<MoePlayerUtilitySkillKey, string>} */
 export const MOE_PLAYER_UTILITY_SLOT_ICONS = {
-  enemy_stat_search: "🔍",
   jiriki_kaihou: "🐦‍🔥",
   jiriki_seiryu: "🐉",
 };

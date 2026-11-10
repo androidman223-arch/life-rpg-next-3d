@@ -6,6 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## MOE フィールド（life-rpg）
 
+引き継ぎ用の写し: `3dmoeAGENTS.md`。仕様書: `docs/3dmoe-game-spec.txt`。
+
 ### 目次・全体像
 - **1枚目次**: `docs/moe-overview.md`（ゲームの流れ・ルート・コード層・サブシステム一覧）
 - ファイル索引: `docs/moe-files.md`（どのファイルに何があるか）

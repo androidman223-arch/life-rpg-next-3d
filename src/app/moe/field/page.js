@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import dynamic from "next/dynamic";
-import { addGameExp } from "@/lib/gameStatus";
 
 const FieldMap = dynamic(() => import("@/components/FieldMap"), {
   ssr: false,
@@ -17,9 +16,6 @@ const FieldMap = dynamic(() => import("@/components/FieldMap"), {
 export default function FieldPage() {
   const router = useRouter();
   const goMain = useCallback(() => router.push("/"), [router]);
-  const handleSlimeDefeat = useCallback(() => {
-    addGameExp(1);
-  }, []);
 
-  return <FieldMap onBack={goMain} onSlimeDefeat={handleSlimeDefeat} />;
+  return <FieldMap onBack={goMain} />;
 }

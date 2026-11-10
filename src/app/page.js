@@ -1,78 +1,131 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  backupGameStatusToSlot,
-  DEFAULT_GAME_STATUS,
-  loadGameStatus,
-  loadGameStatusBackup,
-  resetGameStatusToDefault,
-  restoreGameStatusFromBackup,
-} from "@/lib/gameStatus";
+import { DEFAULT_GAME_STATUS, loadGameStatus } from "@/lib/gameStatus";
 import TrainingExpPanel from "@/components/TrainingExpPanel";
 import DragonTrainingPanel from "@/components/DragonTrainingPanel";
 import MoeMacroSessionTimer from "@/components/MoeMacroSessionTimer";
 import { requestMoeFieldBgm } from "@/lib/moeFieldBgm";
-import {
-  prefetchMoeFieldMap,
-  subscribeMoeFieldPrefetch,
-} from "@/lib/moeFieldPrefetch";
+import { prefetchMoeFieldMap } from "@/lib/moeFieldPrefetch";
 import {
   formatDragonExpDisplay,
   getDragonPracticeExpDisplay,
 } from "@/lib/moeDragonTraining";
-import { loadPlayerExperience } from "@/lib/moePlayerExperience";
+import {
+  loadPlayerExperience,
+  restorePhoenixWisdomExpFromTrainingState,
+} from "@/lib/moePlayerExperience";
 import {
   displayTrainingExp,
   importPhoenixPointsFromKyukei,
   loadBreakPopupPoints,
 } from "@/lib/moePhoenixPointsImport";
+import {
+  applyMoeFullBackupKeys,
+  buildMoeFullBackupFilename,
+  buildMoeFullBackupPayload,
+  parseMoeFullBackupPayload,
+} from "@/lib/moe/moeFullBackup";
 
-function MenuTrainingExpCard({
-  emoji,
-  name,
-  nameClass,
-  gameText,
-  externalText,
-  totalText,
-  frameClass,
+async function writeFullBackupFile(jsonText, filename) {
+  if ("showSaveFilePicker" in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        startIn: "documents",
+        types: [
+          {
+            description: "人生レベルアップRPG 全部セーブ",
+            accept: { "application/json": [".json"] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(jsonText);
+      await writable.close();
+      return { ok: true, fileName: handle.name };
+    } catch (err) {
+      if (err?.name === "AbortError") return { ok: false, aborted: true };
+    }
+  }
+  const blob = new Blob([jsonText], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  return { ok: true, fileName: `${filename}（ダウンロード）` };
+}
+
+const MENU_BTN =
+  "w-full rounded-2xl border py-3 px-4 text-center text-base font-bold text-white shadow transition hover:brightness-110 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:pointer-events-none disabled:opacity-50";
+
+function PointCell({ children, strong }) {
+  return (
+    <span
+      className={`text-right font-mono text-sm font-bold tabular-nums ${
+        strong ? "text-white" : "text-white/85"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MenuTrainingPoints({
+  gamePhoenix,
+  gameDragon,
+  externalPhoenix,
+  externalDragon,
+  totalPhoenix,
+  totalDragon,
+  importing,
+  importDisabled,
+  onImport,
+  importMessage,
 }) {
   return (
-    <div className={`rounded-xl border px-3 py-2 shadow ${frameClass}`}>
-      <div className="flex items-center gap-2.5">
-        <span className="text-xl leading-none" aria-hidden>
-          {emoji}
+    <div className="rounded-xl border border-white/15 bg-zinc-950/40 px-3 py-3">
+      <p className="mb-2 text-center text-base font-bold text-white">修行ポイント</p>
+      <div className="grid grid-cols-[6.2rem_1fr_1fr] items-center gap-x-2 gap-y-1.5">
+        <span />
+        <span className="moe-menu-phoenix-name text-center text-sm font-bold leading-none">
+          🪶 鳳凰
         </span>
-        <div className="min-w-0 flex-1">
-          <p
-            className={`text-xl font-black leading-none tracking-[0.14em] ${nameClass}`}
-          >
-            {name}
-          </p>
-          <p className="mt-1 flex items-baseline justify-between gap-2 text-[11px] leading-none">
-            <span className="whitespace-nowrap">
-              <span className="font-bold text-white/70">P </span>
-              <span className="font-mono font-black tabular-nums text-white">
-                {gameText}
-              </span>
-            </span>
-            <span className="whitespace-nowrap">
-              <span className="font-bold text-white/70">外部P </span>
-              <span className="font-mono font-black tabular-nums text-white">
-                {externalText}
-              </span>
-            </span>
-            <span className="whitespace-nowrap">
-              <span className="font-bold text-white/70">合計 </span>
-              <span className="font-mono text-sm font-black tabular-nums text-white">
-                {totalText}
-              </span>
-            </span>
-          </p>
-        </div>
+        <span className="moe-menu-dragon-name text-center text-sm font-bold leading-none">
+          🐉 龍神
+        </span>
+        <span className="whitespace-nowrap text-sm font-bold text-teal-100/85">
+          ゲームの修行
+        </span>
+        <PointCell>{gamePhoenix}</PointCell>
+        <PointCell>{gameDragon}</PointCell>
+        <span className="text-sm font-bold text-sky-100/85">外部</span>
+        <PointCell>{externalPhoenix}</PointCell>
+        <PointCell>{externalDragon}</PointCell>
+        <span className="text-sm font-bold text-amber-100">合計</span>
+        <PointCell strong>{totalPhoenix}</PointCell>
+        <PointCell strong>{totalDragon}</PointCell>
       </div>
+      <button
+        type="button"
+        onClick={onImport}
+        disabled={importDisabled || importing}
+        className="mt-3 w-full rounded-xl border border-teal-300/50 bg-teal-900/50 px-3 py-2 text-sm font-bold text-teal-50 transition hover:bg-teal-800/60 disabled:opacity-50"
+      >
+        {importing ? "読みこみ中…" : "外部ポイントを取りこむ"}
+      </button>
+      {importMessage ? (
+        <p
+          role="status"
+          className="mt-2 rounded-lg border border-teal-300/40 bg-teal-950/70 px-2 py-1.5 text-sm font-semibold leading-snug text-teal-100"
+        >
+          {importMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -81,9 +134,6 @@ export default function Home() {
   const router = useRouter();
   // サーバーとクライアントの初回描画を同じにし、hydration mismatch を防ぐ（localStorage はマウント後のみ読む）
   const [status, setStatus] = useState(() => ({ ...DEFAULT_GAME_STATUS }));
-  /** idle | loading | ready | error */
-  const [moePrefetchState, setMoePrefetchState] = useState("idle");
-
   const [celebration, setCelebration] = useState(null);
 
   /** マウント後に localStorage を反映するまで操作・表示をロック（フラッシュ／誤操作防止） */
@@ -104,9 +154,10 @@ export default function Home() {
   const [breakImporting, setBreakImporting] = useState(false);
 
   const refreshTrainingExp = useCallback(() => {
+    const phoenixWisdomExpKept = restorePhoenixWisdomExpFromTrainingState();
     const saved = loadPlayerExperience();
     setDragonTrack(saved.dragon);
-    setPhoenixWisdomExp(saved.phoenixWisdomExp ?? 0);
+    setPhoenixWisdomExp(phoenixWisdomExpKept);
     setBreakPoints(loadBreakPopupPoints());
   }, []);
 
@@ -130,8 +181,6 @@ export default function Home() {
     refreshTrainingExp();
     setStorageReady(true);
   }, [refreshTrainingExp]);
-
-  useEffect(() => subscribeMoeFieldPrefetch(setMoePrefetchState), []);
 
   useEffect(() => {
     if (!celebration) return;
@@ -169,53 +218,49 @@ export default function Home() {
     [router]
   );
 
-  const handleBackupSave = () => {
-    if (
-      !window.confirm(
-        "セーブしますか？\n現在のレベル・ジョブ・経験値をバックアップに保存します。"
-      )
-    ) {
-      return;
-    }
-    if (backupGameStatusToSlot()) {
-      setCelebration("💾 バックアップにセーブしたよ！");
-    } else {
-      window.alert("セーブに失敗しました（ストレージを確認してください）。");
-    }
+  const fullBackupInputRef = useRef(null);
+
+  const handleFullBackupExport = async () => {
+    const payload = buildMoeFullBackupPayload(window.localStorage);
+    const result = await writeFullBackupFile(
+      JSON.stringify(payload, null, 1),
+      buildMoeFullBackupFilename()
+    );
+    if (result.aborted) return;
+    setCelebration(
+      result.ok
+        ? `全部保存したよ（${payload.keyCount}こ） ${result.fileName}`
+        : "全部保存に失敗しました"
+    );
   };
 
-  const handleBackupLoad = () => {
+  const handleFullBackupImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = parseMoeFullBackupPayload(JSON.parse(await file.text()));
+    } catch {
+      parsed = { ok: false, message: "JSON ファイルが読めませんでした" };
+    }
+    if (!parsed.ok) {
+      window.alert(parsed.message);
+      return;
+    }
+    const count = Object.keys(parsed.keys).length;
     if (
       !window.confirm(
-        "ロードしますか？\nバックアップの内容で上書きします。いま画面の未バックアップの変更は失われます。"
+        `全部保存のファイルを読みこみますか？\n${file.name}（${count}こ）\nいまのペット・アイテム・訓練士Lv・修行・設定が、このファイルの内容で上書きされます。`
       )
     ) {
       return;
     }
-    if (!loadGameStatusBackup()) {
-      window.alert("バックアップがありません。先にセーブしてください。");
-      return;
+    const { failed } = applyMoeFullBackupKeys(window.localStorage, parsed.keys);
+    if (failed.length) {
+      window.alert(`書きこめなかったデータがあります: ${failed.join(", ")}`);
     }
-    const next = restoreGameStatusFromBackup();
-    if (next) {
-      setStatus(next);
-      setCelebration("📂 バックアップからロードしたよ！");
-    } else {
-      window.alert("ロードに失敗しました。バックアップを確認してください。");
-    }
-  };
-
-  const handleResetAll = () => {
-    if (
-      !window.confirm(
-        "すべての項目を本当にリセットしますか？\nLv.1・EXP 0・次の目安 1000 EXP・ジョブ「勇者」に戻します。"
-      )
-    ) {
-      return;
-    }
-    const next = resetGameStatusToDefault();
-    setStatus(next);
-    setCelebration("🔄 初期値にリセットしたよ！");
+    window.location.reload();
   };
 
   return (
@@ -224,7 +269,7 @@ export default function Home() {
         onFinished={() => setCelebration("⏱ マクロ４ 0:00 — お疲れさま！")}
       />
       <div className="w-full max-w-md p-8 rounded-3xl shadow-lg bg-gradient-to-br from-gray-800 to-zinc-900 border border-gray-700 flex flex-col items-center">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-wide mb-8 drop-shadow-lg">
+        <h1 className="mb-6 text-center text-2xl font-extrabold tracking-wide text-white drop-shadow-lg">
           人生レベルアップRPG
         </h1>
 
@@ -253,56 +298,21 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="w-full space-y-6">
-            <div className="flex items-center justify-between py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-700/60 to-indigo-900/40 border border-indigo-800 shadow">
-              <span className="font-bold text-lg text-indigo-300">レベル</span>
-              <span className="font-mono text-2xl text-white drop-shadow">
+          <div className="flex w-full flex-col gap-3">
+            <div className="flex items-center justify-between rounded-2xl border border-indigo-800 bg-gradient-to-r from-indigo-700/60 to-indigo-900/40 px-4 py-3 shadow">
+              <span className="text-base font-bold text-indigo-200">レベル</span>
+              <span className="font-mono text-base font-bold text-white">
                 {status.level}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-700/60 to-emerald-900/40 border border-emerald-800 shadow">
-              <span className="font-bold text-lg text-emerald-300">ジョブ</span>
-              <span className="font-semibold text-xl text-white tracking-wider">
+            <p className="text-center text-sm font-bold leading-snug text-yellow-200">
+              あとで考える。Lvアップの仕組みは、まだありません。
+            </p>
+            <div className="flex items-center justify-between rounded-2xl border border-emerald-800 bg-gradient-to-r from-emerald-700/60 to-emerald-900/40 px-4 py-3 shadow">
+              <span className="text-base font-bold text-emerald-200">ジョブ</span>
+              <span className="text-base font-bold tracking-wider text-white">
                 {status.job}
               </span>
-            </div>
-            <div className="space-y-1.5">
-              <MenuTrainingExpCard
-                emoji="🪶"
-                name="鳳凰"
-                nameClass="moe-menu-phoenix-name"
-                gameText={formatDragonExpDisplay(phoenixWisdomExp)}
-                externalText={formatDragonExpDisplay(breakPoints.phoenix)}
-                totalText={formatDragonExpDisplay(shownTrainingExp.phoenix)}
-                frameClass="border-teal-300/70 bg-gradient-to-br from-teal-900/70 to-cyan-950/70 shadow-[0_0_18px_rgba(45,212,191,0.28)]"
-              />
-              <MenuTrainingExpCard
-                emoji="🐉"
-                name="龍神"
-                nameClass="moe-menu-dragon-name"
-                gameText={formatDragonExpDisplay(
-                  getDragonPracticeExpDisplay(dragonTrack)
-                )}
-                externalText={formatDragonExpDisplay(breakPoints.dragon)}
-                totalText={formatDragonExpDisplay(shownTrainingExp.dragon)}
-                frameClass="border-amber-300/70 bg-gradient-to-br from-amber-950/80 to-orange-950/70 shadow-[0_0_18px_rgba(245,158,11,0.28)]"
-              />
-              <button
-                type="button"
-                onClick={handleImportBreakPoints}
-                disabled={!storageReady || breakImporting}
-                className="w-full rounded-xl border border-teal-300/50 bg-teal-900/40 px-3 py-2 text-sm font-bold text-teal-50 shadow transition hover:bg-teal-800/50 disabled:opacity-50"
-              >
-                {breakImporting ? "読みこみ中…" : "フェニックスP外部取りこみ"}
-              </button>
-              {breakImportMessage ? (
-                <p
-                  role="status"
-                  className="rounded-lg border border-teal-300/40 bg-teal-950/70 px-2 py-1.5 text-[12px] font-semibold leading-snug text-teal-100"
-                >
-                  {breakImportMessage}
-                </p>
-              ) : null}
             </div>
           </div>
         )}
@@ -312,13 +322,27 @@ export default function Home() {
           onClick={() => setTrainingOpen((v) => !v)}
           disabled={!storageReady}
           aria-expanded={trainingOpen}
-          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-teal-700 via-cyan-800 to-amber-800 hover:from-teal-600 hover:via-cyan-700 hover:to-amber-700 border border-teal-300/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
+          className={`${MENU_BTN} mt-3 border-teal-300/50 bg-gradient-to-r from-teal-700 via-cyan-800 to-amber-800 focus:ring-teal-400`}
         >
-          {trainingOpen ? "修行を閉じる" : "修行（鳳凰 · 龍神）"}
+          {trainingOpen ? "修行を閉じる" : "修行"}
         </button>
 
         {trainingOpen && storageReady ? (
-          <div className="mt-3 w-full">
+          <div className="mt-3 flex w-full flex-col gap-3">
+            <MenuTrainingPoints
+              gamePhoenix={formatDragonExpDisplay(phoenixWisdomExp)}
+              gameDragon={formatDragonExpDisplay(
+                getDragonPracticeExpDisplay(dragonTrack)
+              )}
+              externalPhoenix={formatDragonExpDisplay(breakPoints.phoenix)}
+              externalDragon={formatDragonExpDisplay(breakPoints.dragon)}
+              totalPhoenix={formatDragonExpDisplay(shownTrainingExp.phoenix)}
+              totalDragon={formatDragonExpDisplay(shownTrainingExp.dragon)}
+              importing={breakImporting}
+              importDisabled={!storageReady}
+              onImport={handleImportBreakPoints}
+              importMessage={breakImportMessage}
+            />
             <div
               className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-900/80 p-1"
               role="tablist"
@@ -329,7 +353,7 @@ export default function Home() {
                 role="tab"
                 aria-selected={trainingTab === "phoenix"}
                 onClick={() => setTrainingTab("phoenix")}
-                className={`rounded-lg py-2 text-sm font-bold transition ${
+                className={`rounded-lg py-2.5 text-base font-bold transition ${
                   trainingTab === "phoenix"
                     ? "bg-teal-700 text-white shadow"
                     : "text-teal-100/70 hover:text-white"
@@ -342,7 +366,7 @@ export default function Home() {
                 role="tab"
                 aria-selected={trainingTab === "dragon"}
                 onClick={() => setTrainingTab("dragon")}
-                className={`rounded-lg py-2 text-sm font-bold transition ${
+                className={`rounded-lg py-2.5 text-base font-bold transition ${
                   trainingTab === "dragon"
                     ? "bg-amber-700 text-white shadow"
                     : "text-amber-100/70 hover:text-white"
@@ -374,7 +398,7 @@ export default function Home() {
 
         <Link
           href="/field"
-          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center block"
+          className={`${MENU_BTN} mt-3 border-emerald-400/50 bg-gradient-to-r from-emerald-600 to-teal-600 focus:ring-emerald-400`}
         >
           フィールドへ移動
         </Link>
@@ -384,9 +408,9 @@ export default function Home() {
           onMouseEnter={() => prefetchMoeFieldMap().catch(() => {})}
           onFocus={() => prefetchMoeFieldMap().catch(() => {})}
           onClick={() => enterMoeField("moe")}
-          className="mt-4 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 border border-sky-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center"
+          className={`${MENU_BTN} mt-3 border-sky-400/50 bg-gradient-to-r from-sky-600 to-blue-600 focus:ring-sky-400`}
         >
-          MOEのフィールドへ行く (ミーリム海岸)
+          MOEのフィールド（2D）
         </button>
 
         <button
@@ -394,50 +418,38 @@ export default function Home() {
           onMouseEnter={() => prefetchMoeFieldMap().catch(() => {})}
           onFocus={() => prefetchMoeFieldMap().catch(() => {})}
           onClick={() => enterMoeField("3d")}
-          className="mt-3 w-full py-3 px-6 rounded-2xl font-bold text-base text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/50 shadow-lg transition transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-zinc-900 text-center"
+          className={`${MENU_BTN} mt-3 border-violet-400/50 bg-gradient-to-r from-violet-600 to-indigo-600 focus:ring-violet-400`}
         >
-          MOEのフィールドへいく（3D版）
+          MOEのフィールド（3D）
         </button>
-        <p className="mt-1 text-center text-[10px] leading-snug text-violet-200/75">
-          {moePrefetchState === "loading"
-            ? "3Dフィールドをバックグラウンドで読み込み中…（ボタンを押さなくても進みます）"
-            : moePrefetchState === "ready"
-              ? "3D版は先読み済み — ボタンでほぼすぐ入れます"
-              : moePrefetchState === "error"
-                ? "先読みに失敗 — ボタン押下で再試行します"
-                : "3Dフィールドの先読みを開始しています…"}
+        <p className="mt-2 text-center text-xs leading-snug text-red-400">
+          毎日おすすめ★︎。ペット経験値・フェニックスP・設定も、全部保存
         </p>
 
-        <div className="mt-8 w-full space-y-2">
-          <p className="text-center text-[11px] font-semibold text-zinc-500">
-            経験値・レベル（保存データ）
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={handleBackupSave}
-              disabled={!storageReady}
-              className="rounded-xl py-2.5 px-2 text-xs font-bold text-white bg-gradient-to-r from-cyan-700 to-teal-800 border border-cyan-500/40 shadow transition hover:opacity-95 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              セーブ
-            </button>
-            <button
-              type="button"
-              onClick={handleBackupLoad}
-              disabled={!storageReady}
-              className="rounded-xl py-2.5 px-2 text-xs font-bold text-white bg-gradient-to-r from-amber-700 to-orange-800 border border-amber-500/40 shadow transition hover:opacity-95 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              ロード
-            </button>
-            <button
-              type="button"
-              onClick={handleResetAll}
-              disabled={!storageReady}
-              className="rounded-xl py-2.5 px-2 text-xs font-bold text-white bg-gradient-to-r from-rose-800 to-red-900 border border-rose-500/40 shadow transition hover:opacity-95 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              リセット
-            </button>
-          </div>
+        <div className="mt-3 w-full">
+          <button
+            type="button"
+            onClick={handleFullBackupExport}
+            disabled={!storageReady}
+            className={`${MENU_BTN} border-violet-400/50 bg-gradient-to-r from-violet-700 to-indigo-800 focus:ring-violet-400`}
+          >
+            全部保存
+          </button>
+          <button
+            type="button"
+            onClick={() => fullBackupInputRef.current?.click()}
+            disabled={!storageReady}
+            className="mt-2 w-full text-center text-sm font-bold text-zinc-300 underline-offset-2 hover:text-white hover:underline disabled:opacity-50"
+          >
+            保存ファイルを読みこむ
+          </button>
+          <input
+            ref={fullBackupInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleFullBackupImport}
+          />
         </div>
 
         <div className="mt-10 border-t border-gray-700 pt-6 flex flex-col items-center">

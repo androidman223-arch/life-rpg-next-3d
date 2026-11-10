@@ -15,6 +15,8 @@ const TONE_CLASS = {
     "border-violet-200/70 bg-gradient-to-b from-violet-400/90 to-violet-800/95 shadow-[0_0_3px_rgba(167,139,250,0.7),inset_0_0.5px_0_rgba(255,255,255,0.4)]",
   debuff:
     "border-rose-300/70 bg-gradient-to-b from-rose-500/90 to-rose-800/95 shadow-[0_0_3px_rgba(244,63,94,0.6),inset_0_0.5px_0_rgba(255,255,255,0.35)]",
+  reflect:
+    "border-yellow-200/90 bg-gradient-to-b from-yellow-300/95 to-amber-600/95 shadow-[0_0_5px_rgba(250,204,21,0.85),inset_0_0.5px_0_rgba(255,255,255,0.45)] animate-pulse",
 };
 
 const EMPTY_CLASS =

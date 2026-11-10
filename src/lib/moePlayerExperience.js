@@ -11,6 +11,7 @@
  */
 
 import { phoenixWisdomExpFromSaved } from "./moeMenuTrainingExp.js";
+import { loadBreakPopupPoints } from "./moePhoenixPointsImport.js";
 
 import { MOE_PLAYER_PRE_SKILLS } from "../data/moePlayerPreSkills.js";
 import {
@@ -37,8 +38,15 @@ const MOE_PHOENIX_EXP_PROC_BASE = MOE_PLAYER_PRE_SKILL_EXP_PROC_RATE;
 export const MOE_PLAYER_EXPERIENCE_STORAGE_KEY =
   "life-rpg-moe-player-experience";
 
+/**
+ * 修行①タイマーの保存先。メニューの phoenixWisdomExp と別ファイル。
+ * 画面は両方を見て、大きいほうを残す（0 で消さない）。
+ */
+export const LIFE_RPG_PHOENIX_TRAINING_STATE_KEY =
+  "life_rpg_next_3d_training_exp_v1";
+
 /** 知恵EXPの旧保存先。初回読み込みで phoenixWisdomExp へ移す */
-const PHOENIX_WISDOM_LEGACY_STORAGE_KEY = "life_rpg_next_3d_training_exp_v1";
+const PHOENIX_WISDOM_LEGACY_STORAGE_KEY = LIFE_RPG_PHOENIX_TRAINING_STATE_KEY;
 
 export const MOE_PLAYER_EXPERIENCE_VERSION = 1;
 
@@ -199,6 +207,66 @@ function migratePhoenixWisdomExp(data, hadWisdomField) {
   } catch {
     return data;
   }
+}
+
+/**
+ * メニューの知恵EXPと、修行タイマーの保存の、大きいほう。
+ * タイマー側が 0 でも、メニュー側の数字は消さない。
+ * @param {number} menuExp
+ * @param {unknown} trainingState
+ */
+export function largerPhoenixWisdomExp(menuExp, trainingState) {
+  const fromMenu = Math.round(Math.max(0, Number(menuExp) || 0) * 10) / 10;
+  const fromTimer = phoenixWisdomExpFromSaved(trainingState);
+  return Math.max(fromMenu, fromTimer);
+}
+
+/**
+ * 修行タイマーのファイルのほうが大きければ、メニューの保存へ書き戻す。
+ * @returns {number}
+ */
+export function restorePhoenixWisdomExpFromTrainingState() {
+  if (typeof window === "undefined") return 0;
+  const data = loadPlayerExperience();
+  let training = null;
+  try {
+    const raw = window.localStorage.getItem(LIFE_RPG_PHOENIX_TRAINING_STATE_KEY);
+    training = raw ? JSON.parse(raw) : null;
+  } catch {
+    training = null;
+  }
+  const kept = largerPhoenixWisdomExp(data.phoenixWisdomExp, training);
+  if (kept > Math.round((Number(data.phoenixWisdomExp) || 0) * 10) / 10) {
+    savePlayerExperience({ ...data, phoenixWisdomExp: kept });
+  }
+  return kept;
+}
+
+/**
+ * 鳳凰スキルの解放に使う数字。ゲームの知恵EXPと、取りこんだ外部鳳凰Pの合計。
+ * 10.0 で Lv10 のスキルが開く。龍神の実践と同じ単位。
+ * @param {number} wisdomExp
+ * @param {number} externalPhoenix
+ */
+export function phoenixSkillUnlockLevel(wisdomExp, externalPhoenix) {
+  const wisdom = Math.max(0, Number(wisdomExp) || 0);
+  const external = Math.max(0, Number(externalPhoenix) || 0);
+  return Math.round((wisdom + external) * 10) / 10;
+}
+
+/** @returns {number} */
+export function loadPhoenixSkillUnlockLevel() {
+  const wisdom = restorePhoenixWisdomExpFromTrainingState();
+  return phoenixSkillUnlockLevel(wisdom, loadBreakPopupPoints().phoenix);
+}
+
+/**
+ * 修行スキルの解放レベル。鳳凰は知恵＋外部。龍神は実践。
+ * @param {"phoenix" | "dragon" | string} track
+ */
+export function loadTrainingSkillUnlockLevel(track) {
+  if (track === "phoenix") return loadPhoenixSkillUnlockLevel();
+  return loadPlayerExperienceTrack(track).level ?? 0;
 }
 
 /** @returns {MoePlayerExperience} */

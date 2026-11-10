@@ -177,8 +177,12 @@ function mirrorPhoenixWisdomExp(exp) {
     const raw = localStorage.getItem(key);
     const data = raw ? JSON.parse(raw) : { version: 1 };
     if (!data || typeof data !== "object" || Array.isArray(data)) return;
-    const next = Math.round(Math.max(0, Number(exp) || 0) * 10) / 10;
-    if (Number(data.phoenixWisdomExp) === next) return;
+    const incoming = Math.round(Math.max(0, Number(exp) || 0) * 10) / 10;
+    const current = Math.round(
+      Math.max(0, Number(data.phoenixWisdomExp) || 0) * 10
+    ) / 10;
+    const next = Math.max(current, incoming);
+    if (current === next) return;
     data.phoenixWisdomExp = next;
     if (data.version == null) data.version = 1;
     localStorage.setItem(key, JSON.stringify(data));

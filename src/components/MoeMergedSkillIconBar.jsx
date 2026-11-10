@@ -19,6 +19,10 @@ import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
 import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
 import { moeFloatingDragTitle } from "@/lib/moePanelStack";
 import { MOE_MINING_SKILL_BTN_CLASS } from "@/lib/moePlayerSkillSlotUi";
+import {
+  moePlayerSkillSlotActiveClass,
+  moePlayerSkillSlotTimingUi,
+} from "@/lib/moeReflectSkillUi";
 
 const SLOT_PX = 32;
 const CAP_W = 5;
@@ -317,8 +321,8 @@ export default function MoeMergedSkillIconBar({
                 })
               : isPlayer
               ? playerRow.map((slot, i) => {
-                  const onCooldown =
-                    slot.cooldownSec !== null && slot.cooldownSec !== undefined;
+                  const { onCooldown, effectRemainSec } =
+                    moePlayerSkillSlotTimingUi(slot);
                   const alwaysClickable = slot.slotKey === "jiriki_seiran";
                   const disabled =
                     (slot.disabled || onCooldown) && !alwaysClickable;
@@ -357,7 +361,10 @@ export default function MoeMergedSkillIconBar({
                               : slot.slotKey === "mining"
                                 ? MOE_MINING_SKILL_BTN_CLASS
                               : slot.active
-                                ? "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-zinc-950 text-cyan-50 ring-1 ring-cyan-200/40"
+                                ? moePlayerSkillSlotActiveClass(
+                                    slot,
+                                    "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-zinc-950 text-cyan-50 ring-1 ring-cyan-200/40"
+                                  )
                                 : playerBtnIdle
                         } ${pointerProps.className ?? ""}`}
                         onPointerDown={pointerProps.onPointerDown}
@@ -381,6 +388,11 @@ export default function MoeMergedSkillIconBar({
                             {slot.cooldownSec}
                           </span>
                         )}
+                        {effectRemainSec != null && effectRemainSec > 0 ? (
+                          <span className="pointer-events-none absolute bottom-0 right-0 bg-black/50 px-0.5 text-[8px] font-bold tabular-nums leading-none text-yellow-100">
+                            {effectRemainSec}
+                          </span>
+                        ) : null}
                         {!onCooldown && slot.subLabel ? (
                           <span
                             className={`pointer-events-none absolute inset-x-0 bottom-0 bg-black/35 text-center text-[5px] font-bold tabular-nums leading-none ${

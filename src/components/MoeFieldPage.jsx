@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { addGameExp } from "@/lib/gameStatus";
 import MoeFieldMapGate from "@/components/MoeFieldMapGate";
 
 /**
@@ -15,15 +14,11 @@ export default function MoeFieldPage({
 }) {
   const router = useRouter();
   const goMain = useCallback(() => router.push("/"), [router]);
-  const handleEnemyDefeat = useCallback((level) => {
-    addGameExp(Math.ceil(Number(level) * 5) || 1);
-  }, []);
 
   return (
     <MoeFieldMapGate
       worldMode={worldMode}
       onBack={goMain}
-      onEnemyDefeat={handleEnemyDefeat}
       loadingLabel={loadingLabel}
     />
   );

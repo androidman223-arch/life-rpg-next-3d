@@ -141,7 +141,7 @@ export default function MoeEnemyStatSearchPanel({
       className="fixed pointer-events-auto select-none"
       style={{ left: pos.x, top: pos.y, width: WINDOW_W }}
       role="dialog"
-      aria-label="敵ステサーチ"
+      aria-label="龍光眼"
     >
       <div className="overflow-hidden rounded-[4px] border border-violet-300/80 bg-black shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
         <div
@@ -149,7 +149,7 @@ export default function MoeEnemyStatSearchPanel({
           onPointerDown={onDragPointerDown}
         >
           <p className="min-w-0 truncate text-[9px] font-bold text-white">
-            🔍 敵ステサーチ
+            👁️ 龍光眼
           </p>
           <button
             type="button"

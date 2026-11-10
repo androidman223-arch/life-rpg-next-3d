@@ -3,10 +3,9 @@
 export const MOE_PLAYER_SKILL_SLOT_ORDER_STORAGE_KEY =
   "life-rpg-moe-player-skill-slot-order";
 
-/** @typedef {'enemy_stat_search'|'worship_nature'|'soul_master'|'mining'|'light'|'heal'|'heal-all'|'regen'|'banana_milk'|'holy_record'|'teleport'|'ninja_shinobiashi'|'ninja_kakuremino'|'dragon_skateboard'|'dragon_kintoun'} MoePlayerSlotSkillKey */
+/** @typedef {'worship_nature'|'soul_master'|'mining'|'light'|'heal'|'heal-all'|'regen'|'banana_milk'|'holy_record'|'teleport'|'ninja_shinobiashi'|'ninja_kakuremino'|'dragon_skateboard'|'dragon_kintoun'|'hyakka_ranran'|'sword_dance'|'revenge_guard'|'revenge_swing'} MoePlayerSlotSkillKey */
 
 export const MOE_PLAYER_SLOT_SKILL_KEYS = [
-  "enemy_stat_search",
   "worship_nature",
   "soul_master",
   "mining",
@@ -21,11 +20,14 @@ export const MOE_PLAYER_SLOT_SKILL_KEYS = [
   "dragon_skateboard",
   "ninja_kakuremino",
   "dragon_kintoun",
+  "hyakka_ranran",
+  "sword_dance",
+  "revenge_guard",
+  "revenge_swing",
 ];
 
 /** @type {Record<MoePlayerSlotSkillKey, string>} */
 export const MOE_PLAYER_SLOT_LABELS = {
-  enemy_stat_search: "敵ステサーチ",
   worship_nature: "ホワイトエンジェルロッド",
   soul_master: "ソウルマスター",
   mining: "採掘",
@@ -40,11 +42,14 @@ export const MOE_PLAYER_SLOT_LABELS = {
   ninja_kakuremino: "隠れ蓑",
   dragon_skateboard: "板乗り",
   dragon_kintoun: "筋斗雲",
+  hyakka_ranran: "百花繚乱",
+  sword_dance: "ソードダンス",
+  revenge_guard: "リベンジガード",
+  revenge_swing: "リベンジスイング",
 };
 
 /** @type {Record<string, string>} */
 export const MOE_PLAYER_SLOT_ICONS = {
-  enemy_stat_search: "🔍",
   worship_nature: "🪄",
   soul_master: "🕯️",
   mining: "⛏️",
@@ -55,6 +60,10 @@ export const MOE_PLAYER_SLOT_ICONS = {
   banana_milk: "🍌",
   holy_record: "📜",
   teleport: "🌀",
+  hyakka_ranran: "🌸",
+  sword_dance: "⚔️",
+  revenge_guard: "🛡️",
+  revenge_swing: "💥",
 };
 
 /** 旧神速スロット → 板乗り */
@@ -62,6 +71,7 @@ export function migratePlayerSkillSlotKey(key) {
   if (key == null || key === "") return null;
   const k = String(key);
   if (k === "ninja_shinsoku") return "dragon_skateboard";
+  if (k === "enemy_stat_search") return null;
   if (k === "condense_mind" || k === "jiriki_seiran") {
     return null;
   }
@@ -77,20 +87,21 @@ const RETIRED_PLAYER_SKILL_BAR_KEYS = new Set([
   "teleport",
   "ninja_shinobiashi",
   "dragon_skateboard",
+  "enemy_stat_search",
 ]);
 
 export function defaultPlayerSkillSlotOrder() {
   return [
-    "enemy_stat_search",
     "worship_nature",
     "regen",
     "banana_milk",
     "holy_record",
     "soul_master",
     "mining",
-    null,
-    null,
-    null,
+    "revenge_swing",
+    "hyakka_ranran",
+    "sword_dance",
+    "revenge_guard",
   ];
 }
 
@@ -108,19 +119,12 @@ export function packPlayerSkillSlots(order) {
   return filled.slice(0, 10);
 }
 
-/** 未配置なら敵ステサーチの次へ入れる（10枠を超えた分は末尾を外す） */
+/** 未配置なら技①の先頭へ入れる（10枠を超えた分は末尾を外す） */
 export function ensureWorshipNatureSlot(order) {
   if (order.includes("worship_nature")) return order.slice(0, 10);
   const next = [...order];
-  const at = next[0] === "enemy_stat_search" ? 1 : 0;
-  next.splice(at, 0, "worship_nature");
+  next.splice(0, 0, "worship_nature");
   return next.slice(0, 10);
-}
-
-/** 未配置なら技①の先頭へ入れる（10枠を超えた分は末尾を外す） */
-export function ensureEnemyStatSearchFirst(order) {
-  if (order.includes("enemy_stat_search")) return order.slice(0, 10);
-  return ["enemy_stat_search", ...order].slice(0, 10);
 }
 
 /** 技①の初期並びに無い技は、空いた枠へ戻さない */
@@ -166,9 +170,7 @@ export function loadPlayerSkillSlotOrder() {
     const normalized = packPlayerSkillSlots(
       mergeMissingSkillKeys(
         stripRetiredPlayerSkillSlots(
-          ensureWorshipNatureSlot(
-            ensureEnemyStatSearchFirst(normalizePlayerSkillSlotOrder(parsed))
-          )
+          ensureWorshipNatureSlot(normalizePlayerSkillSlotOrder(parsed))
         )
       )
     );

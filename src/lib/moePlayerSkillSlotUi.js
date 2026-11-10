@@ -9,6 +9,10 @@ import MoeKintounIcon from "@/components/icons/MoeKintounIcon";
 import MoeSkateboardIcon from "@/components/icons/MoeSkateboardIcon";
 import { getMoePlayerDragonSkill } from "@/data/moePlayerDragonSkills";
 import {
+  getMoePlayerSwordSkillForSlotKey,
+  MOE_PLAYER_SWORD_SKILLS,
+} from "@/data/moePlayerSwordSkills";
+import {
   MOE_PLAYER_SLOT_ICONS,
   MOE_PLAYER_SLOT_LABELS,
 } from "@/data/moePlayerSkillSlotOrder";
@@ -29,6 +33,7 @@ import {
   MOE_PLAYER_SPRINT_STAMINA_DRAIN_PER_SEC,
   moePlayerBananaMilkStaminaRegenPerSec,
 } from "@/lib/moePlayerVitals";
+import { MOE_REFLECT_BUFF_TONE } from "@/lib/moeReflectSkillUi";
 
 /** 採掘ボタンだけ緑。技①の他ボタンは青のまま */
 export const MOE_MINING_SKILL_BTN_CLASS =
@@ -124,22 +129,6 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
         ? "ホワイトエンジェルロッド — 天使の息吹。約5秒で蘇生し、アルターへ帰還する"
         : "ホワイトエンジェルロッド — ペットが倒れたときだけ使える",
       onClick: ctx.onWorshipNature,
-      reorderable: true,
-    };
-  }
-
-  if (key === "enemy_stat_search") {
-    const hasTarget = Boolean(ctx.targetEnemy);
-    return {
-      slotKey: key,
-      label,
-      icon: renderPlayerSlotIcon(key, null),
-      active: Boolean(ctx.enemyStatSearchOpen),
-      disabled: !hasTarget,
-      title: hasTarget
-        ? "ターゲット敵のHP・MP・攻撃・スキルを調べる"
-        : "敵をクリックしてターゲットを選んでから使う",
-      onClick: ctx.onEnemyStatSearch,
       reorderable: true,
     };
   }
@@ -270,6 +259,54 @@ export function buildPlayerSkillSlotEntry(key, slotIndex, ctx) {
     };
   }
 
+  if (
+    key === "hyakka_ranran" ||
+    key === "sword_dance" ||
+    key === "revenge_guard" ||
+    key === "revenge_swing"
+  ) {
+    const skill =
+      ctx.swordById?.[key] ??
+      getMoePlayerSwordSkillForSlotKey(key, ctx.trainerLevel ?? 1);
+    const unlocked = Boolean(skill);
+    const remainKey =
+      key === "hyakka_ranran"
+        ? "hyakkaRemainSec"
+        : key === "sword_dance"
+          ? "swordDanceRemainSec"
+          : key === "revenge_guard"
+            ? "revengeGuardRemainSec"
+            : "revengeSwingRemainSec";
+    const cdKey =
+      key === "hyakka_ranran"
+        ? "hyakkaCooldownSec"
+        : key === "sword_dance"
+          ? "swordDanceCooldownSec"
+          : key === "revenge_guard"
+            ? "revengeGuardCooldownSec"
+            : "revengeSwingCooldownSec";
+    const remain = ctx[remainKey] ?? 0;
+    const cd = ctx[cdKey] ?? 0;
+    const active = unlocked && remain > 0;
+    const busy = unlocked && !active && cd > 0;
+    return {
+      slotKey: key,
+      label,
+      icon: renderPlayerSlotIcon(key, null),
+      disabled: !unlocked || busy,
+      active,
+      activeTone: active ? MOE_REFLECT_BUFF_TONE : undefined,
+      cooldownSec: busy ? cd : active ? remain : null,
+      title: unlocked
+        ? formatMoePetSkillDescription(skill)
+        : `${label}（トレーナーLv.${
+            MOE_PLAYER_SWORD_SKILLS.find((s) => s.id === key)?.level ?? 50
+          }で習得）`,
+      onClick: () => unlocked && skill && ctx.onSwordReflectSkill?.(skill),
+      reorderable: true,
+    };
+  }
+
   if (key === "dragon_kintoun" || key === "dragon_skateboard") {
     const skill = ctx.dragonById?.[key] ?? getMoePlayerDragonSkill(key);
     const unlocked = Boolean(ctx.dragonById?.[key]);
@@ -352,22 +389,6 @@ export function buildPlayerUtilitySkillSlotEntry(key, slotIndex, ctx) {
 
   const label = MOE_PLAYER_UTILITY_SLOT_LABELS[key] ?? key;
   const icon = MOE_PLAYER_UTILITY_SLOT_ICONS[key] ?? "✦";
-
-  if (key === "enemy_stat_search") {
-    const hasTarget = Boolean(ctx.targetEnemy);
-    return {
-      slotKey: key,
-      label,
-      icon,
-      active: Boolean(ctx.enemyStatSearchOpen),
-      disabled: !hasTarget,
-      title: hasTarget
-        ? "ターゲット敵のHP・MP・攻撃・スキルを調べる"
-        : "敵をクリックしてターゲットを選んでから使う",
-      onClick: ctx.onEnemyStatSearch,
-      reorderable: false,
-    };
-  }
 
   return {
     slotKey: key,

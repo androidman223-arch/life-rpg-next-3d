@@ -52,6 +52,10 @@ export function resolveTrainingNinjaSkill(skillId) {
  *   onPreSkill?: (skill: object) => void,
  *   onNinja?: (skill: object) => void,
  *   onDragon?: (skill: object) => void,
+ *   onEnemyStatSearch?: () => void,
+ *   onPhoenixAura?: () => void,
+ *   onDragonLord?: () => void,
+ *   onDragonCounterClaw?: () => void,
  *   setToast?: (msg: string) => void,
  * }} ctx
  * @returns {boolean} 発動したら true
@@ -105,6 +109,26 @@ export function runTrainingSkillBridgeAction(track, level, ctx) {
       return false;
     }
     ctx.onDragon?.(skill);
+    return true;
+  }
+
+  if (action.kind === "enemyStatSearch") {
+    ctx.onEnemyStatSearch?.();
+    return true;
+  }
+
+  if (action.kind === "phoenixAura") {
+    ctx.onPhoenixAura?.();
+    return true;
+  }
+
+  if (action.kind === "dragonLord") {
+    ctx.onDragonLord?.();
+    return true;
+  }
+
+  if (action.kind === "dragonCounterClaw") {
+    ctx.onDragonCounterClaw?.();
     return true;
   }
 

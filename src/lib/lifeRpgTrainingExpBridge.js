@@ -2,7 +2,6 @@
  * life-rpg-next-3d — TrainingExpSystem bridge
  * 公開時: public/training-exp-system/ と本ファイル・TrainingExpPanel を削除
  */
-import { addGameExp } from "@/lib/gameStatus";
 import { MOE_PHOENIX_SKILL_GET_CATALOG } from "@/data/moePhoenixSkillGetCatalog";
 import {
   getMoePhoenixTrainingDefaultMemos,
@@ -10,28 +9,12 @@ import {
   MOE_PHOENIX_REFLECTION_PLACEHOLDER,
   MOE_PHOENIX_REFLECTION_KINDS,
 } from "@/lib/moePhoenixTrainingMemos";
-import { loadPlayerExperienceTrack } from "@/lib/moePlayerExperience";
+import { loadPhoenixSkillUnlockLevel } from "@/lib/moePlayerExperience";
 
 const GAME_ID = "life_rpg_next_3d";
 
-const MILESTONES = [
-  {
-    exp: 10,
-    type: "item",
-    itemId: "trainer_exp_50",
-    name: "修行の成果",
-    rewardLabel: "訓練士EXP +50",
-    trainerExpBonus: 50,
-  },
-  {
-    exp: 100,
-    type: "item",
-    itemId: "trainer_exp_200",
-    name: "修行の大成果",
-    rewardLabel: "訓練士EXP +200",
-    trainerExpBonus: 200,
-  },
-];
+/** 訓練士EXPのごほうびは止めた。Lvアップはあとで考える。 */
+const MILESTONES = [];
 
 /** 鳳凰修行① — 知恵・整える（UIラベルは training-exp-system 側） */
 const DEFAULT_MEMOS = getMoePhoenixTrainingDefaultMemos();
@@ -50,15 +33,6 @@ export function getLifeRpgTrainingExpConfig(hooks = {}) {
   const notify = () => hooks.onTrainerExpGranted?.();
 
   function tryAssignItemDrop(milestone) {
-    const bonus = milestone.trainerExpBonus;
-    if (bonus && bonus > 0) {
-      addGameExp(bonus);
-      notify();
-      return {
-        role: "訓練士",
-        message: `訓練士EXP +${bonus}！（${milestone.rewardLabel || milestone.name}）`,
-      };
-    }
     return {
       role: null,
       message: milestone.rewardLabel || milestone.name || "報酬",
@@ -74,7 +48,7 @@ export function getLifeRpgTrainingExpConfig(hooks = {}) {
     milestones: MILESTONES,
     phoenixSkillGetCatalog: MOE_PHOENIX_SKILL_GET_CATALOG,
     getPhoenixPracticeLevel() {
-      return loadPlayerExperienceTrack("phoenix").level ?? 0;
+      return loadPhoenixSkillUnlockLevel();
     },
     defaultMemos: DEFAULT_MEMOS,
     phoenixUi: {

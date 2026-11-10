@@ -10,6 +10,10 @@ import {
   MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR,
   moeFloatingDragTitle,
 } from "@/lib/moePanelStack";
+import {
+  moePlayerSkillSlotActiveClass,
+  moePlayerSkillSlotTimingUi,
+} from "@/lib/moeReflectSkillUi";
 
 const DEFAULT_STORAGE_KEY = MOE_PANEL_ID_PLAYER_SKILL_ICON_BAR;
 const SLOT_PX = 32;
@@ -125,8 +129,8 @@ export default function MoePlayerSkillIconBar({
           />
           <div className="flex min-w-0 flex-1 items-center gap-0.5 px-0.5">
             {row.map((slot, i) => {
-              const onCooldown =
-                slot.cooldownSec !== null && slot.cooldownSec !== undefined;
+              const { onCooldown, effectRemainSec } =
+                moePlayerSkillSlotTimingUi(slot);
               const alwaysClickable = slot.slotKey === "jiriki_seiran";
               const disabled =
                 (slot.disabled || onCooldown) && !alwaysClickable;
@@ -157,7 +161,10 @@ export default function MoePlayerSkillIconBar({
                         : onCooldown
                           ? "cursor-not-allowed border-zinc-700/80 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-zinc-500 opacity-55 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                           : slot.active
-                            ? "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-zinc-950 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_0_8px_rgba(34,211,238,0.35)] ring-1 ring-cyan-200/40"
+                            ? moePlayerSkillSlotActiveClass(
+                                slot,
+                                "border-cyan-200/80 bg-gradient-to-b from-cyan-500/90 via-sky-700/95 to-zinc-950 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_0_8px_rgba(34,211,238,0.35)] ring-1 ring-cyan-200/40"
+                              )
                             : "border-emerald-400/65 bg-gradient-to-b from-emerald-700 via-emerald-900 to-zinc-950 text-emerald-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_3px_rgba(0,0,0,0.45)] hover:border-emerald-200/75 hover:brightness-110"
                     } ${pointerProps.className ?? ""}`}
                     onPointerDown={pointerProps.onPointerDown}
@@ -179,6 +186,11 @@ export default function MoePlayerSkillIconBar({
                         {slot.cooldownSec}
                       </span>
                     )}
+                    {effectRemainSec != null && effectRemainSec > 0 ? (
+                      <span className="pointer-events-none absolute bottom-0 right-0 bg-black/50 px-0.5 text-[8px] font-bold tabular-nums leading-none text-yellow-100 drop-shadow-[0_0_1px_rgba(0,0,0,1)]">
+                        {effectRemainSec}
+                      </span>
+                    ) : null}
                   </button>
                 </MoeCompactSkillTip>
               );

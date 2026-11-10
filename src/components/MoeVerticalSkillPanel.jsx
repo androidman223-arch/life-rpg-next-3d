@@ -10,6 +10,11 @@ import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
 import MoeFloatingPanelRoot from "@/components/MoeFloatingPanelRoot";
 import { moeFloatingDragTitle } from "@/lib/moePanelStack";
 import { MOE_MINING_SKILL_BTN_CLASS } from "@/lib/moePlayerSkillSlotUi";
+import {
+  MOE_REFLECT_BUFF_TONE,
+  MOE_REFLECT_SKILL_ACTIVE_BTN_CLASS,
+  moePlayerSkillSlotTimingUi,
+} from "@/lib/moeReflectSkillUi";
 
 /** MOE風 — 枠からはみ出した文字は途中で切る（…なし） */
 const MOE_SKILL_LABEL_CLIP =
@@ -258,8 +263,8 @@ export default function MoeVerticalSkillPanel({
             );
           }
 
-          const onCooldown =
-            slot.cooldownSec !== null && slot.cooldownSec !== undefined;
+          const { onCooldown, effectRemainSec } =
+            moePlayerSkillSlotTimingUi(slot);
           const alwaysClickable =
             slot.slotKey === "jiriki_seiran" ||
             Boolean(slot.unusable) ||
@@ -269,6 +274,8 @@ export default function MoeVerticalSkillPanel({
               ? MOE_MINING_SKILL_BTN_CLASS
               : onCooldown
             ? theme.skillCooldown
+            : slot.active && slot.activeTone === MOE_REFLECT_BUFF_TONE
+              ? MOE_REFLECT_SKILL_ACTIVE_BTN_CLASS
             : slot.active
               ? theme.skillActive
               : slot.unusable
@@ -325,6 +332,21 @@ export default function MoeVerticalSkillPanel({
                       style={{ fontSize: Math.max(11, Math.round(slotHeight * 0.62)) }}
                     >
                       {slot.cooldownSec}
+                    </span>
+                  </span>
+                ) : effectRemainSec != null && effectRemainSec > 0 ? (
+                  <span className="relative flex h-full w-full items-center justify-center">
+                    <span
+                      className={`${MOE_SKILL_LABEL_CLIP} opacity-90`}
+                      style={{ fontSize: mainFontPx }}
+                    >
+                      {slot.label}
+                    </span>
+                    <span
+                      className="pointer-events-none absolute bottom-0.5 right-0.5 tabular-nums font-bold leading-none text-yellow-100 drop-shadow-[0_0_1px_rgba(0,0,0,1)]"
+                      style={{ fontSize: Math.max(9, Math.round(slotHeight * 0.28)) }}
+                    >
+                      {effectRemainSec}
                     </span>
                   </span>
                 ) : (

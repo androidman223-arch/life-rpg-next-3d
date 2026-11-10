@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import MoeCompactSkillTip from "@/components/MoeCompactSkillTip";
 import MoeSkillPanelCloseButton from "@/components/MoeSkillPanelCloseButton";
 import { useMoeDraggablePos } from "@/hooks/useMoeDraggablePos";
-import { loadPlayerExperienceTrack } from "@/lib/moePlayerExperience";
+import { loadTrainingSkillUnlockLevel } from "@/lib/moePlayerExperience";
 import {
   buildDragonTrainingVerticalSlots,
   buildPhoenixTrainingVerticalSlots,
@@ -65,7 +65,7 @@ export default function MoeTrainingSkillIconBar({
   const meta = PANEL_META[kind] ?? PANEL_META.phoenix;
   const track = kind === "dragon" ? "dragon" : "phoenix";
   const [practiceLevel, setPracticeLevel] = useState(() =>
-    loadPlayerExperienceTrack(track).level ?? 0
+    loadTrainingSkillUnlockLevel(track)
   );
 
   const getDefaultPos = useCallback(
@@ -85,7 +85,7 @@ export default function MoeTrainingSkillIconBar({
   useEffect(() => {
     const track = kind === "dragon" ? "dragon" : "phoenix";
     const refresh = () => {
-      setPracticeLevel(loadPlayerExperienceTrack(track).level ?? 0);
+      setPracticeLevel(loadTrainingSkillUnlockLevel(track));
     };
     refresh();
     const id = window.setInterval(refresh, 2000);

@@ -58,6 +58,24 @@ export const MOE_BISK_PLANNED_REGISTRY = [
 
 /** アルター南の水辺（転送スポーン tz≈0.54 から離す · `moe3dClearSpawnFromAltarPlayer` でも押し出し） */
 export const MOE_BISK_SPAWN_SPECS = [
+  // 技能試し · 中央アルター東（転送 norm 0.28 · アルタークリックと被らない）
+  {
+    mapSlotId: "bisk",
+    key: "rescue_bear",
+    tx: 0.78,
+    tz: 0.54,
+    modelVariantId: "rescue_bear_a",
+    slotInZone: 2,
+  },
+  // 魔法反射試し · 中央アルター西（オークマジシャン · 通常攻撃=魔法）
+  {
+    mapSlotId: "bisk",
+    key: "orc_magician",
+    tx: 0.22,
+    tz: 0.54,
+    modelVariantId: "orc_magician_a",
+    slotInZone: 3,
+  },
   {
     mapSlotId: "bisk",
     key: "bisk_ixion_water",

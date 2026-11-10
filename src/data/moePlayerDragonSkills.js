@@ -38,7 +38,7 @@ export const MOE_PLAYER_DRAGON_SKILLS = [
     activation: "toggle",
     iconComponent: "MoeSkateboardIcon",
     description:
-      "トグルONで板が滑り込み乗車。地上移動1.75倍 · Shiftダッシュでさらに1.75倍。",
+      "トグルONで板が滑り込み乗車。地上移動1.85倍 · Shiftダッシュでさらに1.75倍。",
     status: "done",
   },
   {

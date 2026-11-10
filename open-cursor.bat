@@ -14,8 +14,8 @@ if exist "%LOCALAPPDATA%\Programs\cursor\_\Cursor.exe" (
 
 where cursor >nul 2>&1
 if %errorlevel% equ 0 (
-  echo Cursor で life-rpg-next-3d を開きます...
-  cursor "%PROJECT%"
+  echo Cursor で life-rpg-next-3d を開きます（IDE / --classic）...
+  cursor "%PROJECT%" --classic
   exit /b 0
 )
 
@@ -39,7 +39,7 @@ if not exist "%PROJECT%\package.json" (
   exit /b 1
 )
 
-echo Cursor で life-rpg-next-3d を開きます...
+echo Cursor で life-rpg-next-3d を開きます（IDE / --classic）...
 echo   %CURSOR%
-start "" "%CURSOR%" "%PROJECT%"
+start "" "%CURSOR%" --classic "%PROJECT%"
 exit /b 0

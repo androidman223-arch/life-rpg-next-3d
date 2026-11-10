@@ -3,7 +3,7 @@
  */
 
 /**
- * @typedef {{ kind: 'skill1', key: string } | { kind: 'skill2', skillId: string } | { kind: 'pre', skillId: string } | { kind: 'ninja', skillId: string } | { kind: 'dragon', skillId: string }} MoeTrainingSkillBridgeAction
+ * @typedef {{ kind: 'skill1', key: string } | { kind: 'skill2', skillId: string } | { kind: 'pre', skillId: string } | { kind: 'ninja', skillId: string } | { kind: 'dragon', skillId: string } | { kind: 'enemyStatSearch' } | { kind: 'phoenixAura' } | { kind: 'dragonLord' } | { kind: 'dragonCounterClaw' }} MoeTrainingSkillBridgeAction
  */
 
 /** @type {Record<number, MoeTrainingSkillBridgeAction>} */
@@ -17,6 +17,7 @@ export const MOE_PHOENIX_TRAINING_SKILL_ACTIONS = {
   70: { kind: "skill2", skillId: "phoenix_life_burst" },
   80: { kind: "skill1", key: "heal-all" },
   90: { kind: "pre", skillId: "jiriki_kaihou" },
+  130: { kind: "phoenixAura" },
 };
 
 /** @type {Record<number, MoeTrainingSkillBridgeAction>} */
@@ -25,8 +26,11 @@ export const MOE_DRAGON_TRAINING_SKILL_ACTIONS = {
   20: { kind: "ninja", skillId: "ninja_shinobiashi" },
   40: { kind: "dragon", skillId: "dragon_skateboard" },
   50: { kind: "ninja", skillId: "ninja_kakuremino" },
+  60: { kind: "enemyStatSearch" },
   80: { kind: "dragon", skillId: "dragon_kintoun" },
   90: { kind: "pre", skillId: "jiriki_seiryu" },
+  100: { kind: "dragonCounterClaw" },
+  130: { kind: "dragonLord" },
 };
 
 /**

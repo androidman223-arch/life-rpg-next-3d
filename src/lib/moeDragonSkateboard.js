@@ -3,10 +3,10 @@
  */
 
 /** 乗車中 — 徒歩より速い（足元を下げたあと板の優位が出る） */
-export const MOE_SKATEBOARD_WALK_SPEED_MULT = 1.6;
+export const MOE_SKATEBOARD_WALK_SPEED_MULT = 1.85;
 
 /** Shiftダッシュ時にさらに乗算 */
-export const MOE_SKATEBOARD_DASH_EXTRA_MULT = 1.55;
+export const MOE_SKATEBOARD_DASH_EXTRA_MULT = 1.75;
 
 /**
  * @param {boolean} sprinting
@@ -55,7 +55,7 @@ export function lerpSkateboardPetRideSlot(petX, petZ, slotX, slotZ, dt) {
 
 export const MOE_SKATEBOARD_APPROACH_START_DIST = 42;
 
-export const MOE_SKATEBOARD_APPROACH_RUSH_SPEED = 52;
+export const MOE_SKATEBOARD_APPROACH_RUSH_SPEED = 64;
 
 export const MOE_SKATEBOARD_APPROACH_JUMP_DIST = 8;
 

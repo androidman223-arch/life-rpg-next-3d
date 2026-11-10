@@ -1,3 +1,11 @@
+import { MOE_REFLECT_BUFF_TONE } from "./moeReflectSkillUi.js";
+import {
+  moeHyakkaRanranReflectBuffLabel,
+  moeRevengeGuardReflectBuffLabel,
+  moeRevengeSwingReflectBuffLabel,
+  moeSwordDanceReflectBuffLabel,
+} from "./moePlayerReflectSkills.js";
+
 /**
  * MOE バフアイコン strip — プレイヤー·ペットとも 1行×6
  */
@@ -11,7 +19,7 @@ export const MOE_BUFF_ICON_PX = 13;
 export const MOE_BUFF_ICON_GAP_PX = 1;
 
 /**
- * @typedef {'buff' | 'toggle' | 'stealth' | 'debuff'} MoeBuffIconTone
+ * @typedef {'buff' | 'toggle' | 'stealth' | 'debuff' | 'reflect'} MoeBuffIconTone
  * @typedef {{
  *   id: string,
  *   icon: string,
@@ -51,11 +59,19 @@ export function padMoeBuffSlots(items, slotCount) {
  *   skateboardOn?: boolean,
  *   playerCondenseMindRef?: { current: { until: number } | null },
  *   playerJirikiSeiranRef?: { current: { until: number, boostUntil?: number } | null },
+ *   hyakkaUntilMs?: number,
+ *   swordDanceUntilMs?: number,
+ *   revengeGuardUntilMs?: number,
+ *   revengeSwingUntilMs?: number,
  * }} ctx
  * @param {number} [nowMs]
  */
-export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
-  const items = [];
+export function buildMoePlayerBuffStrip(
+  ctx,
+  nowMs = Date.now(),
+  reflectNowMs = nowMs
+) {
+  const items = [...moeReflectPlayerBuffItems(ctx, reflectNowMs)];
 
   if (ctx.bananaMilkActive) {
     items.push({
@@ -124,12 +140,57 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
     items.push({
       id: "skateboard",
       icon: "🛹",
-      label: "板乗り — 地上 · 移動1.75倍",
+      label: "板乗り — 地上 · 移動1.85倍",
       tone: "toggle",
     });
   }
 
   return padMoeBuffSlots(items, MOE_PLAYER_BUFF_SLOT_COUNT);
+}
+
+function moeReflectPlayerBuffItems(ctx, nowMs) {
+  const out = [];
+  const hyakkaRemain = moeBuffRemainSec(ctx.hyakkaUntilMs ?? 0, nowMs);
+  if (hyakkaRemain != null) {
+    out.push({
+      id: "hyakka_ranran",
+      icon: "🌸",
+      label: moeHyakkaRanranReflectBuffLabel(),
+      remainSec: hyakkaRemain,
+      tone: MOE_REFLECT_BUFF_TONE,
+    });
+  }
+  const sdRemain = moeBuffRemainSec(ctx.swordDanceUntilMs ?? 0, nowMs);
+  if (sdRemain != null) {
+    out.push({
+      id: "sword_dance",
+      icon: "⚔️",
+      label: moeSwordDanceReflectBuffLabel(),
+      remainSec: sdRemain,
+      tone: MOE_REFLECT_BUFF_TONE,
+    });
+  }
+  const rgRemain = moeBuffRemainSec(ctx.revengeGuardUntilMs ?? 0, nowMs);
+  if (rgRemain != null) {
+    out.push({
+      id: "revenge_guard",
+      icon: "🛡️",
+      label: moeRevengeGuardReflectBuffLabel(),
+      remainSec: rgRemain,
+      tone: MOE_REFLECT_BUFF_TONE,
+    });
+  }
+  const rsRemain = moeBuffRemainSec(ctx.revengeSwingUntilMs ?? 0, nowMs);
+  if (rsRemain != null) {
+    out.push({
+      id: "revenge_swing",
+      icon: "💥",
+      label: moeRevengeSwingReflectBuffLabel(),
+      remainSec: rsRemain,
+      tone: MOE_REFLECT_BUFF_TONE,
+    });
+  }
+  return out;
 }
 
 /**
@@ -145,10 +206,21 @@ export function buildMoePlayerBuffStrip(ctx, nowMs = Date.now()) {
  *   atrumMpRegenRef?: { current: { until: number } | null },
  *   atrumMagicBuffUntilRef?: { current: number },
  *   rebirthOnceRef?: { current: { charges?: number, pendingUntilMs?: number } | null },
+ *   phoenixAuraUntilMs?: number,
+ *   dragonLordUntilMs?: number,
+ *   dragonCounterClawUntilMs?: number,
+ *   hyakkaUntilMs?: number,
+ *   swordDanceUntilMs?: number,
+ *   revengeGuardUntilMs?: number,
+ *   revengeSwingUntilMs?: number,
  * }} ctx
  * @param {number} [nowMs]
  */
-export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
+export function buildMoePetBuffStrip(
+  ctx,
+  nowMs = Date.now(),
+  reflectNowMs = nowMs
+) {
   const items = [];
 
   if (ctx.petRegenActive) {
@@ -170,6 +242,8 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
       remainSec: ctx.petRegenRemainSec ?? null,
     });
   }
+
+  items.push(...moeReflectPlayerBuffItems(ctx, reflectNowMs));
 
   const phoenixRegenSources = [
     {
@@ -241,6 +315,39 @@ export function buildMoePetBuffStrip(ctx, nowMs = Date.now()) {
       icon: "🪽",
       label: "リボーンワンス — 復活待ち",
       remainSec: Math.ceil((rebirth.pendingUntilMs - nowMs) / 1000),
+      tone: "buff",
+    });
+  }
+
+  const auraRemain = moeBuffRemainSec(ctx.phoenixAuraUntilMs ?? 0, nowMs);
+  if (auraRemain != null) {
+    items.push({
+      id: "phoenix_aura",
+      icon: "🔥",
+      label: "フェニックスオーラ — 完全ガード（物理・魔法）",
+      remainSec: auraRemain,
+      tone: "buff",
+    });
+  }
+
+  const lordRemain = moeBuffRemainSec(ctx.dragonLordUntilMs ?? 0, nowMs);
+  if (lordRemain != null) {
+    items.push({
+      id: "dragon_lord",
+      icon: "🐲",
+      label: "ドラゴンロード — ペット与ダメ2倍",
+      remainSec: lordRemain,
+      tone: "buff",
+    });
+  }
+
+  const clawRemain = moeBuffRemainSec(ctx.dragonCounterClawUntilMs ?? 0, nowMs);
+  if (clawRemain != null) {
+    items.push({
+      id: "dragon_counter_claw",
+      icon: "✊",
+      label: "カウンタークロウ — 半減＋半減分反射",
+      remainSec: clawRemain,
       tone: "buff",
     });
   }

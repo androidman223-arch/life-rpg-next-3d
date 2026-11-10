@@ -30,7 +30,7 @@ export const MOE_TOMORROW_MEMO_STARTER_TEXTS = [
   ...MOE_TOMORROW_MEMO_DESIGN_NOTES,
   "鳳凰/龍スキルゲット9 — データ定義と解放UI",
   "龍の武練 — フィールド実績の自動取り込み（討伐・走破）",
-  "訓練士Lv ← ペット育成EXP連動",
+  "訓練士のLvアップは、あとで考える（いま仕組みはない）",
   "ボス戦場（小・中・大）＋EXP倍率",
 ];
 

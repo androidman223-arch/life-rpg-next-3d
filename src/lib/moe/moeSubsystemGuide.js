@@ -155,7 +155,7 @@ export const MOE_SUBSYSTEMS = {
 
   playerUtilitySkills: {
     purpose:
-      "技③データの残り（生活改鳳・自力整龍）。敵ステサーチは技①。",
+      "技③データ（生活改鳳・自力整龍）。敵調査は龍神 Lv60 龍光眼。",
     layer: "pure",
     stateOwner: "moePlayerUtilitySkills.js + MoeFieldMap handler",
     files: [
@@ -168,7 +168,7 @@ export const MOE_SUBSYSTEMS = {
 
   enemyStatSearch: {
     purpose:
-      "敵ステサーチ — HP/MP/攻撃/スキル + 索敵（視野・聴覚・タイプ）。検知対象はプレイヤー。",
+      "龍光眼 — HP/MP/攻撃/スキル + 索敵（視野・聴覚・タイプ）。龍神縦スキル Lv60。検知対象はプレイヤー。",
     layer: "pure",
     stateOwner: "MoeFieldMap (enemyStatSearchOpen) + buildMoeEnemyStatSearchView",
     files: [
@@ -270,6 +270,18 @@ export const MOE_SUBSYSTEMS = {
     related: ["mapPlannedData", "fieldPrefetch"],
   },
 
+  lovePetBuff: {
+    purpose:
+      "ラブペットの10分バフ。戦闘の基礎EXPにだけ掛ける。メモリだけなので、転送と再読み込みで消える。",
+    layer: "pure",
+    stateOwner: "moeLovePetBuff.js",
+    files: ["src/lib/moeLovePetBuff.js", "src/data/moePetExpBuffs.js"],
+    doNot: [
+      "localStorage に残さない",
+      "経験値の粉・クリスタルの固定EXPには掛けない",
+    ],
+  },
+
   persistence: {
     purpose: "localStorage / 外部セーブ。キーは moeStorageRegistry で一元管理。",
     layer: "persistence",
@@ -278,6 +290,7 @@ export const MOE_SUBSYSTEMS = {
       "src/lib/moe/moeStorageRegistry.js",
       "src/lib/moePetSave.js",
       "src/lib/moeExternalSaveLabels.js",
+      "src/lib/moe/moeFullBackup.js",
     ],
     doNot: ["文字列キーを各ファイルに直書きで増やさない"],
     related: ["externalSave"],

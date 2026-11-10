@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MoeVerticalSkillPanel from "@/components/MoeVerticalSkillPanel";
-import { loadPlayerExperienceTrack } from "@/lib/moePlayerExperience";
+import { loadTrainingSkillUnlockLevel } from "@/lib/moePlayerExperience";
 import {
   buildDragonTrainingVerticalSlots,
   buildPhoenixTrainingVerticalSlots,
@@ -56,12 +56,12 @@ export default function MoeTrainingVerticalSkillPanel({
 }) {
   const meta = PANEL_META[kind] ?? PANEL_META.phoenix;
   const [practiceLevel, setPracticeLevel] = useState(() =>
-    loadPlayerExperienceTrack(meta.track).level ?? 0
+    loadTrainingSkillUnlockLevel(meta.track)
   );
 
   useEffect(() => {
     const refresh = () => {
-      setPracticeLevel(loadPlayerExperienceTrack(meta.track).level ?? 0);
+      setPracticeLevel(loadTrainingSkillUnlockLevel(meta.track));
     };
     refresh();
     const id = window.setInterval(refresh, 2000);
